@@ -1,0 +1,7 @@
+{"name":"ops","version":"1.0.0","description":"Python data analysis operations","tools":[
+  {"name":"run_profile","description":"Statistical profile of all numeric columns. Returns count, mean, median, min, max, missing%, outliers.","input_schema":{"type":"object","properties":{},"required":[]}},
+  {"name":"run_trend","description":"Detect trends in time-series data.","input_schema":{"type":"object","properties":{"date_column":{"type":"string","description":"Date column name"},"metric_columns":{"type":"array","description":"Numeric columns","items":{"type":"string"}}},"required":["date_column","metric_columns"]}},
+  {"name":"run_pivot","description":"Group-by aggregation pivot.","input_schema":{"type":"object","properties":{"group_by":{"type":"array","description":"Category columns","items":{"type":"string"}},"metric_columns":{"type":"array","description":"Numeric columns","items":{"type":"string"}}},"required":["group_by"]}},
+  {"name":"run_clean","description":"Clean the active file: trim whitespace, deduplicate, normalize dates. Returns download.","input_schema":{"type":"object","properties":{},"required":[]}},
+  {"name":"run_compare","description":"Compare two uploaded files.","input_schema":{"type":"object","properties":{"file_id_a":{"type":"string"},"file_id_b":{"type":"string"}},"required":["file_id_a","file_id_b"]}}
+]}

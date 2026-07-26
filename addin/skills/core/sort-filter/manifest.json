@@ -1,0 +1,3 @@
+{"name":"sort-filter","version":"1.0.0","description":"Sort and filter data","tools":[
+  {"name":"sort_filter","description":"Sort or filter data. sort: sortBy=[{column:'B',order:'descending'}]. filter: filterBy=[{column:'B',operator:'greaterThan',value:'100'}].","input_schema":{"type":"object","properties":{"sheetName":{"type":"string"},"range":{"type":"string"},"action":{"type":"string","description":"sort|filter|clearFilter"},"sortBy":{"type":"array"},"filterBy":{"type":"array"}},"required":["sheetName","range","action"]}}
+]}

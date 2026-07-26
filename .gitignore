@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build output
+web/dist/
+addin/dist/
+*.egg-info/
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+
+# Local config and data
+config.json
+data.db
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Office add-in temp
+*.sideload.xlsx
+Excel add-in*.xlsx
+
+# Python virtual env
+venv/
+.venv/
+env/

@@ -1,0 +1,7 @@
+{"name":"read-write","version":"1.0.0","description":"Read and write Excel data","tools":[
+  {"name":"read_selection","description":"Read currently selected cells. Returns 2D array + address.","input_schema":{"type":"object","properties":{},"required":[]}},
+  {"name":"read_range","description":"Read any range from any sheet.","input_schema":{"type":"object","properties":{"sheetName":{"type":"string","description":"Sheet name"},"range":{"type":"string","description":"Range e.g. A1:D50"}},"required":["sheetName","range"]}},
+  {"name":"write_to_sheet","description":"Create a NEW sheet with data starting at A1.","input_schema":{"type":"object","properties":{"data":{"type":"array","description":"2D array"},"sheetName":{"type":"string","description":"New sheet name"}},"required":["data","sheetName"]}},
+  {"name":"write_to_range","description":"Write values to a specific range in an existing sheet.","input_schema":{"type":"object","properties":{"sheetName":{"type":"string"},"range":{"type":"string"},"values":{"type":"array"}},"required":["sheetName","range","values"]}},
+  {"name":"get_sheet_names","description":"List all sheet names.","input_schema":{"type":"object","properties":{},"required":[]}}
+]}
