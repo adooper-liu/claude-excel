@@ -225,6 +225,82 @@ async def ops_pivot(req: dict):
     result = profile_statistics(df, metric_cols, group_by=group_by)
     return {"pivot": result.to_dict(orient="records")}
 
+# ── Logistics Engine ───────────────────────────────────────
+
+@app.post("/api/logistics/upload-mapping")
+async def logistics_mapping(req: dict):
+    """Suggest field mapping for uploaded files."""
+    file_id = req.get("file_id")
+    path = _get_path(file_id)
+    df = pd.read_excel(path)
+    from logistics.schema import suggest_mapping
+    mapping = suggest_mapping(list(df.columns))
+    return {"columns": list(df.columns), "suggested_mapping": mapping, "row_count": len(df), "samples": df.head(3).to_dict(orient="records")}
+
+@app.post("/api/logistics/match")
+async def logistics_match(req: dict):
+    """Match orders + tracking files."""
+    orders_path = _get_path(req.get("orders_id"))
+    tracking_path = _get_path(req.get("tracking_id"))
+    mapping = req.get("mapping", {})
+    orders = pd.read_excel(orders_path)
+    tracking = pd.read_excel(tracking_path)
+    from logistics.schema import apply_mapping
+    orders = apply_mapping(orders, mapping.get("orders", {}))
+    tracking = apply_mapping(tracking, mapping.get("tracking", {}))
+    from logistics.matcher import match
+    result = match(orders, tracking)
+    result.pop("matched_df", None)
+    return result
+
+@app.post("/api/logistics/kpi")
+async def logistics_kpi(req: dict):
+    """Calculate VTR/OTR KPIs."""
+    orders_path = _get_path(req.get("orders_id"))
+    tracking_path = _get_path(req.get("tracking_id"))
+    mapping = req.get("mapping", {})
+    orders = pd.read_excel(orders_path)
+    tracking = pd.read_excel(tracking_path)
+    from logistics.schema import apply_mapping
+    orders = apply_mapping(orders, mapping.get("orders", {}))
+    tracking = apply_mapping(tracking, mapping.get("tracking", {}))
+    from logistics.matcher import match
+    from logistics.kpi import calculate as kpi_calc
+    from logistics.anomaly import detect
+    from logistics.carrier import compare
+    m = match(orders, tracking)
+    matched = orders  # Use all orders with tracking columns merged
+    kpi = kpi_calc(matched)
+    anomalies = detect(matched)
+    carriers = compare(matched)
+    # Save to history
+    from logistics.storage import save_kpi, save_anomalies
+    save_kpi(req.get("orders_id", ""), kpi)
+    save_anomalies(req.get("orders_id", ""), anomalies.get("anomalies", []))
+    return {"kpi": kpi, "anomalies": anomalies, "carriers": carriers}
+
+@app.post("/api/logistics/report")
+async def logistics_report(req: dict):
+    """Generate XLSX report."""
+    orders_path = _get_path(req.get("orders_id"))
+    tracking_path = _get_path(req.get("tracking_id"))
+    mapping = req.get("mapping", {})
+    orders = pd.read_excel(orders_path)
+    tracking = pd.read_excel(tracking_path)
+    from logistics.schema import apply_mapping
+    orders = apply_mapping(orders, mapping.get("orders", {}))
+    tracking = apply_mapping(tracking, mapping.get("tracking", {}))
+    from logistics.kpi import calculate as kpi_calc
+    from logistics.anomaly import detect
+    from logistics.carrier import compare
+    from logistics.report import generate
+    kpi = kpi_calc(orders)
+    anomalies = detect(orders)
+    carriers = compare(orders)
+    xlsx = generate(kpi, anomalies, carriers, orders)
+    import base64
+    return {"report_b64": base64.b64encode(xlsx).decode(), "filename": "logistics_report.xlsx"}
+
 @app.get("/api/skills")
 async def api_get_skills():
     """Return all tool definitions from skill manifests."""
