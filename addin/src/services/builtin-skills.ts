@@ -1,0 +1,71 @@
+/** Built-in skill bodies. Kept as TS so webpack never has to parse SKILL.md. */
+
+export const reconcileSkill = [
+  "# reconcile",
+  "",
+  "两表对账。精确匹配，结果只写新表。",
+  "",
+  "## 何时用",
+  "",
+  "用户要把两份名单/订单/流水对上：谁两边都有、谁只有一边、谁键相同但金额等字段不一致。",
+  "",
+  "## 步骤",
+  "",
+  "1. `inspect_workbook` — 看有没有 Table、表头叫什么。空工作簿或没有带表头的表：只回短句让界面出勾选框，不要列举样例表头、不要编造数据、也不要报错结束。",
+  "2. 还不是 Table → `ensure_table`（含表头的区域）。后续必须用返回的 `name`（中文表名可能变成 `T_系统订单表`）。",
+  "3. `inspect_table` 确认键列名",
+  "4. `reconcile_tables`，传入 `leftTable` `rightTable` `keys`",
+  "",
+  "不要覆盖源表。不要用模糊匹配。空键不会互配。不要用 `write_to_sheet` 手写对账结果。",
+  "",
+  "## 结果列",
+  "",
+  "`status`（matched / left_only / right_only / conflict）、`key`、`left_*`、`right_*`、`conflict_columns`",
+].join("\n");
+
+export const reshapeSkill = [
+  "# reshape",
+  "",
+  "把脏表收成能算的新表。源表只读。",
+  "",
+  "| op | 用户怎么说 | 结果 |",
+  "|---|---|---|",
+  "| `dedupe` | 按订单号去重 | 键相同只留第一行 |",
+  "| `unpivot` | 反透视 / 转长表 | 宽表变长表（属性 / 值） |",
+  "| `split` | 把标签按逗号拆开 | 一列拆成 `列_1` `列_2` … |",
+  "| `coerce` | 把金额转成数字 | 非法值变空 |",
+  "",
+  "必须先是 Excel Table（`ensure_table`）。空工作簿或没有带表头的表时，只回短句让界面出勾选框，不要报错结束。不做 Power Query 全功能、不跨文件合并。",
+].join("\n");
+
+export const calculateSkill = [
+  "# calculate",
+  "",
+  "用还活着的公式算。源表只读；汇总值禁止写死。",
+  "",
+  "| op | 用户怎么说 | 写出什么 |",
+  "|---|---|---|",
+  "| `lookup` | 按订单号把金额匹配过来 | 新表里 `INDEX` + `MATCH`（精确匹配，不依赖 XLOOKUP） |",
+  "| `sumifs` | 按类别求和 | 新表里 `SUMIFS`，合计会随源表变 |",
+  "| `fix_ref` | 修 #REF! | 新表去掉公式里的 `#REF!` 参数 |",
+  "",
+  "必须先是 Excel Table（`ensure_table`）。空工作簿或没有带表头的表时，只回短句让界面出勾选框，不要报错结束。不做透视表全功能。",
+].join("\n");
+
+export const skillifySkill = [
+  "# skill",
+  "",
+  "把用户工作流做成可安装的 SKILL.md。不要改工作簿。",
+  "",
+  "## 何时用",
+  "",
+  "用户说 /skill、创建技能、把某套步骤做成技能。",
+  "",
+  "## 步骤",
+  "",
+  "1. 若 /对账 /整形 /计算 或已有斜杠已经覆盖，告诉用户用那个，停止。",
+  "2. 用户没说清楚要自动化什么：先问，不要空造。",
+  "3. 可以 `inspect_workbook` 看当前表头。禁止 ensure_table / reconcile / reshape / calculate / write。",
+  "4. 起草 SKILL.md：frontmatter 含 name、description、slash。slash 用中文短命令，不能占用内置名。正文按实际表头写步骤，结果只写新表。",
+  "5. 回复里用一个 markdown 代码块给出完整 SKILL.md。",
+].join("\n");

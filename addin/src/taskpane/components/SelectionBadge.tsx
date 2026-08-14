@@ -1,21 +1,27 @@
 /**
- * SelectionBadge.tsx — Displays the current Excel selection with a clear button.
+ * SelectionBadge — current Excel cell, shown as a formula bar.
  */
 
 import React from 'react';
 
 interface Props {
-  address: string;
-  rows: number;
-  cols: number;
-  onClear: () => void;
+  address?: string;
+  rows?: number;
+  cols?: number;
 }
 
-export default function SelectionBadge({ address, rows, cols, onClear }: Props): JSX.Element {
+export default function SelectionBadge({ address, rows, cols }: Props): JSX.Element {
   return (
-    <div className="selection-badge">
-      <span>📎 Selected: {address} ({rows} rows × {cols} cols)</span>
-      <button onClick={onClear} title="Clear selection focus">✕</button>
+    <div className="fx-live">
+      <span className="fx-glyph" aria-hidden="true">fx</span>
+      {address ? (
+        <>
+          <span className="fx-addr" title={address}>{address}</span>
+          <span className="fx-dim">{rows}×{cols}</span>
+        </>
+      ) : (
+        <span className="fx-idle">选中单元格后可提问</span>
+      )}
     </div>
   );
 }

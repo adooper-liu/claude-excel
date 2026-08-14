@@ -30,10 +30,15 @@ module.exports = async (env, options) => {
       clean: true,
     },
     resolve: {
-      extensions: [".ts", ".tsx", ".html", ".js"],
+      extensions: [".ts", ".tsx", ".html", ".js", ".json"],
     },
     module: {
       rules: [
+        {
+          test: /\.md$/i,
+          type: "javascript/auto",
+          use: require.resolve("./md-raw-loader.js"),
+        },
         {
           test: /\.ts$/,
           exclude: /node_modules/,
@@ -102,6 +107,7 @@ module.exports = async (env, options) => {
       hot: true,
       headers: {
         "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
       },
       server: {
         type: "https",

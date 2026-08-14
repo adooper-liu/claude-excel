@@ -1,0 +1,11 @@
+{
+  "name": "claude-excel",
+  "private": true,
+  "description": "Excel add-in. Run npm commands from this folder; they forward to addin/.",
+  "scripts": {
+    "start": "npm start --prefix addin",
+    "stop": "npm stop --prefix addin",
+    "build": "npm run build --prefix addin",
+    "install:addin": "npm install --prefix addin"
+  }
+}

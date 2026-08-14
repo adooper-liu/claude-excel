@@ -20,7 +20,7 @@ echo 证书已配置。
 
 echo.
 echo [2/3] 安装 Python 依赖...
-pip install fastapi uvicorn python-multipart httpx pandas openpyxl numpy scipy -q
+pip install fastapi uvicorn httpx -q
 echo 依赖已安装。
 
 echo.
@@ -30,7 +30,7 @@ powershell -Command "$m='file:///'+(Get-Location).Path.Replace('\','/')+'/addin/
 echo.
 echo ==========================================
 echo   安装完成！
-echo   以后每次使用：双击 start.bat
-echo   首次配置 API Key：浏览器打开 https://localhost:8765
+echo   以后每次使用：双击 launch.bat
+echo   首次配置 API Key：在 Excel 侧边栏点 ⚙
 echo ==========================================
 pause

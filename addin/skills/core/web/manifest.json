@@ -1,0 +1,18 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "description": "Fetch a known URL via the local backend. Search is injected server-side on DeepSeek.",
+  "tools": [
+    {
+      "name": "web_fetch",
+      "description": "Fetch readable text of a known http(s) URL via the local backend. Use after web_search finds a link, or when the user gave a URL. If fetch errors (Amazon often 403), do not invent prices/ASINs — mark 未能获取 and fall back to web_search snippets.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "Full http(s) URL" }
+        },
+        "required": ["url"]
+      }
+    }
+  ]
+}

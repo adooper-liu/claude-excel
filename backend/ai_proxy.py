@@ -1,11 +1,66 @@
-"""ai_proxy.py — Proxy AI API calls to DeepSeek/Qwen/GLM/etc (Anthropic-compatible endpoints)."""
+"""ai_proxy.py — Proxy AI API calls to Anthropic-compatible endpoints."""
 
 import json
+from typing import Any, AsyncGenerator, Optional
+
 import httpx
-from typing import AsyncGenerator, Optional
 from config_store import get_api_key, get_base_url, get_model
+from web_tools import merge_web_search, should_inject_web_search
 
 API_VERSION = "2023-06-01"
+
+
+def _headers(api_key: str) -> dict[str, str]:
+    return {
+        "content-type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": API_VERSION,
+    }
+
+
+def _payload(
+    messages: list[dict],
+    system_prompt: Optional[Any],
+    model: Optional[str],
+    max_tokens: int,
+    tools: Optional[list],
+    stream: bool,
+) -> dict:
+    system_parts: list[str] = []
+    if isinstance(system_prompt, str) and system_prompt:
+        system_parts.append(system_prompt)
+    elif isinstance(system_prompt, list):
+        for part in system_prompt:
+            if isinstance(part, str):
+                system_parts.append(part)
+            elif isinstance(part, dict) and part.get("text"):
+                system_parts.append(part["text"])
+
+    api_messages = []
+    for m in messages:
+        role = m.get("role")
+        if role == "system":
+            content = m.get("content", "")
+            if isinstance(content, str):
+                system_parts.append(content)
+            continue
+        if role in ("user", "assistant"):
+            api_messages.append({"role": role, "content": m.get("content", "")})
+
+    body: dict[str, Any] = {
+        "model": model or get_model(),
+        "max_tokens": max_tokens,
+        "messages": api_messages,
+        "stream": stream,
+    }
+    if system_parts:
+        body["system"] = [{"type": "text", "text": s} for s in system_parts]
+    merged = list(tools or [])
+    if should_inject_web_search(get_base_url()):
+        merged = merge_web_search(merged)
+    if merged:
+        body["tools"] = merged
+    return body
 
 
 async def validate_key(api_key: str, base_url: Optional[str] = None) -> bool:
@@ -22,9 +77,47 @@ async def validate_key(api_key: str, base_url: Optional[str] = None) -> bool:
         return False
 
 
+async def chat_complete(
+    messages: list[dict],
+    system_prompt: Optional[Any] = None,
+    model: Optional[str] = None,
+    max_tokens: int = 4096,
+    tools: Optional[list] = None,
+) -> dict:
+    """Non-streaming proxy. Returns an Anthropic-style messages response dict."""
+    api_key = get_api_key()
+    if not api_key:
+        return {
+            "content": [
+                {"type": "text", "text": "Error: No API key configured. Please set your key in Settings."}
+            ]
+        }
+
+    body = _payload(messages, system_prompt, model, max_tokens, tools, stream=False)
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{get_base_url()}/v1/messages",
+                headers=_headers(api_key),
+                json=body,
+            )
+            if resp.status_code != 200:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Error: API returned {resp.status_code}: {resp.text[:300]}",
+                        }
+                    ]
+                }
+            return resp.json()
+    except Exception as e:
+        return {"content": [{"type": "text", "text": f"Error: {e}"}]}
+
+
 async def chat_stream(
     messages: list[dict],
-    system_prompt: Optional[str] = None,
+    system_prompt: Optional[Any] = None,
     model: Optional[str] = None,
     max_tokens: int = 4096,
     tools: Optional[list] = None,
@@ -35,42 +128,13 @@ async def chat_stream(
         yield "Error: No API key configured. Please set your key in Settings."
         return
 
-    base_url = get_base_url()
-    use_model = model or get_model()
-
-    # Separate system messages
-    system_parts = []
-    if system_prompt:
-        system_parts.append(system_prompt)
-
-    api_messages = []
-    for m in messages:
-        if m.get("role") == "system":
-            system_parts.append(m.get("content", ""))
-        elif m.get("role") in ("user", "assistant"):
-            api_messages.append({"role": m["role"], "content": m.get("content", "")})
-
-    body = {
-        "model": use_model,
-        "max_tokens": max_tokens,
-        "messages": api_messages,
-        "stream": True,
-    }
-    if system_parts:
-        body["system"] = [{"type": "text", "text": s} for s in system_parts]
-    if tools:
-        body["tools"] = tools
-
+    body = _payload(messages, system_prompt, model, max_tokens, tools, stream=True)
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             async with client.stream(
                 "POST",
-                f"{base_url}/v1/messages",
-                headers={
-                    "content-type": "application/json",
-                    "x-api-key": api_key,
-                    "anthropic-version": API_VERSION,
-                },
+                f"{get_base_url()}/v1/messages",
+                headers=_headers(api_key),
                 json=body,
             ) as resp:
                 if resp.status_code != 200:

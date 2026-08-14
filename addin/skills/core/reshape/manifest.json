@@ -1,0 +1,29 @@
+{
+  "name": "reshape",
+  "version": "1.0.0",
+  "description": "Clean a dirty Excel Table into a new table: dedupe, unpivot, split column, coerce types",
+  "tools": [
+    {
+      "name": "reshape_table",
+      "description": "Reshape one Excel Table and WRITE A NEW SHEET only (never overwrite the source). op: dedupe (keep first row per key), unpivot (wide→long), split (one column by separator), coerce (number|text|date). Table must already exist (use ensure_table first).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tableName": { "type": "string", "description": "Excel Table name from ensure_table" },
+          "op": { "type": "string", "description": "dedupe | unpivot | split | coerce" },
+          "keys": { "type": "string", "description": "dedupe: uniqueness column(s), comma-separated" },
+          "idColumns": { "type": "string", "description": "unpivot: columns that stay. Default: first column" },
+          "valueColumns": { "type": "string", "description": "unpivot: columns to melt. Default: all except idColumns" },
+          "attributeName": { "type": "string", "description": "unpivot: name of the new attribute column. Default 属性" },
+          "valueName": { "type": "string", "description": "unpivot: name of the new value column. Default 值" },
+          "column": { "type": "string", "description": "split/coerce: source column header" },
+          "separator": { "type": "string", "description": "split: delimiter. Default comma" },
+          "maxParts": { "type": "number", "description": "split: max new columns. Default = max observed" },
+          "type": { "type": "string", "description": "coerce: number | text | date" },
+          "outputSheet": { "type": "string", "description": "New sheet name. Default 去重结果 / 反透视结果 / 拆列结果 / 类型结果" }
+        },
+        "required": ["tableName", "op"]
+      }
+    }
+  ]
+}

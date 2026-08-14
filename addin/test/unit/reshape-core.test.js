@@ -1,0 +1,95 @@
+require("ts-node/register/transpile-only");
+const assert = require("assert");
+const { reshape } = require("../../src/excel/reshape-core");
+
+describe("reshape-core", function () {
+  it("dedupes by key and keeps the first row", function () {
+    const result = reshape({
+      headers: ["id", "amt"],
+      rows: [
+        ["A", 1],
+        ["A", 9],
+        ["B", 2],
+      ],
+      op: "dedupe",
+      keys: ["id"],
+    });
+    assert.deepStrictEqual(result.headers, ["id", "amt"]);
+    assert.deepStrictEqual(result.rows, [
+      ["A", 1],
+      ["B", 2],
+    ]);
+    assert.strictEqual(result.dropped, 1);
+  });
+
+  it("trims key cells before dedupe", function () {
+    const result = reshape({
+      headers: ["id"],
+      rows: [[" A "], ["A"]],
+      op: "dedupe",
+      keys: ["id"],
+    });
+    assert.strictEqual(result.rows.length, 1);
+  });
+
+  it("unpivots value columns into 属性/值", function () {
+    const result = reshape({
+      headers: ["地区", "1月", "2月"],
+      rows: [["华东", 10, 20]],
+      op: "unpivot",
+      idColumns: ["地区"],
+      valueColumns: ["1月", "2月"],
+    });
+    assert.deepStrictEqual(result.headers, ["地区", "属性", "值"]);
+    assert.deepStrictEqual(result.rows, [
+      ["华东", "1月", 10],
+      ["华东", "2月", 20],
+    ]);
+  });
+
+  it("splits a column by separator into numbered parts", function () {
+    const result = reshape({
+      headers: ["姓名", "标签"],
+      rows: [["张三", "a,b,c"]],
+      op: "split",
+      column: "标签",
+      separator: ",",
+      maxParts: 3,
+    });
+    assert.deepStrictEqual(result.headers, ["姓名", "标签_1", "标签_2", "标签_3"]);
+    assert.deepStrictEqual(result.rows, [["张三", "a", "b", "c"]]);
+  });
+
+  it("coerces a column to number and blanks invalid cells", function () {
+    const result = reshape({
+      headers: ["id", "金额"],
+      rows: [
+        ["A", "1,234"],
+        ["B", " 12.5 "],
+        ["C", "x"],
+      ],
+      op: "coerce",
+      column: "金额",
+      type: "number",
+    });
+    assert.deepStrictEqual(result.rows, [
+      ["A", 1234],
+      ["B", 12.5],
+      ["C", null],
+    ]);
+    assert.strictEqual(result.converted, 2);
+    assert.strictEqual(result.blanked, 1);
+  });
+
+  it("throws when a required column is missing", function () {
+    assert.throws(function () {
+      reshape({
+        headers: ["id"],
+        rows: [["A"]],
+        op: "split",
+        column: "标签",
+        separator: ",",
+      });
+    }, /标签/);
+  });
+});

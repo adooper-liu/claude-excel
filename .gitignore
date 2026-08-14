@@ -5,7 +5,6 @@ __pycache__/
 *.pyo
 
 # Build output
-web/dist/
 addin/dist/
 *.egg-info/
 
@@ -28,6 +27,9 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# Installer archives (GitHub rejects files over 100MB)
+*.zip
 
 # Office add-in temp
 *.sideload.xlsx

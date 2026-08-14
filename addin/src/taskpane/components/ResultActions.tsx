@@ -48,12 +48,12 @@ export default function ResultActions({ content, hasTable }: Props): JSX.Element
   return (
     <div className="result-actions">
       {hasTable && (
-        <button onClick={handleWriteToSheet} title="Write table to a new Excel sheet">
-          📊 Write to Sheet
+        <button onClick={handleWriteToSheet} title="把表格写入新工作表">
+          写入工作表
         </button>
       )}
-      <button onClick={handleCopy} title="Copy response to clipboard">
-        📋 Copy
+      <button onClick={handleCopy} title="复制到剪贴板">
+        复制
       </button>
     </div>
   );

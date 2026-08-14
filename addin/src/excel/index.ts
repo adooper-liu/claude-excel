@@ -1,6 +1,30 @@
 export { readSelection, readRange } from './read';
-export { writeToNewSheet, writeToRange, writeFormulas } from './write';
+export { writeToNewSheet, writeToRange, writeFormulas, writeFormulaRuns } from './write';
 export { formatRange, addConditionalFormat } from './format';
 export { createChart } from './chart';
 export { applySortFilter } from './data-ops';
-export { getSheetNames, setActiveSheet } from './sheet';
+export { getSheetNames, setActiveSheet, undoLastResultSheet, undoResultSheet } from './sheet';
+export { sheetHistory } from './sheet-history';
+export { inspectWorkbook, inspectTable } from './inspect';
+export { ensureTable, readTable, listTableNames } from './table';
+export { reconcileTables } from './reconcile';
+export { runReconcileIntent } from './reconcile-run';
+export { isReconcileRequest } from './reconcile-intent';
+export { reshapeTable } from './reshape';
+export { runReshapeIntent } from './reshape-run';
+export { isReshapeRequest } from './reshape-intent';
+export { calculateTable } from './calculate';
+export { runCalculateIntent } from './calculate-run';
+export { isCalculateRequest } from './calculate-intent';
+export {
+  isSetupRequest,
+  isSkipSampleRequest,
+  isAskGenerateSample,
+  askGenerateSample,
+  sampleKitsForAsk,
+  sampleActionForText,
+  buildGenerateCommand,
+  SKIP_SAMPLE_COMMAND,
+  SKIP_SAMPLE_REPLY,
+} from './intent-guard';
+export type { SampleKit } from './intent-guard';

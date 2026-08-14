@@ -1,0 +1,20 @@
+{
+  "name": "table",
+  "version": "1.0.0",
+  "description": "Promote a range to an Excel Table so later skills can use headers and keys",
+  "tools": [
+    {
+      "name": "ensure_table",
+      "description": "Turn a range into an Excel Table (first row = headers). If the range is already a table, return it. Required before reconcile_tables, reshape_table, and calculate_table. Returns the actual table name (Chinese names are prefixed, e.g. T_系统订单表); always use that name in later calls.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string", "description": "Optional A1 range including header row, e.g. A1:D50. If omitted, uses the sheet's used range. Do not include the sheet name." },
+          "tableName": { "type": "string", "description": "Optional table name. Chinese names are stored as T_系统订单表; always use the returned name." }
+        },
+        "required": ["sheetName"]
+      }
+    }
+  ]
+}

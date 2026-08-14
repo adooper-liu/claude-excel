@@ -1,0 +1,23 @@
+{
+  "name": "inspect",
+  "version": "1.0.0",
+  "description": "See workbook structure before changing anything",
+  "tools": [
+    {
+      "name": "inspect_workbook",
+      "description": "List sheets and Excel Tables with used range, headers, and row counts. Call this first. Does not dump all cell values.",
+      "input_schema": { "type": "object", "properties": {}, "required": [] }
+    },
+    {
+      "name": "inspect_table",
+      "description": "Inspect one Excel Table: headers, data row count, up to 5 sample rows.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tableName": { "type": "string", "description": "Excel Table name (ListObject)" }
+        },
+        "required": ["tableName"]
+      }
+    }
+  ]
+}

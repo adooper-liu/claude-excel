@@ -1,38 +1,117 @@
 /**
- * ChatInput.tsx — Text input with send and stop buttons.
+ * ChatInput.tsx — Text input with send, stop, ⚡ templates, and / skills.
  */
 
 import React, { useState, useRef, useCallback, KeyboardEvent } from 'react';
+import PromptMenu from './PromptMenu';
+import { filterSlashSkills, parseSlashCommand, slashQuery, type SlashSkill } from '../../services/slash-skills';
+import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
 
 interface Props {
   onSend: (text: string) => void;
   onStop: () => void;
   isStreaming: boolean;
   disabled: boolean;
+  installed?: InstalledSkill[];
+  onInstalledChange?: (skills: InstalledSkill[]) => void;
 }
 
 export default function ChatInput({
-  onSend, onStop, isStreaming, disabled,
+  onSend, onStop, isStreaming, disabled, installed = [], onInstalledChange,
 }: Props): JSX.Element {
   const [text, setText] = useState('');
+  const [showPrompts, setShowPrompts] = useState(false);
+  const [active, setActive] = useState(0);
+  const [pasteMd, setPasteMd] = useState('');
+  const [installErr, setInstallErr] = useState('');
+  const [installing, setInstalling] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const query = slashQuery(text);
+  const skills = query == null ? [] : filterSlashSkills(query, installed);
+  const completeSlash = !!parseSlashCommand(text.trim(), installed);
+  const wantInstall = query === "安装" || query === "install";
+  const showSlash = !disabled && !isStreaming && query != null && !completeSlash && (skills.length > 0 || wantInstall);
+
+  const applySkill = useCallback((skill: SlashSkill) => {
+    setText('/' + skill.slash);
+    setActive(0);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 100) + 'px';
+    }
+  }, []);
+
+  const handleInstall = useCallback(async () => {
+    const md = pasteMd.trim();
+    if (!md || installing) return;
+    setInstalling(true);
+    setInstallErr('');
+    try {
+      const skill = await installUserSkill(md);
+      const next = installed.filter((s) => s.id !== skill.id).concat([skill]);
+      onInstalledChange?.(next);
+      setPasteMd('');
+      setText('/' + skill.slash);
+    } catch (err) {
+      setInstallErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setInstalling(false);
+    }
+  }, [pasteMd, installing, installed, onInstalledChange]);
+
+  const handleDeleteInstalled = useCallback(async (id: string) => {
+    try {
+      await deleteUserSkill(id);
+      onInstalledChange?.(installed.filter((s) => s.id !== id));
+    } catch (err) {
+      setInstallErr(err instanceof Error ? err.message : String(err));
+    }
+  }, [installed, onInstalledChange]);
+
   const handleSend = useCallback(() => {
-    if (!text.trim() || isStreaming) return;
-    onSend(text);
+    const raw = text.trim();
+    if (!raw || isStreaming) return;
+    if (raw.startsWith('/') && !parseSlashCommand(raw, installed) && slashQuery(raw) != null) return;
+    onSend(raw);
     setText('');
-    // Reset height
+    setShowPrompts(false);
+    setActive(0);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [text, isStreaming, onSend]);
+  }, [text, isStreaming, onSend, installed]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (showSlash) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (skills.length) setActive((i) => (i + 1) % skills.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (skills.length) setActive((i) => (i - 1 + skills.length) % skills.length);
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (skills[active] || skills[0]) applySkill(skills[active] || skills[0]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setText('');
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  }, [handleSend]);
+  }, [showSlash, skills, active, applySkill, handleSend]);
 
   const handleInput = useCallback(() => {
     const el = textareaRef.current;
@@ -44,21 +123,90 @@ export default function ChatInput({
 
   return (
     <div className="chat-input-area">
+      <div className="chat-input-tools">
+        <button
+          type="button"
+          className="icon-btn"
+          disabled={disabled || isStreaming}
+          onClick={() => setShowPrompts((v) => !v)}
+          title="预置指令"
+          aria-label="预置指令"
+        >⚡</button>
+        {showPrompts && (
+          <PromptMenu
+            draft={text}
+            onPick={(prompt) => {
+              setText(prompt);
+              setShowPrompts(false);
+              if (textareaRef.current) {
+                textareaRef.current.focus();
+                textareaRef.current.style.height = 'auto';
+                textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 100) + 'px';
+              }
+            }}
+            onClose={() => setShowPrompts(false)}
+          />
+        )}
+        {showSlash && (
+          <div className="flyout prompt-flyout skill-flyout" role="listbox" aria-label="技能">
+            <div className="flyout-head"><span>技能</span></div>
+            {skills.length > 0 && (
+              <ul className="prompt-list">
+                {skills.map((s, i) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      className={`prompt-pick${i === active ? ' active' : ''}`}
+                      title={s.title}
+                      onMouseEnter={() => setActive(i)}
+                      onClick={() => applySkill(s)}
+                    >
+                      <span className="slash-cmd"><span className="slash-mark">/</span>{s.slash}</span>
+                      {s.title}
+                    </button>
+                    {s.installed && (
+                      <button
+                        type="button"
+                        className="prompt-del"
+                        title="卸载"
+                        aria-label={"卸载 " + s.slash}
+                        onClick={() => handleDeleteInstalled(s.id)}
+                      >✕</button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="skill-install">
+              <textarea
+                value={pasteMd}
+                onChange={(e) => { setPasteMd(e.target.value); setInstallErr(''); }}
+                placeholder="粘贴 SKILL.md 安装外部技能"
+                rows={4}
+              />
+              <button type="button" onClick={handleInstall} disabled={!pasteMd.trim() || installing}>
+                安装
+              </button>
+              {installErr && <p className="skill-install-err">{installErr}</p>}
+            </div>
+          </div>
+        )}
+      </div>
       <textarea
         ref={textareaRef}
         value={text}
-        onChange={e => setText(e.target.value)}
+        onChange={e => { setText(e.target.value); setActive(0); }}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
-        placeholder={disabled ? 'Configure API settings first...' : 'Ask about your Excel data...'}
+        placeholder={disabled ? '请先在设置里配置接口' : '输入 / 选择技能，/skill 创建技能…'}
         disabled={disabled}
         rows={1}
       />
       {isStreaming ? (
-        <button className="stop" onClick={onStop}>⏹ Stop</button>
+        <button className="stop" onClick={onStop}>停止</button>
       ) : (
         <button onClick={handleSend} disabled={disabled || !text.trim()}>
-          Send
+          发送
         </button>
       )}
     </div>

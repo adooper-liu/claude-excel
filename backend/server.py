@@ -1,145 +1,59 @@
-"""server.py — FastAPI backend for Claude Excel Web."""
+"""server.py — FastAPI backend for the Excel add-in (LLM proxy + static taskpane)."""
 
-import os
-import uuid
-import shutil
-import time
+import json
+from contextlib import asynccontextmanager
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Optional
 
-import math
-import webbrowser
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-import pandas as pd
-from excel_core import describe, profile, clean as excel_clean, compare as excel_compare
-from ai_proxy import chat_stream, validate_key
-from config_store import save_config, get_config, get_api_key
+from ai_proxy import chat_complete, chat_stream, validate_key
+from config_store import save_config, get_config
+from templates_store import read_templates, write_templates
+from user_skills_store import delete_skill, install_skill, list_skills
+from web_tools import fetch_url_content
+from skill_registry import (
+    SkillRegistryError,
+    addin_skills_dir,
+    load_tools,
+    validate_backend_skills,
+)
 
-# ── JSON NaN sanitizer ────────────────────────────────────────────
+ADDIN_DIR = Path(__file__).parent.parent / "addin" / "dist"
+ROOT_DIR = Path(__file__).parent.parent
 
-class NaNResponse(JSONResponse):
-    def render(self, content) -> bytes:
-        return super().render(_sanitize(content))
 
-def _sanitize(obj):
-    if isinstance(obj, float):
-        if math.isnan(obj): return None
-        if math.isinf(obj): return None
-        return obj
-    if isinstance(obj, dict):
-        return {k: _sanitize(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitize(v) for v in obj]
-    return obj
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        validate_backend_skills(ROOT_DIR)
+    except SkillRegistryError as exc:
+        raise SystemExit(str(exc)) from exc
+    yield
 
-app = FastAPI(title="Claude Excel", version="2.0.0", default_response_class=NaNResponse)
+
+app = FastAPI(title="Claude Excel", version="3.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["https://localhost:3000"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Static files ─────────────────────────────────────────────────
-FRONTEND_DIR = Path(__file__).parent.parent / "web" / "dist"
-ADDIN_DIR = Path(__file__).parent.parent / "addin" / "dist"
-ROOT_DIR = Path(__file__).parent.parent
 
-if FRONTEND_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+if ADDIN_DIR.joinpath("assets").exists():
+    app.mount("/assets", StaticFiles(directory=ADDIN_DIR / "assets"), name="assets")
 
-if ADDIN_DIR.exists():
-    app.mount("/addin/assets", StaticFiles(directory=ADDIN_DIR / "assets"), name="addin_assets")
-
-UPLOAD_DIR = Path.home() / "claude-excel-web" / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# Store active file sessions {file_id: path}
-_sessions: dict[str, dict] = {}
-
-# ── File cleanup ──────────────────────────────────────────────────
-
-def _cleanup_old_files():
-    """Remove files older than 24 hours."""
-    cutoff = time.time() - 86400
-    for f in UPLOAD_DIR.iterdir():
-        if f.is_file() and f.stat().st_mtime < cutoff:
-            f.unlink()
-    # Also clean _sessions
-    stale = [fid for fid, s in _sessions.items()
-             if not Path(s["path"]).exists()]
-    for fid in stale:
-        del _sessions[fid]
-
-# ── API Routes ────────────────────────────────────────────────────
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
 
-@app.post("/api/upload")
-async def upload(file: UploadFile = File(...)):
-    _cleanup_old_files()
-    file_id = uuid.uuid4().hex[:12]
-    ext = Path(file.filename).suffix if file.filename else ".xlsx"
-    dest = UPLOAD_DIR / f"{file_id}{ext}"
-    with open(dest, "wb") as f:
-        f.write(await file.read())
-
-    # Get structure
-    try:
-        info = describe(str(dest))
-    except Exception as e:
-        dest.unlink()
-        raise HTTPException(400, f"Cannot read file: {e}")
-
-    _sessions[file_id] = {"path": str(dest), "name": file.filename}
-
-    return {
-        "file_id": file_id,
-        "name": file.filename,
-        "sheets": info["sheets"],
-        "warnings": info.get("warnings", []),
-    }
-
-@app.post("/api/describe")
-async def api_describe(req: dict):
-    file_id = req.get("file_id")
-    path = _get_path(file_id)
-    return describe(path)
-
-@app.post("/api/profile")
-async def api_profile(req: dict):
-    file_id = req.get("file_id")
-    path = _get_path(file_id)
-    columns = req.get("columns")
-    return profile(path, columns=columns)
-
-@app.post("/api/clean")
-async def api_clean(req: dict):
-    file_id = req.get("file_id")
-    path = _get_path(file_id)
-    ops = req.get("operations")
-    out_id = uuid.uuid4().hex[:12]
-    out_path = str(UPLOAD_DIR / f"{out_id}_cleaned.xlsx")
-    result = excel_clean(path, operations=ops, output_path=out_path)
-    _sessions[out_id] = {"path": out_path, "name": f"cleaned_{Path(path).name}"}
-    return {**result, "file_id": out_id}
-
-@app.post("/api/compare")
-async def api_compare(req: dict):
-    path_a = _get_path(req.get("file_id_a"))
-    path_b = _get_path(req.get("file_id_b"))
-    key = req.get("key_columns")
-    return excel_compare(path_a, path_b, key_columns=key)
 
 @app.post("/api/chat")
 async def api_chat(req: dict):
@@ -151,24 +65,35 @@ async def api_chat(req: dict):
     tools = req.get("tools")
 
     if not stream:
-        # Non-streaming: collect all tokens and return JSON
-        result_text = ""
-        async for token in chat_stream(messages, system_prompt=system, model=model, max_tokens=max_tokens, tools=tools):
-            result_text += token
-        return {
-            "id": "chat-" + __import__('uuid').uuid4().hex[:8],
-            "model": model or "unknown",
-            "content": [{"type": "text", "text": result_text}],
-            "usage": {"input_tokens": 0, "output_tokens": 0},
-        }
+        return await chat_complete(
+            messages,
+            system_prompt=system,
+            model=model,
+            max_tokens=max_tokens,
+            tools=tools,
+        )
 
     async def event_stream():
-        async for token in chat_stream(messages, system_prompt=system, model=model, max_tokens=max_tokens):
-            yield f"data: {__import__('json').dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': token}})}\n\n"
+        async for token in chat_stream(
+            messages,
+            system_prompt=system,
+            model=model,
+            max_tokens=max_tokens,
+            tools=tools,
+        ):
+            payload = {
+                "type": "content_block_delta",
+                "delta": {"type": "text_delta", "text": token},
+            }
+            yield "data: " + json.dumps(payload) + "\n\n"
         yield "data: [DONE]\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 
 @app.post("/api/key/validate")
 async def api_validate_key(req: dict):
@@ -179,6 +104,7 @@ async def api_validate_key(req: dict):
     valid = await validate_key(api_key, base_url)
     return {"valid": valid}
 
+
 @app.post("/api/key/set")
 async def api_set_key(req: dict):
     api_key = req.get("apiKey", "")
@@ -186,134 +112,21 @@ async def api_set_key(req: dict):
         raise HTTPException(400, "apiKey required")
     if not api_key.strip().startswith("sk-"):
         raise HTTPException(400, "Invalid key format")
-    # Skip validation — let first chat call validate (avoids network issues)
-    save_config({k: v for k, v in req.items() if v and k in ("apiKey", "baseUrl", "model", "smallFastModel")})
+    save_config(
+        {
+            k: v
+            for k, v in req.items()
+            if v and k in ("apiKey", "baseUrl", "model", "smallFastModel")
+        }
+    )
     return {"ok": True}
 
-# ── Pre-defined Operations (safe — no code execution) ─────────
-
-@app.post("/api/ops/profile")
-async def ops_profile(req: dict):
-    """Statistical profile + outlier detection."""
-    path = _get_path(req.get("file_id"))
-    cols = req.get("columns")
-    return profile(path, columns=cols)
-
-@app.post("/api/ops/trend")
-async def ops_trend(req: dict):
-    """Time-series trend detection."""
-    path = _get_path(req.get("file_id"))
-    date_col = req.get("date_column", "")
-    metric_cols = req.get("metric_columns", [])
-    if not date_col or not metric_cols:
-        raise HTTPException(400, "date_column and metric_columns required")
-    df = pd.read_excel(path)
-    from excel_core import detect_trends
-    result = detect_trends(df, date_col, metric_cols)
-    return {"trends": result.to_dict(orient="records")}
-
-@app.post("/api/ops/pivot")
-async def ops_pivot(req: dict):
-    """Group-by aggregation pivot."""
-    path = _get_path(req.get("file_id"))
-    group_by = req.get("group_by", [])
-    metric_cols = req.get("metric_columns")
-    if not group_by:
-        raise HTTPException(400, "group_by required")
-    df = pd.read_excel(path)
-    from excel_core import profile_statistics
-    result = profile_statistics(df, metric_cols, group_by=group_by)
-    return {"pivot": result.to_dict(orient="records")}
-
-# ── Logistics Engine ───────────────────────────────────────
-
-@app.post("/api/logistics/upload-mapping")
-async def logistics_mapping(req: dict):
-    """Suggest field mapping for uploaded files."""
-    file_id = req.get("file_id")
-    path = _get_path(file_id)
-    df = pd.read_excel(path)
-    from logistics.schema import suggest_mapping
-    mapping = suggest_mapping(list(df.columns))
-    return {"columns": list(df.columns), "suggested_mapping": mapping, "row_count": len(df), "samples": df.head(3).to_dict(orient="records")}
-
-@app.post("/api/logistics/match")
-async def logistics_match(req: dict):
-    """Match orders + tracking files."""
-    orders_path = _get_path(req.get("orders_id"))
-    tracking_path = _get_path(req.get("tracking_id"))
-    mapping = req.get("mapping", {})
-    orders = pd.read_excel(orders_path)
-    tracking = pd.read_excel(tracking_path)
-    from logistics.schema import apply_mapping
-    orders = apply_mapping(orders, mapping.get("orders", {}))
-    tracking = apply_mapping(tracking, mapping.get("tracking", {}))
-    from logistics.matcher import match
-    result = match(orders, tracking)
-    result.pop("matched_df", None)
-    return result
-
-@app.post("/api/logistics/kpi")
-async def logistics_kpi(req: dict):
-    """Calculate VTR/OTR KPIs."""
-    orders_path = _get_path(req.get("orders_id"))
-    tracking_path = _get_path(req.get("tracking_id"))
-    mapping = req.get("mapping", {})
-    orders = pd.read_excel(orders_path)
-    tracking = pd.read_excel(tracking_path)
-    from logistics.schema import apply_mapping
-    orders = apply_mapping(orders, mapping.get("orders", {}))
-    tracking = apply_mapping(tracking, mapping.get("tracking", {}))
-    from logistics.matcher import match
-    from logistics.kpi import calculate as kpi_calc
-    from logistics.anomaly import detect
-    from logistics.carrier import compare
-    m = match(orders, tracking)
-    matched = orders  # Use all orders with tracking columns merged
-    kpi = kpi_calc(matched)
-    anomalies = detect(matched)
-    carriers = compare(matched)
-    # Save to history
-    from logistics.storage import save_kpi, save_anomalies
-    save_kpi(req.get("orders_id", ""), kpi)
-    save_anomalies(req.get("orders_id", ""), anomalies.get("anomalies", []))
-    return {"kpi": kpi, "anomalies": anomalies, "carriers": carriers}
-
-@app.post("/api/logistics/report")
-async def logistics_report(req: dict):
-    """Generate XLSX report."""
-    orders_path = _get_path(req.get("orders_id"))
-    tracking_path = _get_path(req.get("tracking_id"))
-    mapping = req.get("mapping", {})
-    orders = pd.read_excel(orders_path)
-    tracking = pd.read_excel(tracking_path)
-    from logistics.schema import apply_mapping
-    orders = apply_mapping(orders, mapping.get("orders", {}))
-    tracking = apply_mapping(tracking, mapping.get("tracking", {}))
-    from logistics.kpi import calculate as kpi_calc
-    from logistics.anomaly import detect
-    from logistics.carrier import compare
-    from logistics.report import generate
-    kpi = kpi_calc(orders)
-    anomalies = detect(orders)
-    carriers = compare(orders)
-    xlsx = generate(kpi, anomalies, carriers, orders)
-    import base64
-    return {"report_b64": base64.b64encode(xlsx).decode(), "filename": "logistics_report.xlsx"}
 
 @app.get("/api/skills")
 async def api_get_skills():
-    """Return all tool definitions from skill manifests."""
-    import json, glob as _glob
-    tools = []
-    skills_dir = Path(__file__).parent.parent / "skills" / "core"
-    for mf in sorted(skills_dir.glob("*/manifest.json")):
-        try:
-            data = json.loads(mf.read_text(encoding="utf-8"))
-            tools.extend(data.get("tools", []))
-        except Exception:
-            pass
+    tools = load_tools(addin_skills_dir(ROOT_DIR))
     return {"tools": tools, "count": len(tools)}
+
 
 @app.get("/api/config")
 async def api_get_config():
@@ -322,61 +135,93 @@ async def api_get_config():
     pub["hasKey"] = bool(cfg.get("apiKey"))
     return pub
 
-@app.get("/api/download/{file_id}")
-async def download(file_id: str):
-    path = _get_path(file_id)
-    name = _sessions.get(file_id, {}).get("name", Path(path).name)
-    return FileResponse(path, filename=name,
-                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-# ── Helpers ────────────────────────────────────────────────────────
+@app.get("/api/templates")
+async def api_get_templates():
+    return {"templates": read_templates()}
 
-def _get_path(file_id: str) -> str:
-    if file_id in _sessions and Path(_sessions[file_id]["path"]).exists():
-        return _sessions[file_id]["path"]
-    # Try glob
-    for f in UPLOAD_DIR.iterdir():
-        if f.name.startswith(file_id):
-            return str(f)
-    raise HTTPException(404, f"File not found: {file_id}")
 
-# ── SPA catch-all: serve index.html for non-API routes ────────────
+@app.put("/api/templates")
+async def api_put_templates(req: dict):
+    items = req.get("templates")
+    if not isinstance(items, list):
+        raise HTTPException(400, "templates must be a list")
+    return {"templates": write_templates(None, items)}
+
+
+@app.get("/api/user-skills")
+async def api_list_user_skills():
+    return {"skills": list_skills()}
+
+
+@app.post("/api/user-skills")
+async def api_install_user_skill(req: dict):
+    markdown = req.get("markdown") or req.get("content") or ""
+    if not str(markdown).strip():
+        raise HTTPException(400, "markdown required")
+    try:
+        skill = install_skill(None, str(markdown))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"skill": skill}
+
+
+@app.post("/api/web-fetch")
+async def api_web_fetch(req: dict):
+    url = req.get("url") or ""
+    return await fetch_url_content(str(url))
+
+
+@app.delete("/api/user-skills/{skill_id}")
+async def api_delete_user_skill(skill_id: str):
+    try:
+        delete_skill(None, skill_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "skill not found")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True}
+
+
+ADDIN_FILES = {
+    "taskpane.html",
+    "taskpane.js",
+    "commands.html",
+    "commands.js",
+    "polyfill.js",
+    "react.js",
+}
+
 
 @app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    # Root path always serves web frontend
-    if not full_path:
-        if FRONTEND_DIR.joinpath("index.html").exists():
-            return HTMLResponse(FRONTEND_DIR.joinpath("index.html").read_text(encoding="utf-8"))
-        return HTMLResponse("<h1>Claude Excel</h1><p>Web frontend not built.</p>")
-
-    # Addin-specific files (only when path matches addin file names)
-    ADDIN_FILES = {'taskpane.html', 'taskpane.js', 'commands.html', 'commands.js', 'polyfill.js', 'react.js'}
+async def serve_addin(full_path: str):
     if full_path in ADDIN_FILES and ADDIN_DIR.joinpath(full_path).exists():
-        return FileResponse(str(ADDIN_DIR / full_path))
+        return FileResponse(
+            str(ADDIN_DIR / full_path),
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+                "Pragma": "no-cache",
+            },
+        )
+    raise HTTPException(404, "Not found")
 
-    # Web SPA fallback
-    if FRONTEND_DIR.joinpath("index.html").exists():
-        return HTMLResponse(FRONTEND_DIR.joinpath("index.html").read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>Claude Excel</h1><p>Not built.</p>")
-
-# ── Main ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     CERT = ROOT_DIR / "backend" / "cert.pem"
     KEY = ROOT_DIR / "backend" / "key.pem"
     use_ssl = CERT.exists() and KEY.exists()
-
-    print("=" * 50)
-    print("  Claude Excel")
     proto = "https" if use_ssl else "http"
+    print("=" * 50)
+    print("  Claude Excel (Excel add-in backend)")
     print(f"  {proto}://localhost:8765")
     print("=" * 50)
-
-    if not use_ssl:
-        webbrowser.open("http://localhost:8765")
-        uvicorn.run(app, host="0.0.0.0", port=8765)
+    if use_ssl:
+        uvicorn.run(
+            app,
+            host="0.0.0.0",
+            port=8765,
+            ssl_keyfile=str(KEY),
+            ssl_certfile=str(CERT),
+        )
     else:
-        webbrowser.open("https://localhost:8765")
-        uvicorn.run(app, host="0.0.0.0", port=8765,
-                    ssl_keyfile=str(KEY), ssl_certfile=str(CERT))
+        uvicorn.run(app, host="0.0.0.0", port=8765)

@@ -1,0 +1,29 @@
+{
+  "name": "reconcile",
+  "version": "1.0.0",
+  "description": "Exact-match two Excel Tables by key columns; write a new result sheet only",
+  "tools": [
+    {
+      "name": "reconcile_tables",
+      "description": "Compare two Excel Tables by one or more key columns. Writes a NEW sheet (never overwrites sources) with status matched|left_only|right_only|conflict. Exact match after trim; blank keys never match; no fuzzy match. Both sides must already be Tables (use ensure_table first).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "leftTable": { "type": "string", "description": "Left Excel Table name" },
+          "rightTable": { "type": "string", "description": "Right Excel Table name" },
+          "keys": {
+            "type": "string",
+            "description": "Join key header name(s), comma-separated. Example: 订单号"
+          },
+          "compareColumns": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Columns to check for conflicts when keys match. Default: all shared non-key columns"
+          },
+          "outputSheet": { "type": "string", "description": "New sheet name. Default 对账结果" }
+        },
+        "required": ["leftTable", "rightTable", "keys"]
+      }
+    }
+  ]
+}

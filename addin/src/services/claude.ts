@@ -8,6 +8,8 @@
  *   PROXY   — fetch through backend server (config sent to backend)
  */
 
+import { appendSummaryNudge, compactToolDigest, parseAssistantContent } from './agent-finish';
+
 export type ApiMode = 'direct' | 'proxy';
 
 export interface ClaudeMessage {
@@ -286,53 +288,114 @@ export interface AgentCallbacks {
   onToken?: (t: string) => void;
   onToolUse?: (tc: ToolCall) => Promise<string>;
   onThinking?: (t: string) => void;
-  signal?: AbortSignal;
+    onToolStep?: (step: {
+      phase: 'start' | 'end';
+      name: string;
+      input: Record<string, unknown>;
+      result?: string;
+      ms?: number;
+    }) => void;
+    onUsage?: (info: { model: string; tokens: number }) => void;
+    signal?: AbortSignal;
+}
+
+async function completeOnce(
+  messages: Array<{ role: string; content: unknown }>,
+  systemPrompt: string,
+  tools: ToolDef[] | undefined,
+  signal: AbortSignal | undefined,
+): Promise<Record<string, unknown>> {
+  const body: Record<string, unknown> = { model: providerConfig.model, max_tokens: 4096, messages, stream: false };
+  if (systemPrompt) body.system = systemPrompt;
+  if (tools && tools.length) body.tools = tools;
+  if (apiMode === 'direct') {
+    if (!directApiKey) throw new Error('No API key');
+    const r = await fetch(providerConfig.baseUrl + '/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': directApiKey, 'anthropic-version': API_VERSION },
+      body: JSON.stringify(body), signal,
+    });
+    if (!r.ok) throw new Error('API error ' + r.status);
+    return r.json();
+  }
+  const r = await fetch(proxyBaseUrl + '/api/chat', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body), signal,
+  });
+  if (!r.ok) throw new Error('Proxy error ' + r.status);
+  return r.json();
 }
 
 export async function chatWithTools(
   systemPrompt: string, userMessage: string, tools: ToolDef[], cb: AgentCallbacks,
 ): Promise<string> {
   const messages: Array<{ role: string; content: unknown }> = [{ role: 'user', content: userMessage }];
-  let text = ''; const maxIter = 10;
+  let text = '';
+  const digest: string[] = [];
+  const maxIter = 20;
   for (let i = 0; i < maxIter; i++) {
-    const body: Record<string, unknown> = { model: providerConfig.model, max_tokens: 4096, messages, tools, stream: false };
-    if (systemPrompt) body.system = systemPrompt;
-    let data: Record<string, unknown>;
-    if (apiMode === 'direct') {
-      if (!directApiKey) throw new Error('No API key');
-      const r = await fetch(providerConfig.baseUrl + '/v1/messages', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-api-key': directApiKey, 'anthropic-version': API_VERSION },
-        body: JSON.stringify(body), signal: cb.signal,
-      });
-      if (!r.ok) throw new Error('API error ' + r.status);
-      data = await r.json();
-    } else {
-      const r = await fetch(proxyBaseUrl + '/api/chat', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body), signal: cb.signal,
-      });
-      if (!r.ok) throw new Error('Proxy error ' + r.status);
-      data = await r.json();
+    const data = await completeOnce(messages, systemPrompt, tools, cb.signal);
+    cb.onUsage?.({
+      model: providerConfig.model,
+      tokens: estimateTokens(JSON.stringify({ systemPrompt, messages, tools, content: data.content })),
+    });
+    const parsed = parseAssistantContent(data.content);
+    if (parsed.text) {
+      text = parsed.text;
+      cb.onToken?.(parsed.text);
     }
-    const content = data.content as Array<{ type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }> | undefined;
-    if (!content) break;
-    const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
-    const texts: string[] = [];
-    for (const b of content) {
-      if (b.type === 'text' && b.text) { texts.push(b.text); cb.onToken?.(b.text); }
-      if (b.type === 'tool_use' && b.name && b.id) toolUses.push({ id: b.id, name: b.name, input: b.input || {} });
-    }
-    text = texts.join('');
-    if (toolUses.length === 0) break;
-    messages.push({ role: 'assistant', content });
+    if (parsed.toolUses.length === 0) break;
+    messages.push({ role: 'assistant', content: data.content });
     const results: Array<{ type: string; tool_use_id: string; content: string }> = [];
-    for (const tc of toolUses) {
-      cb.onThinking?.('🔧 ' + tc.name + '(' + JSON.stringify(tc.input).slice(0, 80) + ')');
-      try { results.push({ type: 'tool_result', tool_use_id: tc.id, content: cb.onToolUse ? await cb.onToolUse(tc) : 'OK' }); }
-      catch (e) { results.push({ type: 'tool_result', tool_use_id: tc.id, content: 'Error: ' + e }); }
+    for (const tc of parsed.toolUses) {
+      const t0 = Date.now();
+      cb.onToolStep?.({ phase: 'start', name: tc.name, input: tc.input });
+      if (!cb.onToolStep) cb.onThinking?.(toolPreview(tc.name, tc.input));
+      try {
+        const out = cb.onToolUse ? await cb.onToolUse(tc) : 'OK';
+        const ms = Date.now() - t0;
+        results.push({ type: 'tool_result', tool_use_id: tc.id, content: out });
+        digest.push(tc.name + ' → ' + String(out).slice(0, 180));
+        cb.onToolStep?.({ phase: 'end', name: tc.name, input: tc.input, result: out, ms: ms });
+        if (!cb.onToolStep) cb.onThinking?.('   ' + String(out).slice(0, 180));
+      } catch (e) {
+        const err = 'Error: ' + e;
+        const ms = Date.now() - t0;
+        results.push({ type: 'tool_result', tool_use_id: tc.id, content: err });
+        digest.push(tc.name + ' → ' + err);
+        cb.onToolStep?.({ phase: 'end', name: tc.name, input: tc.input, result: err, ms: ms });
+        if (!cb.onToolStep) cb.onThinking?.('   ' + err);
+      }
     }
     messages.push({ role: 'user', content: results });
   }
-  return text || '(no response)';
+  if (!text && digest.length) {
+    appendSummaryNudge(messages);
+    try {
+      const data = await completeOnce(messages, systemPrompt, undefined, cb.signal);
+      cb.onUsage?.({
+        model: providerConfig.model,
+        tokens: estimateTokens(JSON.stringify({ systemPrompt, messages, content: data.content })),
+      });
+      const parsed = parseAssistantContent(data.content);
+      if (parsed.text) {
+        text = parsed.text;
+        cb.onToken?.(parsed.text);
+      }
+    } catch {
+      /* fall through to compact digest */
+    }
+  }
+  if (text) return text;
+  if (digest.length) return compactToolDigest(digest);
+  return '(no response)';
+}
+
+function toolPreview(name: string, input: Record<string, unknown>): string {
+  const keys = ['op', 'sheetName', 'tableName', 'leftTable', 'rightTable', 'key', 'groupBy', 'valueColumn', 'outputSheet'];
+  const bits: string[] = [];
+  for (const k of keys) {
+    if (input[k] != null && String(input[k]) !== '') bits.push(String(input[k]));
+  }
+  return '🔧 ' + name + (bits.length ? ' (' + bits.join(' · ') + ')' : '');
 }
