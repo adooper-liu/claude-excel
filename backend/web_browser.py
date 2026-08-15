@@ -95,7 +95,7 @@ HIGHLIGHT_JS = """(i) => {
 BOX_INSTALL_JS = Path(__file__).with_name("box_select.js").read_text(encoding="utf-8")
 BOX_STATUS_JS = """() => window.__ceManual || { pending: true }"""
 _EXT = Path(__file__).resolve().parent.parent / "extension"
-PICKER_UI_VER = "0.4.4"
+PICKER_UI_VER = "0.4.9"
 PICKER_BOOT_JS = """
 (function () {
   var boot = function () {

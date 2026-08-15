@@ -10,7 +10,7 @@ export const SKILL_TOOL_CATALOG: SkillToolHint[] = [
   { name: "scan_formula_errors", use: "只扫 #REF! #DIV/0! 等错误值。" },
   { name: "ensure_table", use: "把带表头的区域升级成 Table，后续用返回的 name。" },
   { name: "extract_selection", use: "提取一列：去空格、大小写、可选去重。万行在 Excel 里做。" },
-  { name: "reshape_table", use: "dedupe|unpivot|split|coerce，只写新表。" },
+  { name: "reshape_table", use: "dedupe|unpivot|split|coerce|project，只写新表。" },
   { name: "reconcile_tables", use: "两表精确对账，只写新表。" },
   { name: "calculate_table", use: "lookup=INDEX/MATCH；sumifs=活汇总；fix_ref 修 #REF!。禁止写死合计。" },
   { name: "create_pivot", use: "透视表。字段名必须来自 inspect 的真实表头。" },

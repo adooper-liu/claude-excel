@@ -101,8 +101,13 @@ export function compactToolDigest(lines: string[]): string {
       sheets.push(m[1]);
     }
   }
-  const parts = [`已完成 ${lines.length} 步。`];
-  if (sheets.length) parts.push("新建表：" + sheets.join("、") + "。");
+  const parts: string[] = [];
+  if (sheets.length) {
+    parts.push(`已完成 ${lines.length} 步。`);
+    parts.push("新建表：" + sheets.join("、") + "。");
+  } else {
+    parts.push(`已执行 ${lines.length} 步，尚未写出新表。`);
+  }
   if (failed) parts.push(`失败 ${failed} 次。`);
   return parts.join("");
 }

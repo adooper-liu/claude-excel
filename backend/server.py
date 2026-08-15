@@ -18,6 +18,16 @@ from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_skill, list_skills
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
+from fetch_recipe import (
+    export_recipe,
+    host_from_sheet_name,
+    import_recipe,
+    list_recipes,
+    load_recipe,
+    project_targets_for_sheet,
+    resolve_project_for_sheet,
+    save_recipe,
+)
 from web_browser import (
     box_select_status,
     cancel_fetch_session,
@@ -59,6 +69,55 @@ async def api_web_ingest_pending(request: Request):
 async def api_web_ingest_ack(req: dict, request: Request):
     require_loopback(request)
     return ack_ingest(str((req or {}).get("id") or ""))
+
+
+@ingest_router.get("/api/fetch-recipe")
+async def api_fetch_recipe_get(request: Request, url: str = ""):
+    require_loopback(request)
+    return export_recipe(url)
+
+
+@ingest_router.post("/api/fetch-recipe")
+async def api_fetch_recipe_post(req: dict, request: Request):
+    require_loopback(request)
+    data = req if isinstance(req, dict) else {}
+    if data.get("recipe"):
+        return import_recipe(data.get("recipe"))
+    url = str(data.get("url") or "")
+    recipe = load_recipe(url)
+    if url:
+        recipe["url"] = url
+    return save_recipe(recipe)
+
+
+@ingest_router.get("/api/fetch-recipe/list")
+async def api_fetch_recipe_list(request: Request):
+    require_loopback(request)
+    return {"recipes": list_recipes()}
+
+
+@ingest_router.get("/api/fetch-recipe/project")
+async def api_fetch_recipe_project(
+    request: Request,
+    url: str = "",
+    sheet: str = "",
+    targets: str = "",
+):
+    require_loopback(request)
+    page_url = str(url or "").strip()
+    if not page_url and sheet:
+        host = host_from_sheet_name(sheet)
+        if host:
+            page_url = "https://" + host + "/"
+    target_list = [t.strip() for t in str(targets or "").split("/") if t.strip()] or None
+    hit = resolve_project_for_sheet(sheet, page_url, target_list) if (sheet or page_url) else None
+    default_targets = project_targets_for_sheet(sheet, page_url)
+    return {
+        "url": page_url,
+        "sheet": sheet,
+        "project": hit,
+        "targets": default_targets,
+    }
 
 
 @asynccontextmanager

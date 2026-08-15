@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Claude Excel 取数",
-  "version": "0.4.4",
+  "version": "0.4.9",
   "description": "打开网页即监听接口表；也可点选同类或框选，送到本机 Excel。密码不进模型。",
   "action": {
     "default_popup": "popup.html",

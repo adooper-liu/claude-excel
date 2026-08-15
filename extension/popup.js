@@ -1,47 +1,18 @@
-const INGEST = "http://127.0.0.1:8766/api/web-ingest";
-
-const listEl = document.getElementById("list");
+const PENDING = "http://127.0.0.1:8766/api/web-ingest/pending";
 const msgEl = document.getElementById("msg");
-const scanBtn = document.getElementById("scan");
-const writeBtn = document.getElementById("write");
-const appendBtn = document.getElementById("append");
-const pickBtn = document.getElementById("pick");
+const openBtn = document.getElementById("open");
+const pingBtn = document.getElementById("ping");
+const titleEl = document.getElementById("title");
 
-let grids = [];
-let picked = 0;
-let pageUrl = "";
-
-function setMsg(text) {
-  msgEl.textContent = text || "";
+try {
+  const ver = chrome.runtime.getManifest().version;
+  if (titleEl && ver) titleEl.textContent = "Claude Excel 取数 v" + ver;
+} catch (e) {
+  /* ignore */
 }
 
-function render() {
-  listEl.innerHTML = "";
-  grids.forEach((g, i) => {
-    const cols = Math.max(...g.map((r) => r.length), 0);
-    const preview = (g[0] || []).filter(Boolean).slice(0, 4).join(" / ");
-    const label = document.createElement("label");
-    if (i === picked) label.className = "is-on";
-    label.innerHTML =
-      '<input type="radio" name="g" ' +
-      (i === picked ? "checked " : "") +
-      "/><span>表" +
-      (i + 1) +
-      " · " +
-      g.length +
-      "行 × " +
-      cols +
-      "列" +
-      (preview ? " · " + preview : "") +
-      "</span>";
-    label.querySelector("input").addEventListener("change", () => {
-      picked = i;
-      render();
-    });
-    listEl.appendChild(label);
-  });
-  writeBtn.disabled = !grids.length;
-  appendBtn.disabled = !grids.length;
+function setMsg(text) {
+  if (msgEl) msgEl.textContent = text || "";
 }
 
 async function currentTab() {
@@ -49,7 +20,7 @@ async function currentTab() {
   return tab;
 }
 
-async function startPick() {
+async function openPicker() {
   setMsg("");
   const tab = await currentTab();
   if (!tab || tab.id == null) {
@@ -61,64 +32,35 @@ async function startPick() {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        if (typeof ceInstallPagePicker === "function") ceInstallPagePicker({ via: "extension" });
+        if (typeof ceInstallPagePicker === "function") {
+          ceInstallPagePicker({ via: "extension", collapsed: false });
+        }
       },
     });
+    setMsg("已打开取数面板（v" + (chrome.runtime.getManifest().version || "?") + "）。若仍显示旧版本，请到 chrome://extensions 点「重新加载」，再刷新网页。");
     window.close();
   } catch (err) {
     setMsg("无法注入此页（浏览器内置页不行）。请打开普通 https 页面。");
   }
 }
 
-async function scan() {
-  setMsg("");
-  const tab = await currentTab();
-  if (!tab || tab.id == null) {
-    setMsg("没有当前标签页。");
-    return;
-  }
-  pageUrl = tab.url || "";
+async function pingBackend() {
+  setMsg("检测中…");
+  pingBtn.disabled = true;
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["extract.js"] });
-    const out = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => (typeof ceExtractGrids === "function" ? ceExtractGrids() : []),
-    });
-    grids = (out && out[0] && out[0].result) || [];
-    picked = 0;
-    render();
-    if (!grids.length) setMsg("当前页没扫到表。改用「开始点选」，或等数据刷完再扫。");
-  } catch (err) {
-    setMsg("无法读取此页（浏览器内置页不行）。请打开普通 https 页面。");
-  }
-}
-
-async function send(append) {
-  if (!grids[picked]) return;
-  setMsg("");
-  writeBtn.disabled = true;
-  appendBtn.disabled = true;
-  try {
-    const r = await fetch(INGEST, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url: pageUrl, rows: grids[picked], append: Boolean(append) }),
-    });
+    const r = await fetch(PENDING);
     const data = await r.json();
-    if (data && data.error) {
-      setMsg(String(data.error) + " 请确认本机后端已启动。");
+    if (data && (data.job === null || data.job || data.ok !== false)) {
+      setMsg("本机后端正常（8766）。请保持 Excel 任务窗格打开以便落表。");
       return;
     }
-    setMsg((append ? "已追加到队列「" : "已送到 Excel「") + (data.sheetName || "") + "」。打开任务窗格即写入。");
+    setMsg("后端有响应，但格式异常。请重启 launch.bat。");
   } catch (err) {
-    setMsg("连不上本机 8766。请先启动 Excel 插件后端。");
+    setMsg("连不上 8766。请先启动 Excel 插件后端（launch.bat）。");
   } finally {
-    writeBtn.disabled = !grids.length;
-    appendBtn.disabled = !grids.length;
+    pingBtn.disabled = false;
   }
 }
 
-pickBtn.addEventListener("click", () => void startPick());
-scanBtn.addEventListener("click", () => void scan());
-writeBtn.addEventListener("click", () => void send(false));
-appendBtn.addEventListener("click", () => void send(true));
+openBtn.addEventListener("click", () => void openPicker());
+pingBtn.addEventListener("click", () => void pingBackend());

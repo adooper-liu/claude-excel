@@ -1,6 +1,6 @@
 require("ts-node/register/transpile-only");
 const assert = require("assert");
-const { BUILTIN_PROMPTS, mergeTemplates } = require("../../src/services/prompt-templates");
+const { BUILTIN_PROMPTS, mergeTemplates, makeCustomTemplateId } = require("../../src/services/prompt-templates");
 
 describe("prompt-templates", function () {
   it("has the four preset titles", function () {
@@ -20,5 +20,12 @@ describe("prompt-templates", function () {
     assert.strictEqual(merged.filter((p) => p.id === "sample").length, 1);
     assert.strictEqual(merged.filter((p) => p.id === "sample")[0].title, "生成样本数据");
     assert.ok(merged.some((p) => p.id === "mine" && p.prompt === "hello"));
+  });
+
+  it("makeCustomTemplateId generates unique u_ ids", function () {
+    const a = makeCustomTemplateId();
+    const b = makeCustomTemplateId();
+    assert.match(a, /^u_/);
+    assert.notStrictEqual(a, b);
   });
 });

@@ -68,13 +68,14 @@ const SYSTEM_PROMPT = `你是 Excel 里的通用 AI 助手（Office JS 加载项
 
 ## 改表模式
 - 对账、整形：源表只读，结果只写新表。用 reconcile_tables / reshape_table，不要用 write_to_sheet 伪造结果。
+- 规整列 / 按位置映射 / 多列合并成新列（如取数表 25 列收成 9 列）：inspect_workbook → ensure_table → inspect_table（看 columns 的 index/letter 与 sampleRows）→ reshape_table op=project headerless:true（取数_* 且 likelyHeaderless 时必开）。columns 示例：{as:"售价",merge:[5,6,7],separator:"",coerce:"number"}。禁止只用 read_range 探路就停；必须写出新表（默认 sheet 映射结果 或 outputSheet 带 _规范）。
 - 提取选中列、去空格、统一大小写：必须调用 extract_selection（column / caseMode / unique 都是参数）。加载项在 Excel 里处理整列（可数万行）。禁止把整列读进对话再用 write_to_sheet 回写。inspect / read_selection 只是探路，没有写出新表就不算完成。已有 *_规范 表时，去重优先对该表 extract_selection unique:true，或 reshape_table op=dedupe。
 - 默认对话、格式、图表、写公式、透视、取数：就地改或按用户指定写新表。
 - 改增长率/折现率等假设：先 inspect_formulas，只用 write_inputs。公式格不准覆盖。改完再看下游值和 scan_formula_errors。
 - 透视：create_pivot，字段名必须来自 inspect 的真实表头。
 - 分类汇总若用户要的是活 SUMIFS 而不是透视表，用 calculate_table。
 - 查找用 INDEX/MATCH，不要默认 XLOOKUP。合计必须是公式，不要把心算结果贴进格子。
-- 「继续」表示接着做上一句还没做完的事。用户补了去重/大小写等参数时，对已有工具设对应参数，不要改问要不要透视或对账。
+- 「继续」表示接着做上一句还没做完的事。若上一句已列出目标列名或选了「规整列」而还没写新表，直接 ensure_table → inspect_table → reshape_table op=project，不要重复 read_range。用户补了去重/大小写等参数时，对已有工具设对应参数，不要改问要不要透视或对账。
 
 ## 空表
 工作簿空或没有表头：若用户要求生成/随机/准备样例，用 write_to_sheet 建小表。否则只回这句中文：「当前工作簿没有带表头的表。请勾选要生成的样例后点确认。」界面会出勾选框。不要列举样例表头，不要编造业务数据。
@@ -83,7 +84,7 @@ const SYSTEM_PROMPT = `你是 Excel 里的通用 AI 助手（Office JS 加载项
 inspect_workbook → ensure_table → reconcile_tables。精确匹配（去空格）。空键不配。不要模糊匹配。用返回的 table name（中文表名可能是 T_系统订单表）。
 
 ## 取数
-公开 https 用 web_fetch，再写入新表。禁止在工具参数或回复里写账号密码。三方站/ERP：让用户勾选取数栏登录，用本机 Chrome/Edge 跟手操作（验证码自己点）；在网页窗口里点选同类或框选，写入按钮在网页上，不必回到 Excel。失败标「未能获取」，不要编数字。不要把 web_search 的 JSON / encrypted_content 贴进对用户可见的回复。
+公开 https 用 web_fetch，再写入新表。禁止在工具参数或回复里写账号密码。三方站/ERP：让用户用取数栏打开本机 Chrome/Edge 跟手操作（验证码自己点）；在网页窗口里点选同类或框选，写入按钮在网页上，不必回到 Excel。失败标「未能获取」，不要编数字。不要把 web_search 的 JSON / encrypted_content 贴进对用户可见的回复。
 
 ## 规范表
 inspect_formulas 后 format_range：输入蓝 #0000FF，同表公式黑，跨表绿 #008000，关键假设黄底 #FFFF00。金额人民币格式；比例格子里存 0.15。边框/对齐/换行/冻结用同一工具的 border、hAlign、wrap、freezeRows。
@@ -234,6 +235,11 @@ export default function App(): JSX.Element {
         }
         if (Excel.isExtractRequest(workText)) {
           const final = await Excel.runExtractIntent(workText, ctx.showMessage);
+          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
+          return;
+        }
+        if (Excel.isProjectReshapeRequest(workText)) {
+          const final = await Excel.runProjectReshapeIntent(workText, ctx.showMessage);
           setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
@@ -420,19 +426,30 @@ export default function App(): JSX.Element {
           if (job && Array.isArray(job.rows) && job.rows.length) {
             const name = String(job.sheetName || "取数").trim() || "取数";
             try {
+              const truncNote =
+                job.truncated && job.sourceRows
+                  ? "（原 " + job.sourceRows + " 行，只写入前 " + job.rows.length + " 行）"
+                  : job.truncated
+                    ? "（只写入前 " + job.rows.length + " 行）"
+                    : "";
+              const tailNotes: string[] = [];
+              if (job.fetchWarning) tailNotes.push(String(job.fetchWarning));
+              if (job.recipePath) tailNotes.push("配方已保存：" + job.recipePath);
+              if (job.projectReady && job.reshapeHint) tailNotes.push(String(job.reshapeHint));
+              const tail = tailNotes.length ? "\n" + tailNotes.join("\n") : "";
               if (job.append) {
                 const n = await Excel.appendSheetRows(name, job.rows);
                 setMessages((prev) => prev.concat({
                   id: nextMsgId(),
                   role: "assistant",
-                  content: "网页已追加 " + n + " 行到「" + name + "」。",
+                  content: "网页已追加 " + n + " 行到「" + name + "」。" + truncNote + tail,
                 }));
               } else {
                 const written = await Excel.writeToNewSheet(name, job.rows);
                 setMessages((prev) => prev.concat({
                   id: nextMsgId(),
                   role: "assistant",
-                  content: "网页已写入「" + written + "」（" + job.rows.length + " 行）。",
+                  content: "网页已写入「" + written + "」（" + job.rows.length + " 行）。" + truncNote + tail,
                 }));
               }
             } catch (err) {

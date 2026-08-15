@@ -19,13 +19,13 @@ def test_picker_js_has_click_similar_and_multi_box():
     assert "写入这" in text
     assert "ce-stat" in text
     assert "还没选中内容" in text
-    assert "0.4.4" in text
+    assert "0.4.9" in text
     assert "PICKER_VER" in text
     assert "data-ce-ver" in text
     assert "looksLikeHeaderRow" in text
     assert "撤销" in text
     assert "undoLast" in text
-    assert "浏览/翻页" in text
+    assert "virtualScrollHint" in text or "虚拟滚动" in text
     assert 'getAttribute("data-ce-ver") === PICKER_VER' in text
     assert "点选同类" not in text
     assert "再选一块" not in text
@@ -38,9 +38,9 @@ def test_ver_tuple_orders_versions():
     sys.path.insert(0, str(ROOT / "backend"))
     from web_browser import _ver_tuple
 
-    assert _ver_tuple("0.4.3") < _ver_tuple("0.4.4")
-    assert _ver_tuple("0.4.4") >= _ver_tuple("0.4.4")
-    assert not (_ver_tuple("0.4.4") < _ver_tuple("0.4.3"))
+    assert _ver_tuple("0.4.4") < _ver_tuple("0.4.5")
+    assert _ver_tuple("0.4.5") >= _ver_tuple("0.4.5")
+    assert not (_ver_tuple("0.4.5") < _ver_tuple("0.4.4"))
 
 
 def test_product_cards_are_not_headers():

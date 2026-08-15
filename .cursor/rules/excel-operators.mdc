@@ -9,7 +9,7 @@ alwaysApply: true
 
 ## 该做厚（算子）
 
-- `reshape_table`：`dedupe | unpivot | split | coerce`
+- `reshape_table`：`dedupe | unpivot | split | coerce | project`
 - `extract_selection`：`column` / 选区 / `caseMode` / `unique`（任意列，不写死店铺）。按 2000 行分块读写。
 - `reshape_table` 的 `dedupe` 同样分块流式；反透视/拆列/转类型仍一次载入，超 200 万格会拒绝。
 - `reconcile_tables`、`calculate_table`、`create_pivot`、`write_inputs`

@@ -14,6 +14,17 @@ describe("isReshapeRequest", function () {
   it("does not steal 对账", function () {
     assert.strictEqual(isReshapeRequest("按订单号对账"), false);
   });
+
+  it("does not treat 规整列 as dedupe-style shortcut", function () {
+    assert.strictEqual(isReshapeRequest("整理成规整列"), false);
+  });
+});
+
+describe("isProjectReshapeRequest", function () {
+  const { isProjectReshapeRequest } = require("../../src/excel/reshape-intent");
+  it("matches 规整列 asks", function () {
+    assert.strictEqual(isProjectReshapeRequest("整理成规整列（排名/标题）"), true);
+  });
 });
 
 describe("parseReshapeIntent", function () {
@@ -40,6 +51,10 @@ describe("parseReshapeIntent", function () {
     assert.strictEqual(intent.op, "coerce");
     assert.strictEqual(intent.column, "金额");
     assert.strictEqual(intent.type, "number");
+  });
+
+  it("parses project for 规整列", function () {
+    assert.strictEqual(parseReshapeIntent("整理成规整列").op, "project");
   });
 });
 

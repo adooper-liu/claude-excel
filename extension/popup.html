@@ -4,33 +4,60 @@
     <meta charset="utf-8" />
     <style>
       body {
-        font: 13px/1.4 system-ui, sans-serif;
+        font: 13px/1.45 system-ui, sans-serif;
         margin: 0;
-        width: 300px;
-        color: #1a1a1a;
+        width: 280px;
+        color: #0f172a;
       }
       h1 {
         font-size: 14px;
         margin: 0;
-        padding: 10px 12px 6px;
+        padding: 12px 12px 4px;
       }
       p {
         margin: 0;
-        padding: 0 12px 12px;
-        color: #666;
+        padding: 0 12px 10px;
+        color: #64748b;
         font-size: 12px;
       }
-      .ver {
-        padding: 0 12px 10px;
+      .actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 12px 12px;
+      }
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font: 13px/1.2 system-ui, sans-serif;
+        cursor: pointer;
+      }
+      #open {
+        background: #2563eb;
+        color: #fff;
+        font-weight: 700;
+      }
+      #ping {
+        background: #f1f5f9;
+        color: #334155;
+      }
+      #msg {
+        min-height: 1.2em;
+        padding: 0 12px 12px;
+        color: #64748b;
         font-size: 12px;
-        color: #2563eb;
       }
     </style>
   </head>
   <body>
-    <h1>抓到 Excel</h1>
-    <p class="ver">当前版本 v0.4.4。右侧白底卡片标题应为「取数 v0.4.4」，且不应闪烁。</p>
-    <p><b>你现在看到的深蓝横条是旧脚本，改文件不会自动生效。</b></p>
-    <p>1. chrome://extensions → 本扩展「重新加载」→ 报表页 Ctrl+Shift+R<br/>2. 若从 Excel 取数弹出窗口：任务窗格点「结束」，关掉跑 backend 的窗口，再启动一次，然后重新取数。</p>
+    <h1 id="title">Claude Excel 取数</h1>
+    <p>打开报表页后，右下角会出现白底「取数」卡片。本弹窗只负责打开面板和检测后端。</p>
+    <div class="actions">
+      <button type="button" id="open">打开当前页取数面板</button>
+      <button type="button" id="ping">检测本机后端</button>
+    </div>
+    <p id="msg"></p>
+    <script src="popup.js"></script>
   </body>
 </html>

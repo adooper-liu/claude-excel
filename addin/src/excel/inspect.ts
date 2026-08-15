@@ -1,7 +1,14 @@
 /// <reference types="@types/office-js" />
 
+import { indexToCol } from "./formula-inspect-core";
 import { inspectSampleRows } from "./range-chunk";
 import { parseA1Range, resolveTableName } from "./table-name";
+
+export interface TableColumnMeta {
+  index: number;
+  letter: string;
+  header: string;
+}
 
 export interface SheetInfo {
   name: string;
@@ -18,8 +25,32 @@ export interface TableInfo {
   sheet: string;
   address: string;
   headers: string[];
+  columns: TableColumnMeta[];
   dataRows: number;
   sampleRows: (string | number | boolean | null)[][];
+  likelyHeaderless?: boolean;
+  reshapeHint?: string;
+}
+
+function columnMeta(headers: string[]): TableColumnMeta[] {
+  return headers.map(function (h, i) {
+    return { index: i, letter: indexToCol(i), header: String(h ?? "").trim() };
+  });
+}
+
+function likelyHeaderlessTable(sheetName: string, headers: string[], sampleRows: TableInfo["sampleRows"]): boolean {
+  if (!/取数_/i.test(sheetName)) return false;
+  if (headers.length < 4) return false;
+  const r1 = sampleRows[0] || [];
+  let same = 0;
+  for (let i = 0; i < headers.length; i++) {
+    if (String(headers[i] ?? "").trim() === String(r1[i] ?? "").trim()) same += 1;
+  }
+  if (sampleRows.length && same > headers.length * 0.5) return true;
+  const noisy = headers.filter(function (c) {
+    return /CNY|¥|\$\s?\d|颗星|选项:/i.test(String(c)) || /^\+?\d+(\.\d+)?$/.test(String(c).trim());
+  }).length;
+  return noisy >= 2;
 }
 
 export interface WorkbookInspect {
@@ -89,15 +120,23 @@ export async function inspectWorkbook(): Promise<WorkbookInspect> {
       list.push(t.table.name);
       tablesBySheet.set(sheetName, list);
       const sample = sampleRanges[i].sample;
+      const headers = headerRow(t.header.values as unknown[][]);
+      const sampleRows = sample
+        ? ((sample.values as unknown[][]) || []) as (string | number | boolean | null)[][]
+        : [];
+      const headerless = likelyHeaderlessTable(sheetName, headers, sampleRows);
       tableInfos.push({
         name: t.table.name,
         sheet: sheetName,
         address: t.header.address,
-        headers: headerRow(t.header.values as unknown[][]),
+        headers: headers,
+        columns: columnMeta(headers),
         dataRows: sampleRanges[i].dataRows,
-        sampleRows: sample
-          ? ((sample.values as unknown[][]) || []) as (string | number | boolean | null)[][]
-          : [],
+        sampleRows: sampleRows,
+        likelyHeaderless: headerless,
+        reshapeHint: headerless
+          ? "首行可能是数据不是表头。规整列用 reshape_table op=project headerless:true；from/merge 用 columns[].index 或 letter，不要用 read_range。"
+          : undefined,
       });
     });
 

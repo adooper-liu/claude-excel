@@ -101,4 +101,44 @@ describe("reshape-core", function () {
       });
     }, /标签/);
   });
+
+  it("projects columns by index with merge and number coerce", function () {
+    const result = reshape({
+      headers: ["+14", "Bedsure", "选项:", "CNY", "67", ".", "29", "4.4"],
+      rows: [["+8", "BEDELITE", "选项:", "CNY", "50", ".", "00", "4.3"]],
+      op: "project",
+      headerless: true,
+      columns: [
+        { as: "排名", from: 0 },
+        { as: "标题", from: 1 },
+        { as: "售价", merge: [4, 5, 6], separator: "", coerce: "number" },
+      ],
+    });
+    assert.deepStrictEqual(result.headers, ["排名", "标题", "售价"]);
+    assert.strictEqual(result.rows.length, 2);
+    assert.strictEqual(result.rows[0][0], "+14");
+    assert.strictEqual(result.rows[1][1], "BEDELITE");
+    assert.strictEqual(result.rows[0][2], 67.29);
+    assert.strictEqual(result.rows[1][2], 50);
+  });
+
+  it("projects by column letter on a normal header row", function () {
+    const result = reshape({
+      headers: ["A", "B", "C"],
+      rows: [
+        ["1", "foo", "10"],
+        ["2", "bar", "20"],
+      ],
+      op: "project",
+      columns: [
+        { as: "编号", from: "A" },
+        { as: "名称", from: "B" },
+        { as: "数量", from: "C", coerce: "number" },
+      ],
+    });
+    assert.deepStrictEqual(result.rows, [
+      ["1", "foo", 10],
+      ["2", "bar", 20],
+    ]);
+  });
 });

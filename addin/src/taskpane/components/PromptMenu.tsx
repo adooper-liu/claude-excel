@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { BUILTIN_PROMPTS, mergeTemplates, type PromptTemplate } from '../../services/prompt-templates';
-
-const API = 'https://localhost:8765/api/templates';
+import {
+  BUILTIN_PROMPTS,
+  loadCustomTemplates,
+  makeCustomTemplateId,
+  mergeTemplates,
+  saveCustomTemplates,
+  type PromptTemplate,
+} from '../../services/prompt-templates';
 
 interface Props {
   draft: string;
@@ -11,49 +16,53 @@ interface Props {
 
 export default function PromptMenu({ draft, onPick, onClose }: Props): JSX.Element {
   const [custom, setCustom] = useState<PromptTemplate[]>([]);
-  const [title, setTitle] = useState('');
+  const [newTitle, setNewTitle] = useState('');
+  const [newPrompt, setNewPrompt] = useState('');
+  const [saveErr, setSaveErr] = useState('');
 
   const reload = useCallback(async () => {
-    try {
-      const r = await fetch(API);
-      if (!r.ok) return;
-      const data = await r.json();
-      setCustom(Array.isArray(data.templates) ? data.templates : []);
-    } catch {
-      /* backend down: builtins still work */
-    }
+    setCustom(await loadCustomTemplates());
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const items = mergeTemplates(BUILTIN_PROMPTS, custom);
 
   const persist = async (nextCustom: PromptTemplate[]) => {
-    const payload = nextCustom.map(({ id, title, prompt }) => ({ id, title, prompt }));
-    try {
-      const r = await fetch(API, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ templates: payload }),
-      });
-      if (r.ok) {
-        const data = await r.json();
-        setCustom(Array.isArray(data.templates) ? data.templates : payload);
-      } else {
-        setCustom(payload);
-      }
-    } catch {
-      setCustom(payload);
-    }
+    setSaveErr('');
+    const saved = await saveCustomTemplates(nextCustom);
+    setCustom(saved);
   };
 
-  const handleSave = async () => {
-    const t = title.trim() || draft.trim().slice(0, 12) || '我的模板';
-    const prompt = draft.trim();
-    if (!prompt) return;
-    const id = 'u_' + Date.now().toString(36);
-    await persist(custom.concat([{ id, title: t, prompt, custom: true }]));
-    setTitle('');
+  const handleAdd = async () => {
+    const title = newTitle.trim() || '我的指令';
+    const prompt = newPrompt.trim();
+    if (!prompt) {
+      setSaveErr('请填写指令正文。');
+      return;
+    }
+    await persist(
+      custom.concat([
+        {
+          id: makeCustomTemplateId(),
+          title,
+          prompt,
+          custom: true,
+        },
+      ])
+    );
+    setNewTitle('');
+    setNewPrompt('');
+  };
+
+  const handleFillFromDraft = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setNewPrompt(text);
+    if (!newTitle.trim()) setNewTitle(text.slice(0, 16));
+    setSaveErr('');
   };
 
   const handleDelete = async (id: string) => {
@@ -64,25 +73,55 @@ export default function PromptMenu({ draft, onPick, onClose }: Props): JSX.Eleme
     <div className="flyout prompt-flyout" role="dialog" aria-label="预置指令">
       <div className="flyout-head">
         <span>预置指令</span>
-        <button className="icon-btn" onClick={onClose} title="关闭" aria-label="关闭">✕</button>
+        <button className="icon-btn" onClick={onClose} title="关闭" aria-label="关闭">
+          ✕
+        </button>
       </div>
       <ul className="prompt-list">
         {items.map((p) => (
           <li key={p.id}>
-            <button type="button" className="prompt-pick" onClick={() => onPick(p.prompt)}>{p.title}</button>
+            <button type="button" className="prompt-pick" onClick={() => onPick(p.prompt)}>
+              <span className="prompt-pick-title">{p.title}</span>
+              {p.custom && <span className="prompt-pick-tag">自定义</span>}
+            </button>
             {p.custom && (
-              <button type="button" className="prompt-del" onClick={() => handleDelete(p.id)} title="删除">✕</button>
+              <button
+                type="button"
+                className="prompt-del"
+                onClick={() => handleDelete(p.id)}
+                title="删除"
+                aria-label={'删除 ' + p.title}
+              >
+                ✕
+              </button>
             )}
           </li>
         ))}
       </ul>
-      <div className="prompt-save">
+      <div className="prompt-add">
+        <div className="prompt-add-label">添加指令</div>
         <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="名称（保存当前输入）"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="名称，例如：Amazon 规整列"
+          aria-label="指令名称"
         />
-        <button type="button" onClick={handleSave} disabled={!draft.trim()}>保存</button>
+        <textarea
+          value={newPrompt}
+          onChange={(e) => setNewPrompt(e.target.value)}
+          placeholder="指令正文，可多行"
+          rows={3}
+          aria-label="指令正文"
+        />
+        <div className="prompt-add-actions">
+          <button type="button" className="prompt-add-secondary" onClick={handleFillFromDraft} disabled={!draft.trim()}>
+            用当前输入
+          </button>
+          <button type="button" className="prompt-add-primary" onClick={handleAdd} disabled={!newPrompt.trim()}>
+            添加
+          </button>
+        </div>
+        {saveErr && <p className="prompt-add-err">{saveErr}</p>}
       </div>
     </div>
   );

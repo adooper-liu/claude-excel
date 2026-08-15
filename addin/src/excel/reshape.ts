@@ -1,6 +1,6 @@
 /// <reference types="@types/office-js" />
 
-import { reshape as reshapeCore, dedupeChunk, type Cell, type ReshapeInput, type ReshapeOp, type CoerceType } from "./reshape-core";
+import { reshape as reshapeCore, dedupeChunk, type Cell, type ReshapeInput, type ReshapeOp, type CoerceType, type ProjectColumnSpec } from "./reshape-core";
 import { readTable, readTableMeta, readTableBodyChunk } from "./table";
 import { createSheetWithHeader, writeSheetRows, finishResultSheet, writeToNewSheet } from "./write";
 import { CHUNK_ROWS, chunkRanges } from "./range-chunk";
@@ -18,6 +18,8 @@ export interface ReshapeTableInput {
   separator?: string;
   maxParts?: number;
   type?: CoerceType;
+  headerless?: boolean;
+  columns?: ProjectColumnSpec[];
   outputSheet?: string;
 }
 
@@ -26,6 +28,7 @@ const DEFAULT_SHEET: Record<ReshapeOp, string> = {
   unpivot: "反透视结果",
   split: "拆列结果",
   coerce: "类型结果",
+  project: "映射结果",
 };
 
 function asWriteGrid(rows: Cell[][]): (string | number)[][] {
@@ -87,6 +90,8 @@ export async function reshapeTable(input: ReshapeTableInput): Promise<{
     separator: input.separator,
     maxParts: input.maxParts,
     type: input.type,
+    headerless: input.headerless,
+    columns: input.columns,
   };
   const result = reshapeCore(coreInput);
   const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);

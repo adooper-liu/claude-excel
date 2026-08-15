@@ -28,6 +28,15 @@ describe("selectToolsForRequest", function () {
     assert.ok(names.indexOf("write_to_sheet") < 0);
   });
 
+  it("hides write tools for 规整列 so the model must use reshape_table project", function () {
+    const names = selectToolsForRequest(
+      "整理成规整列 排名 标题 售价",
+      tools.concat([{ name: "reshape_table" }])
+    ).map((t) => t.name);
+    assert.ok(names.indexOf("reshape_table") >= 0);
+    assert.ok(names.indexOf("write_to_sheet") < 0);
+  });
+
   it("hides write tools for 求和 so the model cannot paste dead totals", function () {
     const names = selectToolsForRequest("按类别求和", tools.concat([{ name: "calculate_table" }])).map((t) => t.name);
     assert.ok(names.indexOf("calculate_table") >= 0);

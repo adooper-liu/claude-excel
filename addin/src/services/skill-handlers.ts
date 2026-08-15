@@ -205,10 +205,24 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           return String(v).split(',').map((s) => s.trim()).filter(Boolean);
         };
         const op = String(input.op || '').trim();
-        if (!op) return 'Error: op required (dedupe|unpivot|split|coerce)';
+        if (!op) return 'Error: op required (dedupe|unpivot|split|coerce|project)';
+        const parseColumns = (v: unknown) => {
+          if (Array.isArray(v)) return v;
+          if (v == null || v === '') return undefined;
+          try {
+            const parsed = JSON.parse(String(v));
+            return Array.isArray(parsed) ? parsed : undefined;
+          } catch {
+            return undefined;
+          }
+        };
+        const columns = parseColumns(input.columns);
+        if (op === 'project' && (!columns || !columns.length)) {
+          return 'Error: op=project 需要 columns 数组（[{as, from} 或 {as, merge, coerce}]). 先 inspect_table 看 columns.index/letter；取数_* 表加 headerless:true。不要用 read_range 代替。';
+        }
         const r = await E.reshapeTable({
           tableName: input.tableName as string,
-          op: op as 'dedupe' | 'unpivot' | 'split' | 'coerce',
+          op: op as 'dedupe' | 'unpivot' | 'split' | 'coerce' | 'project',
           keys: splitCsv(input.keys),
           idColumns: splitCsv(input.idColumns),
           valueColumns: splitCsv(input.valueColumns),
@@ -218,6 +232,8 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           separator: input.separator as string | undefined,
           maxParts: typeof input.maxParts === 'number' ? input.maxParts : undefined,
           type: input.type as 'number' | 'text' | 'date' | undefined,
+          headerless: Boolean(input.headerless),
+          columns: columns,
           outputSheet: input.outputSheet as string | undefined,
         });
         return JSON.stringify(r);

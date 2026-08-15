@@ -9,6 +9,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       url: msg.url || (sender.tab && sender.tab.url) || "",
       rows: msg.rows,
       append: Boolean(msg.append),
+      fields: Array.isArray(msg.fields) ? msg.fields : [],
+      hasHead: Boolean(msg.hasHead),
+      columnLabels: Array.isArray(msg.columnLabels) ? msg.columnLabels : [],
+      extractMode: msg.extractMode || "picker",
     }),
   })
     .then((r) => r.json())

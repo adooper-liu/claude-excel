@@ -91,4 +91,13 @@ describe("compactToolDigest", function () {
     assert.ok(out.indexOf("usedAddress") < 0);
     assert.ok(out.indexOf(SUMMARY_NUDGE) < 0);
   });
+
+  it("does not claim completion when no output sheet was written", function () {
+    const out = compactToolDigest([
+      'inspect_workbook → {"sheets":[{"name":"取数_amazon.com"}]}',
+      'read_range → {"rows":104}',
+    ]);
+    assert.ok(out.indexOf("尚未写出新表") >= 0);
+    assert.ok(out.indexOf("已完成") < 0);
+  });
 });

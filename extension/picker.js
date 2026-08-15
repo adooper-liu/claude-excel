@@ -3,7 +3,8 @@
  * write/append from the page so the user does not bounce back to Excel.
  */
 (function (global) {
-  const PICKER_VER = "0.4.4";
+  const PICKER_VER = "0.4.9";
+  const INGEST_MAX_ROWS = 500;
   const BAR_ID = "ce-excel-picker-bar";
   const BOX_ID = "ce-excel-box-root";
   const MARK_ID = "ce-excel-marks";
@@ -103,6 +104,37 @@
     return sample.filter((t) => t.length >= 2).length >= Math.min(2, items.length);
   }
 
+  function virtualScrollHint(items) {
+    if (!items || items.length < 2) return "";
+    const first = items[0];
+    const virtual = first.closest(
+      '.rc-virtual-list, .ReactVirtualized__List, .ReactVirtualized__Grid, .cdk-virtual-scroll-viewport, [class*="virtual-list"], [class*="VirtualList"]'
+    );
+    if (virtual) {
+      return "⚠ 虚拟滚动：当前只看到 " + items.length + " 条。请先滚到底再锁定，或等「接口表」。";
+    }
+    const root = first.closest(".ant-table, .el-table, .vxe-table, [role='grid'], table");
+    if (root) {
+      const body = root.querySelector(".ant-table-body, .el-table__body-wrapper, tbody");
+      if (body && /virtual|scroll-viewport/i.test(String(body.className || ""))) {
+        return "⚠ 表格可能是懒加载：当前 " + items.length + " 行。请滚到底或翻页后再点选。";
+      }
+    }
+    try {
+      const bodyText = (document.body && document.body.innerText) || "";
+      const m = bodyText.match(/(?:共|total)\s*([\d,]+)\s*(?:条|项|results?|items?)/i);
+      if (m) {
+        const total = parseInt(m[1].replace(/,/g, ""), 10);
+        if (Number.isFinite(total) && total > items.length + 5 && total > items.length * 1.3) {
+          return "⚠ 页面约 " + total + " 条，DOM 里只有 " + items.length + " 条。请滚到底或改用接口表。";
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return "";
+  }
+
   function similarItems(start) {
     if (!start || start === document.documentElement || start === document.body) return [start];
     const row = start.closest(
@@ -188,19 +220,301 @@
         parts.unshift((n.tagName || "div").toLowerCase() + ":nth-child(" + idx + ")");
         n = p;
       }
-      return { sel: parts.join(" > "), i: 0, name: txt(el).slice(0, 24) || tag, path: true };
+      return { sel: parts.join(" > "), i: 0, name: "", col: columnIndexInRow(item, el), path: true };
     }
-    return { sel, i, name: txt(el).slice(0, 24) || "列" + (i + 1), path: false };
+    return { sel, i, name: "", col: columnIndexInRow(item, el), path: false };
   }
 
-  function headerName(item, el) {
+  function columnIndexInRow(item, el) {
     const tr = el.closest("tr") || (item && item.tagName === "TR" ? item : null);
     const cell = el.closest("td, th, [role='gridcell'], [role='cell']") || el;
-    if (!tr) return "";
+    if (!tr) return -1;
     const cells = [...tr.querySelectorAll(":scope > td, :scope > th, :scope > [role='gridcell']")];
     let idx = cells.indexOf(cell);
     if (idx < 0) idx = [...tr.querySelectorAll("td, th")].indexOf(cell);
-    if (idx < 0) return "";
+    return idx;
+  }
+
+  function looksLikeDataCell(s) {
+    const t = String(s || "").trim();
+    if (!t) return true;
+    if (/^\+?\d{1,5}$/.test(t)) return true;
+    if (/^[.．]$/.test(t)) return true;
+    if (/^\d{1,2}$/.test(t)) return true;
+    if (/颗星/.test(t)) return true;
+    if (/^CNY/i.test(t)) return true;
+    if (/^[\d,.\s]+$/.test(t) && /\d/.test(t)) return true;
+    return false;
+  }
+
+  function isValidFieldLabel(name) {
+    const t = String(name || "").trim();
+    if (!t || t.length > 24) return false;
+    return !looksLikeDataCell(t);
+  }
+
+  function columnSamples(items, key) {
+    if (!items || !items.length || !key) return [];
+    if (typeof key.col === "number" && key.col >= 0) {
+      return columnSamplesAt(items, key.col);
+    }
+    return items
+      .map(function (it) {
+        return txt(getField(it, key));
+      })
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  function columnSamplesAt(items, colIdx) {
+    if (!items || !items.length || colIdx < 0) return [];
+    return items
+      .map(function (it) {
+        return rowCellAt(it, colIdx);
+      })
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+
+  function rowCellAt(item, colIdx) {
+    const row = rowFromItem(item);
+    if (colIdx < 0 || colIdx >= row.length) return "";
+    return String(row[colIdx] || "").trim();
+  }
+
+  function cellElAt(item, colIdx) {
+    if (!item || colIdx < 0) return null;
+    const cells = [...item.querySelectorAll(":scope > td, :scope > th, :scope > [role='gridcell']")];
+    if (cells[colIdx]) return cells[colIdx];
+    const all = [...item.querySelectorAll("td, th, [role='gridcell'], [role='cell']")];
+    return all[colIdx] || null;
+  }
+
+  function buildColumnProfiles(items) {
+    if (!items || !items.length) return [];
+    const width = Math.max.apply(
+      null,
+      items.map(function (it) {
+        return rowFromItem(it).length;
+      })
+    );
+    const profiles = [];
+    for (let c = 0; c < width; c++) {
+      profiles.push(columnSamplesAt(items, c));
+    }
+    return profiles;
+  }
+
+  function allSamplesMatch(samples, pattern) {
+    return samples.length > 0 && samples.every(function (s) {
+      return pattern.test(s);
+    });
+  }
+
+  function findPriceTriple(profiles, colIdx) {
+    if (!profiles.length || colIdx < 0) return null;
+    for (let start = colIdx - 2; start <= colIdx; start++) {
+      if (start < 0 || start + 2 >= profiles.length) continue;
+      const a = profiles[start];
+      const b = profiles[start + 1];
+      const c = profiles[start + 2];
+      if (allSamplesMatch(a, /^\d+$/) && allSamplesMatch(b, /^[.．]$/) && allSamplesMatch(c, /^\d{1,2}$/)) {
+        return { start: start, mergeCols: [start, start + 1, start + 2], name: "售价" };
+      }
+    }
+    return null;
+  }
+
+  function priceSegmentLabel(partIdx) {
+    return "售价（段" + (partIdx + 1) + "）";
+  }
+
+  function inferFieldLabel(samples, colIdx, profiles) {
+    if (!samples.length) return "";
+    if (profiles && typeof colIdx === "number" && colIdx >= 0) {
+      const triple = findPriceTriple(profiles, colIdx);
+      if (triple) {
+        if (colIdx === triple.start) return triple.name;
+        return priceSegmentLabel(colIdx - triple.start);
+      }
+    }
+    if (
+      samples.every(function (s) {
+        return /^\+?\d{1,4}$/.test(s);
+      })
+    ) {
+      return "排名";
+    }
+    if (
+      samples.some(function (s) {
+        return /颗星/.test(s);
+      })
+    ) {
+      return "评分";
+    }
+    if (
+      samples.every(function (s) {
+        return /^[\d,]+$/.test(s.replace(/,/g, ""));
+      }) &&
+      samples.some(function (s) {
+        return s.replace(/,/g, "").length >= 3;
+      })
+    ) {
+      return "评论数";
+    }
+    if (
+      samples.some(function (s) {
+        return /sponsored|广告|Sponsored/i.test(s);
+      })
+    ) {
+      return "是否广告";
+    }
+    if (
+      samples.some(function (s) {
+        return /Pre-owned|Brand New|Refurbished|成色|全新|二手/i.test(s);
+      })
+    ) {
+      return "成色";
+    }
+    if (
+      samples.some(function (s) {
+        return /sold|已售|成交/i.test(s);
+      })
+    ) {
+      return "已售";
+    }
+    if (
+      samples.every(function (s) {
+        return /^[\d.]+$/.test(s) && Number(s) >= 0.5 && Number(s) <= 5;
+      })
+    ) {
+      return "评分";
+    }
+    if (
+      samples.some(function (s) {
+        return /¥|CNY|元\/|起批|代发|批发/i.test(s);
+      })
+    ) {
+      return "批发价";
+    }
+    if (
+      samples.some(function (s) {
+        return /购买|past month|month/i.test(s);
+      })
+    ) {
+      return "月购买";
+    }
+    if (
+      samples.some(function (s) {
+        return /配送|shipping/i.test(s);
+      })
+    ) {
+      return "配送费";
+    }
+    if (
+      samples.some(function (s) {
+        return /市场价|list price|was price/i.test(s);
+      })
+    ) {
+      return "市场价";
+    }
+    if (
+      samples.some(function (s) {
+        return /尺码|尺寸|选项:/i.test(s);
+      })
+    ) {
+      return "尺码数";
+    }
+    if (
+      samples.every(function (s) {
+        return /^CNY/i.test(s);
+      })
+    ) {
+      return "货币";
+    }
+    var avgLen =
+      samples.reduce(function (a, s) {
+        return a + s.length;
+      }, 0) / samples.length;
+    var latin =
+      samples.filter(function (s) {
+        return /[A-Za-z]{4,}/.test(s);
+      }).length / samples.length;
+    if (
+      (avgLen >= 12 || latin >= 0.5) &&
+      !samples.every(function (s) {
+        return looksLikeDataCell(s);
+      })
+    ) {
+      return "标题";
+    }
+    return "";
+  }
+
+  function fallbackColumnLabel(colIdx, pickOrder) {
+    var n = typeof colIdx === "number" && colIdx >= 0 ? colIdx + 1 : pickOrder;
+    return "列" + n;
+  }
+
+  function fieldColumns(f) {
+    if (f && f.mergeCols && f.mergeCols.length) return f.mergeCols.slice();
+    if (f && typeof f.col === "number" && f.col >= 0) return [f.col];
+    return [];
+  }
+
+  function fieldsShareColumn(a, b) {
+    const ca = fieldColumns(a);
+    const cb = fieldColumns(b);
+    return ca.some(function (c) {
+      return cb.indexOf(c) >= 0;
+    });
+  }
+
+  function valueFromField(item, f) {
+    if (f.mergeCols && f.mergeCols.length) {
+      return f.mergeCols
+        .map(function (c) {
+          return rowCellAt(item, c);
+        })
+        .join("");
+    }
+    return txt(getField(item, f));
+  }
+
+  function resolveFieldMeta(item, el, key, items, pickOrder, mergeMode) {
+    var colIdx = typeof key.col === "number" ? key.col : columnIndexInRow(item, el);
+    key.col = colIdx;
+    var profiles = buildColumnProfiles(items);
+    var triple = findPriceTriple(profiles, colIdx);
+    if (triple && mergeMode !== "segment") {
+      key.mergeCols = triple.mergeCols.slice();
+      key.col = triple.start;
+      key.name = triple.name;
+      return key;
+    }
+    var domHead = headerName(item, el, colIdx);
+    if (isValidFieldLabel(domHead)) {
+      key.name = domHead;
+      key.mergeCols = null;
+      return key;
+    }
+    var samples = columnSamplesAt(items, colIdx);
+    var inferred = inferFieldLabel(samples, colIdx, profiles);
+    if (isValidFieldLabel(inferred)) {
+      key.name = inferred;
+      key.mergeCols = null;
+      return key;
+    }
+    key.name = fallbackColumnLabel(colIdx, pickOrder);
+    key.mergeCols = null;
+    return key;
+  }
+
+  function headerName(item, el, colIdx) {
+    if (typeof colIdx !== "number" || colIdx < 0) colIdx = columnIndexInRow(item, el);
+    if (colIdx < 0) return "";
+    const tr = el.closest("tr") || (item && item.tagName === "TR" ? item : null);
+    if (!tr) return "";
     const table = tr.closest("table, .ant-table, .el-table, .vxe-table, .kd-table, [role='grid']");
     if (table) {
       const heads = [
@@ -208,7 +522,7 @@
           "thead th, .ant-table-thead th, .el-table__header th, .vxe-header--column, [role='columnheader']"
         ),
       ];
-      if (heads[idx] && txt(heads[idx])) return txt(heads[idx]).slice(0, 20);
+      if (heads[colIdx] && txt(heads[colIdx])) return txt(heads[colIdx]).slice(0, 20);
     }
     return "";
   }
@@ -227,8 +541,10 @@
   function gridFromItems(items, fields) {
     if (!items || !items.length) return [];
     if (fields && fields.length) {
-      const header = fields.map((f, i) => f.name || "列" + (i + 1));
-      const body = items.map((it) => fields.map((f) => txt(getField(it, f))));
+      const header = fields.map((f, i) =>
+        f.name || fallbackColumnLabel(typeof f.col === "number" ? f.col : -1, i + 1)
+      );
+      const body = items.map((it) => fields.map((f) => valueFromField(it, f)));
       return [header, ...body].filter((r) => r.some(Boolean));
     }
     const rows = items.map(rowFromItem);
@@ -358,9 +674,10 @@
   function ceInstallPagePicker(opts) {
     const options = opts || {};
     const live = document.getElementById(BAR_ID);
+    const liveVer = live && live.getAttribute("data-ce-ver");
     if (
       live &&
-      live.getAttribute("data-ce-ver") === PICKER_VER &&
+      liveVer === PICKER_VER &&
       global.__cePickerCtl &&
       typeof global.__cePickerCtl.setMode === "function"
     ) {
@@ -375,6 +692,19 @@
         /* ignore */
       }
       return "ok";
+    }
+    if (live && liveVer && liveVer !== PICKER_VER) {
+      if (global.__cePickerCtl && typeof global.__cePickerCtl.teardown === "function") {
+        try {
+          global.__cePickerCtl.teardown();
+        } catch (e) {
+          /* ignore */
+        }
+      } else {
+        live.remove();
+        const staleSt = document.getElementById(STYLE_ID);
+        if (staleSt) staleSt.remove();
+      }
     }
     if (!global.__cePicker) {
       global.__cePicker = {
@@ -398,6 +728,7 @@
       written: false,
       collapsed: options.collapsed !== false && options.via === "extension",
       net: [],
+      writing: false,
     };
 
     function clearHL() {
@@ -428,16 +759,19 @@
       if (state.locked && state.locked.length) {
         hl(state.locked, "#16a34a");
         (state.fields || []).forEach((f) => {
+          const cols = fieldColumns(f);
           state.locked.forEach((it) => {
-            const cell = getField(it, f);
-            if (!cell) return;
-            if (!cell.getAttribute("data-ce-hl")) {
-              cell.setAttribute("data-ce-prev-outline", cell.style.outline || "");
-              cell.setAttribute("data-ce-prev-bg", cell.style.background || "");
-            }
-            cell.setAttribute("data-ce-hl", "1");
-            cell.style.outline = "2px solid #f59e0b";
-            cell.style.background = "rgba(245,158,11,.28)";
+            cols.forEach(function (colIdx) {
+              const cell = cellElAt(it, colIdx) || getField(it, f);
+              if (!cell) return;
+              if (!cell.getAttribute("data-ce-hl")) {
+                cell.setAttribute("data-ce-prev-outline", cell.style.outline || "");
+                cell.setAttribute("data-ce-prev-bg", cell.style.background || "");
+              }
+              cell.setAttribute("data-ce-hl", "1");
+              cell.style.outline = "2px solid #f59e0b";
+              cell.style.background = "rgba(245,158,11,.28)";
+            });
           });
         });
       } else if (state.hover && state.hover.length) {
@@ -541,18 +875,114 @@
       return state.net.reduce((a, b) => (a.rows * a.cols >= b.rows * b.cols ? a : b));
     }
 
+    function recipeMetaFromState(grid) {
+      if (!state.fields || !state.fields.length) {
+        return { fields: [], hasHead: false, columnLabels: [], extractMode: "box" };
+      }
+      const fields = state.fields.map(function (f) {
+        const item = { name: String(f.name || "").slice(0, 24) };
+        if (typeof f.col === "number" && f.col >= 0) item.col = f.col;
+        if (f.mergeCols && f.mergeCols.length) item.mergeCols = f.mergeCols.slice();
+        return item;
+      });
+      const split = splitGrid(plainGrid(grid || state.draft || []), true);
+      const columnLabels = split.hasHead ? split.header.map(String) : fields.map(function (f) {
+        return f.name;
+      });
+      return { fields: fields, hasHead: !!split.hasHead, columnLabels: columnLabels, extractMode: "picker" };
+    }
+
+    function ingestSuccessStatus(res, sentRows, append) {
+      const sheet = (res && res.sheetName) || "";
+      const kept = (res && res.rows) || Math.min(sentRows, INGEST_MAX_ROWS);
+      let msg = (append ? "已追加 " : "已写入 Excel「") + sheet + "」· " + kept + " 行。";
+      if (res && res.truncated) {
+        const src = res.sourceRows || sentRows;
+        msg += " ⚠ 原 " + src + " 行，只写入前 " + INGEST_MAX_ROWS + " 行。";
+      } else if (sentRows > INGEST_MAX_ROWS) {
+        msg += " ⚠ 只写入前 " + INGEST_MAX_ROWS + " 行。";
+      }
+      if (res && res.recipePath) {
+        msg += " 采集路径 JSON：" + res.recipePath;
+      }
+      return msg;
+    }
+
+    function exportRecipeJson() {
+      const url = location.href;
+      fetch("http://127.0.0.1:8766/api/fetch-recipe?url=" + encodeURIComponent(url))
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          const recipe = (data && data.recipe) || {};
+          const blob = new Blob([JSON.stringify(recipe, null, 2)], { type: "application/json" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = (recipe.host || "fetch-recipe") + ".json";
+          a.click();
+          URL.revokeObjectURL(a.href);
+          if (data && data.path) setStatus("已导出 JSON。本机路径：" + data.path);
+        })
+        .catch(function () {
+          setStatus("导出失败。请先写入一次（保存列映射），并确认本机 8766 后端已启动。");
+        });
+    }
+
+    function truncWarnHtml(rowCount) {
+      if (rowCount <= INGEST_MAX_ROWS) return "";
+      return (
+        '<div class="ce-warn">⚠ 写入时只保留前 ' +
+        INGEST_MAX_ROWS +
+        " 行（共 " +
+        rowCount +
+        " 条）。</div>"
+      );
+    }
+
+    function setWriting(on) {
+      state.writing = !!on;
+      refreshBtns();
+    }
+
     function sendGrid(grid, append) {
+      if (state.writing) return;
       const rows = plainGrid(grid);
       if (!usable(rows)) {
         setStatus("这张表没有内容。请点接口表上的「写入」，或点选一整列表（至少两行）。");
         return;
       }
-      const payload = { type: append ? "append" : "write", grids: [rows], rows, url: location.href, append: !!append };
+      const meta = recipeMetaFromState(rows);
+      const payload = {
+        type: append ? "append" : "write",
+        grids: [rows],
+        rows,
+        url: location.href,
+        append: !!append,
+        fields: meta.fields,
+        hasHead: meta.hasHead,
+        columnLabels: meta.columnLabels,
+        extractMode: meta.extractMode,
+      };
       const ext =
         options.via === "extension" ||
         (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage);
+      setWriting(true);
+      setStatus("正在送到 Excel…");
       if (ext && typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({ type: "ce-ingest", url: payload.url, rows: payload.rows, append: payload.append }, (res) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "ce-ingest",
+            url: payload.url,
+            rows: payload.rows,
+            append: payload.append,
+            fields: payload.fields,
+            hasHead: payload.hasHead,
+            columnLabels: payload.columnLabels,
+            extractMode: payload.extractMode,
+          },
+          (res) => {
+          setWriting(false);
           if (chrome.runtime.lastError) {
             setStatus("连不上扩展后台。请确认已加载扩展且本机后端已启动。");
             return;
@@ -562,15 +992,19 @@
             return;
           }
           state.written = true;
-          setStatus((payload.append ? "已追加 " : "已写入 Excel「") + ((res && res.sheetName) || "") + "」· " + rows.length + " 行。");
+          setStatus(ingestSuccessStatus(res, rows.length, payload.append));
           refreshBtns();
         });
-        setStatus("正在送到 Excel…");
         return;
       }
       global.__cePicker.command = payload;
       state.written = true;
-      setStatus((payload.append ? "已提交追加 " : "已提交写入 ") + rows.length + " 行。任务窗格打开时会落表。");
+      setWriting(false);
+      let msg = (payload.append ? "已提交追加 " : "已提交写入 ") + rows.length + " 行。任务窗格打开时会落表。";
+      if (rows.length > INGEST_MAX_ROWS) {
+        msg += " ⚠ 只写入前 " + INGEST_MAX_ROWS + " 行。";
+      }
+      setStatus(msg);
       refreshBtns();
     }
 
@@ -617,6 +1051,66 @@
         .replace(/>/g, "&gt;");
     }
 
+    function escAttr(s) {
+      return escText(s).replace(/"/g, "&quot;");
+    }
+
+    function rebuildDraftFromFields() {
+      if (state.locked && state.locked.length && state.fields && state.fields.length) {
+        state.draft = gridFromItems(state.locked, state.fields);
+      }
+    }
+
+    function previewHeaderFromDraft(grid) {
+      const rows = plainGrid(grid);
+      if (!rows.length) return [];
+      const split = splitGrid(rows, true);
+      return split.header;
+    }
+
+    function applyFieldNameEdit(fieldIdx, raw, box) {
+      const f = state.fields[fieldIdx];
+      if (!f) return;
+      let name = String(raw || "").trim();
+      if (!name) name = fallbackColumnLabel(f.col, fieldIdx + 1);
+      if (name.length > 24) name = name.slice(0, 24);
+      f.name = name;
+      rebuildDraftFromFields();
+      const header = previewHeaderFromDraft(state.draft);
+      updatePreviewChips(box, header);
+      setStatus("列名已改：" + name + "（写入 Excel 时用此表头）");
+    }
+
+    function updatePreviewChips(box, header) {
+      if (!box || !header || !header.length) return;
+      const chips = box.querySelector(".ce-chips");
+      if (!chips) return;
+      const shown = header.slice(0, 8);
+      chips.innerHTML =
+        shown.map((c) => '<span class="ce-chip">' + escText(String(c).slice(0, 14)) + "</span>").join("") +
+        (header.length > 8 ? '<span class="ce-chip ce-chip-more">+' + (header.length - 8) + " 列</span>" : "");
+    }
+
+    function bindPreviewHeaderEditors(box) {
+      if (!box) return;
+      box.querySelectorAll("input.ce-col-name").forEach(function (inp) {
+        inp.addEventListener("change", function () {
+          const idx = parseInt(inp.getAttribute("data-field-idx"), 10);
+          applyFieldNameEdit(idx, inp.value, box);
+        });
+        inp.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            inp.blur();
+          }
+        });
+      });
+    }
+
+    function currentPreviewGrid() {
+      return plainGrid(state.draft || mergeGrids(state.regions) || []);
+    }
+
     function splitGrid(grid, fromClick) {
       const rows = plainGrid(grid);
       const r0 = rows[0] || [];
@@ -631,7 +1125,11 @@
     function renderPreview() {
       const box = document.getElementById("ce-excel-preview");
       if (!box) return;
-      const grid = plainGrid(state.draft || mergeGrids(state.regions) || []);
+      const active = document.activeElement;
+      if (active && active.classList && active.classList.contains("ce-col-name") && box.contains(active)) {
+        return;
+      }
+      const grid = currentPreviewGrid();
       box.style.display = "block";
       if (!usable(grid)) {
         box.innerHTML =
@@ -645,6 +1143,7 @@
         : state.regions.length > 1
           ? "框选 " + state.regions.length + " 块"
           : "框选";
+      const editableFields = !!(state.draft && state.fields && state.fields.length);
       let chips = "";
       if (hasHead) {
         const shown = header.slice(0, 8);
@@ -657,7 +1156,18 @@
       const show = body.slice(0, 5);
       let table = '<div class="ce-table-wrap"><table><thead><tr>';
       header.forEach((h, i) => {
-        table += "<th>" + escText(String(h || "列" + (i + 1)).slice(0, 16)) + "</th>";
+        if (editableFields && i < state.fields.length) {
+          table +=
+            '<th class="ce-th-edit"><input class="ce-col-name" data-field-idx="' +
+            i +
+            '" value="' +
+            escAttr(String(h || "列" + (i + 1)).slice(0, 24)) +
+            '" title="可改列名，写入 Excel 时用" aria-label="列名' +
+            (i + 1) +
+            '"/></th>';
+        } else {
+          table += "<th>" + escText(String(h || "列" + (i + 1)).slice(0, 16)) + "</th>";
+        }
       });
       table += "</tr></thead><tbody>";
       show.forEach((r) => {
@@ -674,8 +1184,10 @@
         " 条" +
         (n > show.length ? "，写入时共 " + n + " 条" : "") +
         (header.length > 6 ? " · 可左右滑动查看全部 " + header.length + " 列" : "") +
+        (editableFields ? " · 表头可直接改列名" : "") +
         "</div>";
       box.innerHTML =
+        truncWarnHtml(n) +
         '<div class="ce-stat">' +
         n +
         " <span>条 · " +
@@ -689,21 +1201,32 @@
       write.type = "button";
       write.className = "ce-go";
       write.textContent = "写入这 " + n + " 条到 Excel";
-      write.onclick = () => sendGrid(grid, false);
+      write.disabled = !!state.writing;
+      write.onclick = () => sendGrid(currentPreviewGrid(), false);
       const append = document.createElement("button");
       append.type = "button";
       append.className = "ce-ghost";
       append.textContent = "追加";
-      append.onclick = () => sendGrid(grid, true);
+      append.disabled = !!state.writing;
+      append.onclick = () => sendGrid(currentPreviewGrid(), true);
       const undo = document.createElement("button");
       undo.type = "button";
       undo.className = "ce-ghost";
       undo.textContent = "撤销";
       undo.onclick = () => undoLast();
+      const exportBtn = document.createElement("button");
+      exportBtn.type = "button";
+      exportBtn.className = "ce-ghost";
+      exportBtn.textContent = "导出 JSON 路径";
+      exportBtn.onclick = () => exportRecipeJson();
       const btns = document.createElement("div");
       btns.className = "ce-row";
       btns.append(write, append, undo);
+      if (state.fields && state.fields.length) {
+        btns.appendChild(exportBtn);
+      }
       box.appendChild(btns);
+      bindPreviewHeaderEditors(box);
     }
 
     function renderNet() {
@@ -726,6 +1249,7 @@
         const lab = document.createElement("div");
         lab.className = "ce-net-lab";
         lab.innerHTML =
+          truncWarnHtml(body.length) +
           "<b>接口表 · " +
           body.length +
           " 条 × " +
@@ -737,11 +1261,13 @@
         writeBtn.type = "button";
         writeBtn.className = "ce-go";
         writeBtn.textContent = "写入这 " + body.length + " 条";
+        writeBtn.disabled = !!state.writing;
         writeBtn.onclick = () => sendGrid(item.grid, false);
         const appendBtn = document.createElement("button");
         appendBtn.type = "button";
         appendBtn.className = "ce-ghost";
         appendBtn.textContent = "追加";
+        appendBtn.disabled = !!state.writing;
         appendBtn.onclick = () => sendGrid(item.grid, true);
         row.append(lab, writeBtn, appendBtn);
         box.appendChild(row);
@@ -788,7 +1314,13 @@
       state.hover = [];
       state.draft = gridFromItems(items, null);
       paint();
-      setStatus("已锁定 " + items.length + " 条。可再点单元格指定列名（黄框是列，绿框是行）。");
+      const vhint = virtualScrollHint(items);
+      setStatus(
+        "已锁定 " +
+          items.length +
+          " 条。" +
+          (vhint ? " " + vhint : " 可再点单元格指定列名（黄框是列，绿框是行）。")
+      );
       refreshBtns();
     }
 
@@ -806,12 +1338,13 @@
         if (inside) {
           const item = state.locked.find((it) => it === el || it.contains(el)) || state.locked[0];
           const key = relKey(item, el);
-          const head = headerName(item, el);
-          if (head) key.name = head;
-          else if (!key.name || key.name.length > 24) key.name = "列" + (state.fields.length + 1);
-          if (!state.fields.some((f) => f.sel === key.sel && f.i === key.i)) {
-            state.fields.push(key);
-          }
+          resolveFieldMeta(item, el, key, state.locked, state.fields.length + 1, "merge");
+          state.fields = state.fields.filter(function (f) {
+            return !fieldsShareColumn(f, key);
+          });
+          state.fields.push(key);
+          var hint = key.mergeCols && key.mergeCols.length ? "（已合并 " + key.mergeCols.length + " 列）" : "";
+          setStatus("已选 " + state.fields.length + " 列 · 最近：" + key.name + hint);
           state.draft = gridFromItems(state.locked, state.fields);
           paint();
           refreshBtns();
@@ -982,7 +1515,11 @@
         "#ce-excel-preview th:first-child,#ce-excel-preview td:first-child{position:sticky;left:0;background:#fff;z-index:1;}" +
         "#ce-excel-preview th:first-child{background:#f1f5f9;z-index:2;}" +
         "#ce-excel-preview th,#ce-excel-preview td{border-bottom:1px solid #e2e8f0;padding:6px 8px;text-align:left;min-width:72px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}" +
+        "#ce-excel-preview th.ce-th-edit{overflow:visible;white-space:normal;max-width:160px;}" +
+        "#ce-excel-preview input.ce-col-name{width:100%;min-width:64px;max-width:132px;border:1px solid #cbd5e1;border-radius:4px;padding:3px 5px;font-size:11px;font-weight:700;background:#fff;color:#334155;box-sizing:border-box;}" +
+        "#ce-excel-preview input.ce-col-name:focus{outline:2px solid #2563eb;border-color:#2563eb;}" +
         "#ce-excel-preview .ce-more{color:#64748b;font-size:11px;margin-top:6px;}" +
+        "#ce-excel-preview .ce-warn,#ce-excel-net-list .ce-warn{color:#b45309;font-size:11px;margin:6px 0;line-height:1.45;}" +
         "#ce-excel-preview .ce-empty{color:#94a3b8;padding:18px 8px;text-align:center;font-weight:650;}" +
         "#ce-excel-preview .ce-hint{font-size:12px;font-weight:400;color:#94a3b8;margin-top:6px;line-height:1.45;}" +
         "#ce-excel-preview .ce-row{display:flex;gap:8px;align-items:stretch;margin-top:8px;}" +

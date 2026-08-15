@@ -1,8 +1,19 @@
 /** Pure reshape logic — no Office JS. Always returns a new grid; never mutates input. */
 
+import { columnKeyToIndex } from "./filter-core";
+import { indexToCol } from "./formula-inspect-core";
+
 export type Cell = string | number | boolean | null;
-export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce";
+export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project";
 export type CoerceType = "number" | "text" | "date";
+
+export interface ProjectColumnSpec {
+  as: string;
+  from?: string | number;
+  merge?: (string | number)[];
+  separator?: string;
+  coerce?: CoerceType;
+}
 
 export interface ReshapeInput {
   headers: string[];
@@ -17,6 +28,8 @@ export interface ReshapeInput {
   separator?: string;
   maxParts?: number;
   type?: CoerceType;
+  headerless?: boolean;
+  columns?: ProjectColumnSpec[];
 }
 
 export interface ReshapeResult {
@@ -226,10 +239,115 @@ function coerce(input: ReshapeInput): ReshapeResult {
   return pack(input.headers, rows, { converted: converted, blanked: blanked });
 }
 
+function resolveColRef(ref: string | number, headers: string[], rowWidth: number): number {
+  if (typeof ref === "number") {
+    const i = Math.floor(ref);
+    if (i < 0 || i >= rowWidth) {
+      throw new Error("列索引 " + i + " 超出范围（0.." + (rowWidth - 1) + "）");
+    }
+    return i;
+  }
+  return columnKeyToIndex(String(ref), headers, 0);
+}
+
+function syntheticHeaders(width: number): string[] {
+  const headers: string[] = [];
+  for (let i = 0; i < width; i++) headers.push(indexToCol(i));
+  return headers;
+}
+
+function padRow(row: Cell[], width: number): Cell[] {
+  const next = row.slice();
+  while (next.length < width) next.push("");
+  return next;
+}
+
+function applyProjectCoerce(value: Cell, kind?: CoerceType): { value: Cell; converted: number; blanked: number } {
+  if (!kind || kind === "text") {
+    return { value: kind === "text" ? coerceText(value) : value, converted: 0, blanked: 0 };
+  }
+  const r = kind === "date" ? coerceDate(value) : coerceNumber(value);
+  return {
+    value: r.value,
+    converted: r.kind === "converted" ? 1 : 0,
+    blanked: r.kind === "blanked" ? 1 : 0,
+  };
+}
+
+function projectCellValue(
+  row: Cell[],
+  spec: ProjectColumnSpec,
+  headers: string[]
+): { value: Cell; converted: number; blanked: number } {
+  let raw: Cell;
+  if (spec.merge && spec.merge.length) {
+    const sep = spec.separator == null ? "" : spec.separator;
+    const parts = spec.merge.map(function (ref) {
+      const idx = resolveColRef(ref, headers, row.length);
+      return norm(row[idx] ?? null);
+    });
+    raw = parts.join(sep);
+  } else if (spec.from != null) {
+    const idx = resolveColRef(spec.from, headers, row.length);
+    raw = row[idx] ?? null;
+  } else {
+    raw = "";
+  }
+  return applyProjectCoerce(raw, spec.coerce);
+}
+
+function project(input: ReshapeInput): ReshapeResult {
+  const specs = input.columns;
+  if (!specs || !specs.length) throw new Error("project 需要 columns");
+  specs.forEach(function (spec, i) {
+    if (!spec || !String(spec.as || "").trim()) {
+      throw new Error("project.columns[" + i + "] 需要 as（输出列名）");
+    }
+    if (spec.merge && spec.merge.length) return;
+    if (spec.from == null) throw new Error("project.columns[" + i + "] 需要 from 或 merge");
+  });
+
+  let headers = input.headers.slice();
+  let rows = input.rows.map(function (r) {
+    return r.slice();
+  });
+  if (input.headerless) {
+    rows = [headers as Cell[]].concat(rows);
+  }
+
+  const width = Math.max(
+    headers.length,
+    rows.reduce(function (m, r) {
+      return Math.max(m, r.length);
+    }, 0)
+  );
+  if (input.headerless) {
+    headers = syntheticHeaders(width);
+  }
+
+  const outHeaders = specs.map(function (s) {
+    return String(s.as).trim();
+  });
+  let converted = 0;
+  let blanked = 0;
+  const outRows = rows.map(function (row) {
+    const padded = padRow(row, width);
+    return specs.map(function (spec) {
+      const hit = projectCellValue(padded, spec, headers);
+      converted += hit.converted;
+      blanked += hit.blanked;
+      return hit.value;
+    });
+  });
+
+  return pack(outHeaders, outRows, { converted: converted, blanked: blanked });
+}
+
 export function reshape(input: ReshapeInput): ReshapeResult {
   if (input.op === "dedupe") return dedupe(input);
   if (input.op === "unpivot") return unpivot(input);
   if (input.op === "split") return splitColumn(input);
   if (input.op === "coerce") return coerce(input);
+  if (input.op === "project") return project(input);
   throw new Error("Unknown reshape op");
 }

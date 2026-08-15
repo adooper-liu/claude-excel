@@ -8,7 +8,7 @@ export interface SourceSheet {
   tableNames: string[];
 }
 
-export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce";
+export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project";
 export type CoerceType = "number" | "text" | "date";
 
 export interface ReshapeIntent {
@@ -19,7 +19,15 @@ export interface ReshapeIntent {
   type?: CoerceType;
 }
 
+export function isProjectReshapeRequest(text: string): boolean {
+  const t = String(text || "").trim();
+  if (isSetupRequest(t)) return false;
+  if (/对账|reconcile/i.test(t)) return false;
+  return /规整|整理.{0,12}列|列映射|投影|\bproject\b/i.test(t);
+}
+
 export function isReshapeRequest(text: string): boolean {
+  if (isProjectReshapeRequest(text)) return false;
   const t = String(text || "").trim();
   if (isSetupRequest(t)) return false;
   if (/对账|reconcile/i.test(t)) return false;
@@ -68,10 +76,14 @@ export function parseReshapeIntent(text: string): ReshapeIntent {
   }
   if (/转成数字|转数字/.test(t)) return { op: "coerce", type: "number" };
 
-  throw new Error("请说明要去重、反透视、拆列还是转数字");
+  if (/规整|整理.{0,12}列|列映射|投影|\bproject\b/i.test(t)) {
+    return { op: "project" };
+  }
+
+  throw new Error("请说明要去重、反透视、拆列、转数字还是规整列（project）");
 }
 
-const RESULT_SHEET = /对账|去重结果|反透视|拆列|类型结果|reshape|reconcile|_规范|提取结果/i;
+const RESULT_SHEET = /对账|去重结果|反透视|拆列|类型结果|映射结果|reshape|reconcile|_规范|提取结果/i;
 
 export function pickSourceSheet(sheets: SourceSheet[], intent: ReshapeIntent): SourceSheet | null {
   const candidates = sheets.filter(function (s) {

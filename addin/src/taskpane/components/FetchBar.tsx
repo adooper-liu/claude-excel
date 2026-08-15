@@ -1,9 +1,14 @@
 /**
- * Local URL fetch. Credentials POST to this machine only — never into chat.
- * Pick / box / write happen on the web page. This bar only opens the session and ends it.
+ * Local URL fetch. Opens browser picker on this machine — credentials stay in the browser, not in chat.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  applyFetchUrlPreset,
+  groupFetchUrlPresets,
+  presetShortLabel,
+  type FetchUrlPreset,
+} from "../../services/fetch-url-presets";
 
 export type FetchRows = (string | number)[][];
 
@@ -28,23 +33,28 @@ async function postJson(path: string, body: object, signal?: AbortSignal): Promi
 
 export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
   const [url, setUrl] = useState("");
-  const [user, setUser] = useState("");
-  const [password, setPassword] = useState("");
-  const [showAuth, setShowAuth] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [err, setErr] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [writtenSheet, setWrittenSheet] = useState("");
-  const [engine, setEngine] = useState("");
   const [note, setNote] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const comboRef = useRef<HTMLDivElement>(null);
 
   const busy = phase === "opening";
   const picking = phase === "picking";
+  const inputLocked = disabled || busy || picking;
+
+  const presetGroups = useMemo(function () {
+    if (!menuOpen) return groupFetchUrlPresets("");
+    const q = url.trim();
+    if (!q || /^https?:\/\//i.test(q)) return groupFetchUrlPresets("");
+    return groupFetchUrlPresets(q);
+  }, [menuOpen, url]);
 
   const resetPick = useCallback(() => {
     setSessionId("");
     setWrittenSheet("");
-    setEngine("");
     setNote("");
     setPhase("idle");
   }, []);
@@ -78,9 +88,16 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
     [onFetched, writtenSheet]
   );
 
+  const pickPreset = useCallback(function (preset: FetchUrlPreset) {
+    setUrl(applyFetchUrlPreset(preset));
+    setMenuOpen(false);
+    setErr("");
+  }, []);
+
   const run = useCallback(async () => {
     const target = url.trim();
     if (!target || busy || disabled) return;
+    setMenuOpen(false);
     setPhase("opening");
     setErr("");
     setNote("");
@@ -91,30 +108,24 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
         "/api/web-fetch",
         {
           url: target,
-          username: user.trim(),
-          password,
           asRows: true,
-          browser: showAuth,
+          browser: true,
         },
         ac.signal
       );
       if (data && data.error) {
         setErr(String(data.error));
-        if (/登录|验证码|密码|浏览器/.test(String(data.error))) setShowAuth(true);
         setPhase("idle");
         return;
       }
       if (data.waitingConfirm && data.sessionId) {
-        setPassword("");
         setSessionId(String(data.sessionId));
         setWrittenSheet("");
-        setEngine(String(data.engine || ""));
         setPhase("picking");
         return;
       }
-      const ok = await writeRows(data, false);
+      await writeRows(data, false);
       setPhase("idle");
-      if (ok) setPassword("");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setErr(/abort/i.test(msg) ? "打开超时。请重试；验证码请在弹出窗口里完成。" : msg);
@@ -122,7 +133,7 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
     } finally {
       window.clearTimeout(timer);
     }
-  }, [url, user, password, showAuth, busy, disabled, writeRows]);
+  }, [url, busy, disabled, writeRows]);
 
   useEffect(() => {
     let stop = false;
@@ -160,22 +171,92 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
     };
   }, [sessionId, phase, writtenSheet]);
 
-  const where = engine === "chromium" ? "弹出窗口" : "本机 Chrome/Edge";
+  useEffect(() => {
+    if (!menuOpen) {
+      return undefined;
+    }
+    const onDoc = (ev: MouseEvent) => {
+      const el = comboRef.current;
+      if (el && !el.contains(ev.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   return (
-    <div className="fetch-bar">
+    <div className={"fetch-bar" + (menuOpen ? " fetch-bar-menu-open" : "")}>
       <div className="fetch-row">
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https:// 含 ERP 控制台；登录在本机浏览器完成"
-          disabled={disabled || busy || picking}
-          aria-label="取数网址"
-        />
+        <div className={"fetch-url-combo" + (menuOpen ? " is-open" : "")} ref={comboRef}>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              if (!menuOpen) setMenuOpen(true);
+            }}
+            onFocus={() => {
+              if (!inputLocked) setMenuOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" && !menuOpen) setMenuOpen(true);
+            }}
+            placeholder="https:// 或点 ▾ 选快捷路径"
+            disabled={inputLocked}
+            aria-label="取数网址"
+            aria-expanded={menuOpen}
+            aria-haspopup="listbox"
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            className="fetch-url-toggle"
+            onClick={() => setMenuOpen(function (v) {
+              return !v;
+            })}
+            disabled={inputLocked}
+            aria-label="展开快捷路径"
+            aria-expanded={menuOpen}
+          >
+            ▾
+          </button>
+          {menuOpen && !inputLocked && (
+            <div className="fetch-url-menu" role="listbox" aria-label="快捷路径">
+              {presetGroups.map(function (g) {
+                return (
+                  <div key={g.id} className="fetch-url-group" role="group" aria-label={g.label}>
+                    <div className="fetch-url-group-label">{g.label}</div>
+                    {g.items.map(function (p) {
+                      return (
+                        <div
+                          key={p.id}
+                          className="fetch-url-option"
+                          role="option"
+                          tabIndex={-1}
+                          title={p.hint || p.url}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => pickPreset(p)}
+                        >
+                          {presetShortLabel(p)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {!presetGroups.length && <div className="fetch-url-empty">没有匹配的快捷路径</div>}
+            </div>
+          )}
+        </div>
         {!picking && (
           <button type="button" onClick={run} disabled={disabled || busy || !url.trim()}>
-            {phase === "opening" ? (showAuth ? "正在打开…" : "取数中") : "取数"}
+            {phase === "opening" ? "正在打开…" : "取数"}
           </button>
         )}
         {picking && (
@@ -184,45 +265,12 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
           </button>
         )}
       </div>
-      <label className="fetch-auth-toggle">
-        <input
-          type="checkbox"
-          checked={showAuth}
-          onChange={(e) => setShowAuth(e.target.checked)}
-          disabled={disabled || busy || picking}
-        />
-        需要登录 / 三方站（本机 Chrome 或 Edge，密码不进对话）
-      </label>
-      {showAuth && !picking && (
-        <p className="fetch-hint">用本机 Chrome/Edge 打开。验证码自己点。点选、框选、翻页、写入都在网页右侧完成。</p>
+      {!picking && (
+        <p className="fetch-hint">可手工输入网址，或选快捷路径后改「关键词 / ASIN」。登录在弹出浏览器里完成。</p>
       )}
-      {showAuth && !picking && (
-        <div className="fetch-row">
-          <input
-            type="text"
-            autoComplete="username"
-            value={user}
-            onChange={(e) => setUser(e.target.value)}
-            placeholder="用户名"
-            disabled={disabled || busy}
-            aria-label="取数用户名"
-          />
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="密码（可空，改在弹出窗口里登）"
-            disabled={disabled || busy}
-            aria-label="取数密码"
-          />
-        </div>
-      )}
-      {picking && (
+      {picking && writtenSheet && (
         <p className="fetch-hint">
-          {writtenSheet
-            ? `已写入「${writtenSheet}」。翻页请在网页切到「浏览/翻页」，再点选或追加。点结束才关浏览器。`
-            : `请在${where}右侧「取数」卡片操作：点选 / 框选 / 浏览/翻页。写入也在网页上，不必回到 Excel。`}
+          {`已写入「${writtenSheet}」。翻页请在网页切到「浏览/翻页」，再点选或追加。点结束才关浏览器。`}
         </p>
       )}
       {note && <p className="fetch-ok">{note}</p>}

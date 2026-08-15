@@ -1,5 +1,8 @@
 export type PromptTemplate = { id: string; title: string; prompt: string; custom?: boolean };
 
+export const CUSTOM_PROMPTS_LS_KEY = "claude_excel_custom_prompts";
+export const TEMPLATES_API = "https://localhost:8765/api/templates";
+
 export const BUILTIN_PROMPTS: PromptTemplate[] = [
   {
     id: "sample",
@@ -44,4 +47,82 @@ export function mergeTemplates(
     extra.push({ id, title, prompt, custom: true });
   }
   return builtins.concat(extra);
+}
+
+export function makeCustomTemplateId(): string {
+  return "u_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function normalizeCustomList(raw: unknown): PromptTemplate[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(function (item) {
+      if (!item || typeof item !== "object") return null;
+      const c = item as { id?: string; title?: string; prompt?: string };
+      const id = String(c.id || "").trim();
+      const title = String(c.title || "").trim();
+      const prompt = String(c.prompt || "").trim();
+      if (!id || !title || !prompt) return null;
+      return { id, title, prompt, custom: true as const };
+    })
+    .filter(Boolean) as PromptTemplate[];
+}
+
+export function readCustomTemplatesFromStorage(): PromptTemplate[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PROMPTS_LS_KEY);
+    if (!raw) return [];
+    return normalizeCustomList(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+export function writeCustomTemplatesToStorage(items: PromptTemplate[]): void {
+  try {
+    const payload = items.map(function (p) {
+      return { id: p.id, title: p.title, prompt: p.prompt };
+    });
+    localStorage.setItem(CUSTOM_PROMPTS_LS_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export async function loadCustomTemplates(): Promise<PromptTemplate[]> {
+  try {
+    const r = await fetch(TEMPLATES_API);
+    if (r.ok) {
+      const data = (await r.json()) as { templates?: unknown[] };
+      const items = normalizeCustomList(data.templates);
+      writeCustomTemplatesToStorage(items);
+      return items;
+    }
+  } catch {
+    /* backend down */
+  }
+  return readCustomTemplatesFromStorage();
+}
+
+export async function saveCustomTemplates(items: PromptTemplate[]): Promise<PromptTemplate[]> {
+  const payload = items.map(function (p) {
+    return { id: p.id, title: p.title, prompt: p.prompt };
+  });
+  writeCustomTemplatesToStorage(items);
+  try {
+    const r = await fetch(TEMPLATES_API, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ templates: payload }),
+    });
+    if (r.ok) {
+      const data = (await r.json()) as { templates?: unknown[] };
+      const saved = normalizeCustomList(data.templates);
+      writeCustomTemplatesToStorage(saved);
+      return saved.length ? saved : items;
+    }
+  } catch {
+    /* keep local copy */
+  }
+  return items;
 }
