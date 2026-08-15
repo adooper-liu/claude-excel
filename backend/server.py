@@ -1,13 +1,15 @@
 """server.py — FastAPI backend for the Excel add-in (LLM proxy + static taskpane)."""
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.routing import APIRouter
 import uvicorn
 
 from ai_proxy import chat_complete, chat_stream, validate_key
@@ -15,6 +17,18 @@ from config_store import save_config, get_config
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_skill, list_skills
 from web_tools import fetch_url_content
+from web_ingest import ack_ingest, pending_ingest, push_ingest
+from web_browser import (
+    box_select_status,
+    cancel_fetch_session,
+    capture_fetch_session,
+    close_all_sessions,
+    highlight_fetch_session,
+    picker_status,
+    scan_fetch_session,
+    start_box_select,
+    start_page_picker,
+)
 from skill_registry import (
     SkillRegistryError,
     addin_skills_dir,
@@ -26,13 +40,39 @@ ADDIN_DIR = Path(__file__).parent.parent / "addin" / "dist"
 ROOT_DIR = Path(__file__).parent.parent
 
 
+ingest_router = APIRouter()
+
+
+@ingest_router.post("/api/web-ingest")
+async def api_web_ingest(req: dict):
+    return push_ingest(req)
+
+
+@ingest_router.get("/api/web-ingest/pending")
+async def api_web_ingest_pending():
+    return pending_ingest()
+
+
+@ingest_router.post("/api/web-ingest/ack")
+async def api_web_ingest_ack(req: dict):
+    return ack_ingest(str((req or {}).get("id") or ""))
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
         validate_backend_skills(ROOT_DIR)
     except SkillRegistryError as exc:
         raise SystemExit(str(exc)) from exc
+    loopback = uvicorn.Server(
+        uvicorn.Config(ingest_app, host="127.0.0.1", port=8766, log_level="warning")
+    )
+    task = asyncio.create_task(loopback.serve())
+    print("  extension ingest http://127.0.0.1:8766")
     yield
+    loopback.should_exit = True
+    task.cancel()
+    await close_all_sessions()
 
 
 app = FastAPI(title="Claude Excel", version="3.0.0", lifespan=lifespan)
@@ -40,10 +80,51 @@ app = FastAPI(title="Claude Excel", version="3.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://localhost:3000"],
+    allow_origin_regex=r"chrome-extension://.*",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ingest_app = FastAPI(title="Claude Excel ingest")
+ingest_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@ingest_router.get("/extension/picker.js")
+async def api_extension_picker_js():
+    path = ROOT_DIR / "extension" / "picker.js"
+    if not path.is_file():
+        raise HTTPException(404, "picker.js not found")
+    return FileResponse(
+        str(path),
+        media_type="text/javascript; charset=utf-8",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+    )
+
+
+app.include_router(ingest_router)
+ingest_app.include_router(ingest_router)
+
+
+def _client_host(request: Request) -> str:
+    host = (request.client.host if request.client else "") or ""
+    host = host.split("%")[0]
+    if host.lower().startswith("::ffff:"):
+        host = host[7:]
+    return host
+
+
+def require_loopback(request: Request) -> None:
+    host = _client_host(request)
+    if host in ("127.0.0.1", "::1") or host.startswith("127."):
+        return
+    raise HTTPException(403, "本机服务，仅允许本机访问")
 
 
 if ADDIN_DIR.joinpath("assets").exists():
@@ -112,6 +193,9 @@ async def api_set_key(req: dict):
         raise HTTPException(400, "apiKey required")
     if not api_key.strip().startswith("sk-"):
         raise HTTPException(400, "Invalid key format")
+    valid = await validate_key(api_key.strip(), req.get("baseUrl"))
+    if not valid:
+        raise HTTPException(400, "Key 校验失败。请确认 Key 和 Base URL。")
     save_config(
         {
             k: v
@@ -167,9 +251,85 @@ async def api_install_user_skill(req: dict):
 
 
 @app.post("/api/web-fetch")
-async def api_web_fetch(req: dict):
+async def api_web_fetch(req: dict, request: Request):
+    require_loopback(request)
     url = req.get("url") or ""
-    return await fetch_url_content(str(url))
+    as_rows = bool(req.get("asRows") or req.get("as_rows"))
+    user = req.get("username") or req.get("user") or ""
+    password = req.get("password") or ""
+    return await fetch_url_content(
+        str(url),
+        str(user) or None,
+        str(password) or None,
+        as_rows=as_rows,
+        browser=bool(req.get("browser")),
+    )
+
+
+@app.post("/api/web-fetch-scan")
+async def api_web_fetch_scan(req: dict, request: Request):
+    require_loopback(request)
+    return await scan_fetch_session(str(req.get("sessionId") or ""))
+
+
+@app.post("/api/web-fetch-highlight")
+async def api_web_fetch_highlight(req: dict, request: Request):
+    require_loopback(request)
+    try:
+        idx = int(req.get("gridIndex") if req.get("gridIndex") is not None else 0)
+    except (TypeError, ValueError):
+        idx = 0
+    return await highlight_fetch_session(str(req.get("sessionId") or ""), idx)
+
+
+@app.post("/api/web-fetch-capture")
+async def api_web_fetch_capture(req: dict, request: Request):
+    require_loopback(request)
+    raw_idx = req.get("gridIndex")
+    try:
+        idx = None if raw_idx in (None, "") else int(raw_idx)
+    except (TypeError, ValueError):
+        idx = None
+    return await capture_fetch_session(
+        str(req.get("sessionId") or ""),
+        idx,
+        str(req.get("rowFrom") or "") or None,
+        str(req.get("rowTo") or "") or None,
+        str(req.get("colFrom") or "") or None,
+        str(req.get("colTo") or "") or None,
+        live=bool(req.get("live") or req.get("append")),
+    )
+
+
+@app.post("/api/web-fetch-cancel")
+async def api_web_fetch_cancel(req: dict, request: Request):
+    require_loopback(request)
+    return await cancel_fetch_session(str(req.get("sessionId") or ""))
+
+
+@app.post("/api/web-fetch-box")
+async def api_web_fetch_box(req: dict, request: Request):
+    require_loopback(request)
+    return await start_box_select(str(req.get("sessionId") or ""))
+
+
+@app.post("/api/web-fetch-box-status")
+async def api_web_fetch_box_status(req: dict, request: Request):
+    require_loopback(request)
+    return await box_select_status(str(req.get("sessionId") or ""))
+
+
+@app.post("/api/web-fetch-picker")
+async def api_web_fetch_picker(req: dict, request: Request):
+    require_loopback(request)
+    mode = str((req or {}).get("mode") or "").strip() or None
+    return await start_page_picker(str(req.get("sessionId") or ""), mode)
+
+
+@app.post("/api/web-fetch-picker-status")
+async def api_web_fetch_picker_status(req: dict, request: Request):
+    require_loopback(request)
+    return await picker_status(str(req.get("sessionId") or ""))
 
 
 @app.delete("/api/user-skills/{skill_id}")
@@ -214,14 +374,15 @@ if __name__ == "__main__":
     print("=" * 50)
     print("  Claude Excel (Excel add-in backend)")
     print(f"  {proto}://localhost:8765")
+    print("  extension ingest http://127.0.0.1:8766")
     print("=" * 50)
     if use_ssl:
         uvicorn.run(
             app,
-            host="0.0.0.0",
+            host="127.0.0.1",
             port=8765,
             ssl_keyfile=str(KEY),
             ssl_certfile=str(CERT),
         )
     else:
-        uvicorn.run(app, host="0.0.0.0", port=8765)
+        uvicorn.run(app, host="127.0.0.1", port=8765)

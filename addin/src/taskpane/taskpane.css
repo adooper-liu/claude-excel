@@ -150,7 +150,8 @@ select:focus-visible {
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   padding: 8px;
 }
-.history-flyout { right: 0; top: calc(100% + 6px); }
+.history-flyout, .session-flyout { right: 0; top: calc(100% + 6px); }
+.session-flyout { width: 260px; }
 .prompt-flyout { left: 0; bottom: calc(100% + 6px); }
 .flyout-head {
   display: flex;
@@ -206,8 +207,52 @@ select:focus-visible {
   border: none;
   cursor: pointer;
   padding: 4px 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+.skill-pick-title {
+  display: block;
+  font-size: var(--fs-ui);
+  color: var(--ink);
+  line-height: 1.35;
+}
+.prompt-pick .slash-cmd {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
 }
 .prompt-pick:hover, .prompt-pick.active, .history-list button:hover { background: var(--fx-fill); }
+.history-list li.session-active { background: var(--fx-fill); border-radius: 4px; padding-left: 4px; padding-right: 4px; }
+.history-list .session-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  padding: 2px 0;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+}
+.history-list .session-open:hover { background: transparent; }
+.session-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-ui);
+}
+.session-when {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 .slash-cmd {
   font-family: var(--mono);
   color: var(--fx);
@@ -552,7 +597,7 @@ select:focus-visible {
 /* ── Chat Input ──────────────────────────────────────────── */
 .chat-input-area {
   padding: 8px 10px 10px;
-  border-top: 1px solid var(--rule);
+  border-top: none;
   background: var(--cell);
   display: flex;
   gap: 8px;
@@ -604,6 +649,114 @@ select:focus-visible {
   background: var(--fx-fill);
   color: var(--fx);
   border-color: var(--fx);
+}
+.chat-input-area .icon-btn.on {
+  background: var(--fx-fill);
+  color: var(--fx);
+  border-color: var(--fx);
+}
+.composer {
+  flex-shrink: 0;
+  background: var(--cell);
+  border-top: 1px solid var(--rule);
+}
+.fetch-bar {
+  padding: 8px 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fetch-row {
+  display: flex;
+  gap: 6px;
+}
+.fetch-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-size: var(--fs-ui);
+  background: var(--paper);
+}
+.fetch-row button {
+  padding: 6px 12px;
+  background: var(--fx);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: var(--fs-ui);
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fetch-row button:disabled { opacity: 0.45; cursor: default; }
+.fetch-row button.fetch-btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+}
+.fetch-grids {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow: auto;
+}
+.fetch-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+}
+.fetch-grid.is-picked {
+  color: var(--ink);
+  border-color: var(--fx);
+  background: var(--cell);
+}
+.fetch-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.fetch-range input {
+  width: 44px;
+  min-width: 44px;
+  flex: 0 0 auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  font-size: var(--fs-ui);
+  background: var(--paper);
+  text-align: center;
+}
+.fetch-auth-toggle {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fetch-err {
+  font-size: var(--fs-meta);
+  color: var(--danger);
+  margin: 0 0 6px;
+}
+.fetch-ok {
+  font-size: var(--fs-meta);
+  color: var(--ok, #166534);
+  margin: 0 0 6px;
+}
+.fetch-hint {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+  margin: 0 0 6px;
 }
 .tool-step-preview {
   margin: 6px 0 0;

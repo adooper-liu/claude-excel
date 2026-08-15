@@ -110,24 +110,43 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
   const rows: ReconcileRow[] = [];
 
   for (const k of allKeys) {
-    const L = leftByKey.get(k) || [];
-    const R = rightByKey.get(k) || [];
-    const n = Math.min(L.length, R.length);
+    const L = (leftByKey.get(k) || []).slice();
+    const R = (rightByKey.get(k) || []).slice();
+    const usedR: boolean[] = R.map(() => false);
+    const unmatchedL: Row[] = [];
+    for (let i = 0; i < L.length; i++) {
+      let hit = -1;
+      for (let j = 0; j < R.length; j++) {
+        if (usedR[j]) continue;
+        if (compareRow(L[i], R[j], compareColumns).length === 0) {
+          hit = j;
+          break;
+        }
+      }
+      if (hit >= 0) {
+        usedR[hit] = true;
+        rows.push({ status: "matched", key: k, left: L[i], right: R[hit] });
+      } else {
+        unmatchedL.push(L[i]);
+      }
+    }
+    const unmatchedR = R.filter((_row, j) => !usedR[j]);
+    const n = Math.min(unmatchedL.length, unmatchedR.length);
     for (let i = 0; i < n; i++) {
-      const conflicts = compareRow(L[i], R[i], compareColumns);
+      const conflicts = compareRow(unmatchedL[i], unmatchedR[i], compareColumns);
       rows.push({
         status: conflicts.length ? "conflict" : "matched",
         key: k,
-        left: L[i],
-        right: R[i],
+        left: unmatchedL[i],
+        right: unmatchedR[i],
         conflictColumns: conflicts.length ? conflicts : undefined,
       });
     }
-    for (let i = n; i < L.length; i++) {
-      rows.push({ status: "left_only", key: k, left: L[i], right: null });
+    for (let i = n; i < unmatchedL.length; i++) {
+      rows.push({ status: "left_only", key: k, left: unmatchedL[i], right: null });
     }
-    for (let i = n; i < R.length; i++) {
-      rows.push({ status: "right_only", key: k, left: null, right: R[i] });
+    for (let i = n; i < unmatchedR.length; i++) {
+      rows.push({ status: "right_only", key: k, left: null, right: unmatchedR[i] });
     }
   }
 

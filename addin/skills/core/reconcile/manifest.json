@@ -5,7 +5,7 @@
   "tools": [
     {
       "name": "reconcile_tables",
-      "description": "Compare two Excel Tables by one or more key columns. Writes a NEW sheet (never overwrites sources) with status matched|left_only|right_only|conflict. Exact match after trim; blank keys never match; no fuzzy match. Both sides must already be Tables (use ensure_table first).",
+      "description": "Compare two Excel Tables by one or more key columns. Writes a NEW sheet (never overwrites sources) with status matched|left_only|right_only|conflict. Exact match after trim; blank keys never match; no fuzzy match. Duplicate keys pair equal remaining rows first (order-independent), leftover same-key rows with different values are conflict. Both sides must already be Tables (use ensure_table first).",
       "input_schema": {
         "type": "object",
         "properties": {

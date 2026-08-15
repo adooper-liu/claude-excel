@@ -9,12 +9,13 @@ import readWrite from '../../skills/core/read-write/manifest.json';
 import reconcile from '../../skills/core/reconcile/manifest.json';
 import reshape from '../../skills/core/reshape/manifest.json';
 import calculate from '../../skills/core/calculate/manifest.json';
+import pivot from '../../skills/core/pivot/manifest.json';
 import sortFilter from '../../skills/core/sort-filter/manifest.json';
 import table from '../../skills/core/table/manifest.json';
 import web from '../../skills/core/web/manifest.json';
 
 const LOCAL_MANIFESTS = [
-  chart, format, formula, inspect, navigation, readWrite, reconcile, reshape, calculate, sortFilter, table, web,
+  chart, format, formula, inspect, navigation, readWrite, reconcile, reshape, calculate, pivot, sortFilter, table, web,
 ];
 
 function localTools(): ToolDef[] {

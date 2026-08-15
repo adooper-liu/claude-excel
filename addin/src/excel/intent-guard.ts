@@ -1,3 +1,21 @@
+/** True when the user is asking to resume the previous ask, not start a new one. */
+export function isContinueRequest(text: string): boolean {
+  return /^(继续|接着(做|来|干)?|然后呢|再做一遍|go on|continue\.?)$/i.test(
+    String(text || "").trim()
+  );
+}
+
+/** If this turn is 「继续」, return the last real user ask; otherwise return the current text. */
+export function resolveContinuedAsk(text: string, priorUserTexts: string[]): string {
+  const current = String(text || "").trim();
+  if (!isContinueRequest(current)) return current;
+  for (let i = priorUserTexts.length - 1; i >= 0; i--) {
+    const t = String(priorUserTexts[i] || "").trim();
+    if (t && !isContinueRequest(t)) return t;
+  }
+  return current;
+}
+
 /** True when the user asked to create sample data first — do not steal the turn with a local shortcut. */
 export function isSetupRequest(text: string): boolean {
   const t = String(text || "").trim();
@@ -48,6 +66,7 @@ export function sampleActionForText(userText: string): string {
   if (/\/计算|活公式/.test(t)) return "计算";
   if (/匹配过来|lookup/i.test(t)) return "匹配";
   if (/求和|sumifs|分类汇总/i.test(t)) return "求和";
+  if (/提取选中|提取.{0,12}列|大小写统一|统一大小写|规范大小写/.test(t)) return "提取列";
   return "继续";
 }
 

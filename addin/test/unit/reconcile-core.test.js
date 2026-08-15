@@ -63,6 +63,25 @@ describe("reconcile-core", function () {
     assert.strictEqual(result.counts.right_only, 0);
   });
 
+  it("matches duplicate keys by content, not row order", function () {
+    const result = reconcile({
+      leftHeaders: ["id", "n"],
+      leftRows: [
+        ["A", 1],
+        ["A", 2],
+      ],
+      rightHeaders: ["id", "n"],
+      rightRows: [
+        ["A", 2],
+        ["A", 1],
+      ],
+      keys: ["id"],
+      compareColumns: ["n"],
+    });
+    assert.strictEqual(result.counts.matched, 2);
+    assert.strictEqual(result.counts.conflict, 0);
+  });
+
   it("trims key cells before matching", function () {
     const result = reconcile({
       leftHeaders: ["id"],

@@ -2,6 +2,7 @@ import * as Excel from '../excel';
 import { selectionToMarkdown } from './context';
 import type { ToolCall } from './claude';
 import { HANDLED_TOOLS } from './skill-registry';
+import { parseFormatInput } from '../excel/format-core';
 
 export interface HandlerContext {
   excel: typeof Excel;
@@ -28,11 +29,25 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const sr = m ? parseInt(m[1]) : 1;
         return JSON.stringify({ sheet: input.sheetName, range: input.range, rows: values.length, cols: values[0]?.length || 0, startRow: sr, markdown: md.markdown });
       }
+      case 'extract_selection': {
+        const caseRaw = String(input.caseMode || 'title').trim().toLowerCase();
+        const caseMode =
+          caseRaw === 'lower' || caseRaw === 'upper' || caseRaw === 'keep' ? caseRaw : 'title';
+        const r = await E.extractSelection({
+          sheetName: input.sheetName as string | undefined,
+          range: input.range as string | undefined,
+          column: input.column as string | undefined,
+          caseMode,
+          unique: input.unique === true || String(input.unique) === "true",
+          outputSheet: input.outputSheet as string | undefined,
+        });
+        return JSON.stringify(r);
+      }
       case 'write_to_sheet': {
         const d = input.data as (string | number)[][];
         const n = String(input.sheetName || '').trim();
         if (!n) return 'Error: sheetName required, e.g. 订单 or 流水.';
-        if (/对账|reconcile|去重|反透视|拆列|reshape|查找结果|汇总结果|公式修复|XLOOKUP|SUMIFS/i.test(n)) {
+        if (/对账|reconcile|去重|反透视|拆列|reshape|提取|_规范|查找结果|汇总结果|公式修复|XLOOKUP|SUMIFS/i.test(n)) {
           return 'write_to_sheet blocked: 对账用 reconcile_tables，整形用 reshape_table，公式用 calculate_table。先 ensure_table。';
         }
         await E.writeToNewSheet(n, d);
@@ -43,6 +58,11 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         await E.writeToRange(input.sheetName as string, input.range as string, v);
         return `Wrote to ${input.sheetName}!${input.range}.`;
       }
+      case 'write_inputs': {
+        const cells = Array.isArray(input.cells) ? input.cells as Array<{ address: string; value: string | number | boolean }> : [];
+        const r = await E.writeInputs(input.sheetName as string, cells);
+        return JSON.stringify(r);
+      }
       case 'get_sheet_names': return JSON.stringify(await E.getSheetNames());
       case 'write_formula': {
         const f = input.formulas as (string | number)[][];
@@ -50,11 +70,9 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         return `Formulas written to ${input.sheetName}!${input.range}.`;
       }
       case 'format_range': {
-        const fmt: Record<string, unknown> = {};
-        for (const k of ['bold','color','bgColor','numberFormat','fontSize','columnWidth'])
-          if (input[k] !== undefined) fmt[k] = input[k];
-        await E.formatRange(input.sheetName as string, input.range as string, fmt as Parameters<typeof E.formatRange>[2]);
-        return `Formatted ${input.sheetName}!${input.range}.`;
+        const fmt = parseFormatInput(input as Record<string, unknown>);
+        const r = await E.formatRange(input.sheetName as string, input.range as string, fmt);
+        return JSON.stringify(r);
       }
       case 'conditional_format': {
         const opts: Record<string, unknown> = {};
@@ -64,12 +82,74 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         return `Applied ${input.type} to ${input.sheetName}!${input.range}.`;
       }
       case 'create_chart': {
-        await E.createChart(input.sheetName as string, input.dataRange as string, input.chartType as string, input.title as string, input.seriesBy as string | undefined, input.labelRange as string | undefined);
+        await E.createChart(input.sheetName as string, input.dataRange as string, input.chartType as string, input.title as string, input.seriesBy as string | undefined, input.labelRange as string | undefined, input.palette as string | undefined);
         return `Created ${input.chartType} chart "${input.title}".`;
       }
+      case 'create_pivot': {
+        const splitCsv = (v: unknown): string[] | undefined => {
+          if (Array.isArray(v)) return (v as string[]).map((s) => String(s).trim()).filter(Boolean);
+          if (v == null || v === '') return undefined;
+          return String(v).split(',').map((s) => s.trim()).filter(Boolean);
+        };
+        const rawValues = Array.isArray(input.values) ? input.values as Array<{ field?: string; aggregation?: string }> : [];
+        const r = await E.createPivot({
+          tableName: input.tableName as string | undefined,
+          sourceSheet: input.sourceSheet as string | undefined,
+          sourceRange: input.sourceRange as string | undefined,
+          outputSheet: input.outputSheet as string | undefined,
+          rows: splitCsv(input.rows),
+          columns: splitCsv(input.columns),
+          filters: splitCsv(input.filters),
+          values: rawValues.map((v) => ({ field: String(v.field || ''), aggregation: v.aggregation })),
+        });
+        return JSON.stringify(r);
+      }
       case 'sort_filter': {
-        await E.applySortFilter(input.sheetName as string, input.range as string, input.action as 'sort'|'filter'|'clearFilter', input.sortBy as Parameters<typeof E.applySortFilter>[3], input.filterBy as Parameters<typeof E.applySortFilter>[4]);
-        return `Applied ${input.action} to ${input.sheetName}!${input.range}.`;
+        const r = await E.applySortFilter(
+          input.sheetName as string,
+          input.range as string,
+          input.action as 'sort'|'filter'|'clearFilter',
+          input.sortBy as Parameters<typeof E.applySortFilter>[3],
+          input.filterBy as Parameters<typeof E.applySortFilter>[4]
+        );
+        return JSON.stringify(r);
+      }
+      case 'fill_range': {
+        const r = await E.fillRange({
+          sheetName: input.sheetName as string,
+          range: input.range as string,
+          destination: input.destination as string | undefined,
+          direction: input.direction as string | undefined,
+          fillType: input.fillType as string | undefined,
+        });
+        return JSON.stringify(r);
+      }
+      case 'find_replace': {
+        const r = await E.findReplace({
+          sheetName: input.sheetName as string,
+          range: input.range as string | undefined,
+          find: String(input.find ?? ''),
+          replace: String(input.replace ?? ''),
+          matchCase: input.matchCase === true,
+          completeMatch: input.completeMatch === true,
+          lookIn: input.lookIn === 'formulas' ? 'formulas' : 'values',
+        });
+        return JSON.stringify(r);
+      }
+      case 'data_validation': {
+        const r = await E.applyDataValidation({
+          sheetName: input.sheetName as string,
+          range: input.range as string,
+          type: String(input.type || ''),
+          source: input.source as string | undefined,
+          operator: input.operator as string | undefined,
+          formula1: input.formula1 as string | undefined,
+          formula2: input.formula2 as string | undefined,
+          formula: input.formula as string | undefined,
+          errorMessage: input.errorMessage as string | undefined,
+          allowBlank: input.allowBlank as boolean | undefined,
+        });
+        return JSON.stringify(r);
       }
       case 'set_active_sheet': {
         await E.setActiveSheet(input.sheetName as string);
@@ -80,6 +160,18 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
       }
       case 'inspect_table': {
         return JSON.stringify(await E.inspectTable(input.tableName as string));
+      }
+      case 'inspect_formulas': {
+        return JSON.stringify(await E.inspectFormulas({
+          sheetName: input.sheetName as string | undefined,
+          range: input.range as string | undefined,
+          tableName: input.tableName as string | undefined,
+        }));
+      }
+      case 'scan_formula_errors': {
+        return JSON.stringify(await E.scanFormulaErrors({
+          sheetName: input.sheetName as string | undefined,
+        }));
       }
       case 'ensure_table': {
         const r = await E.ensureTable(
@@ -167,7 +259,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (tool.name === "ensure_table" || tool.name === "reconcile_tables" || tool.name === "reshape_table" || tool.name === "calculate_table") {
+    if (tool.name === "ensure_table" || tool.name === "reconcile_tables" || tool.name === "reshape_table" || tool.name === "calculate_table" || tool.name === "create_pivot" || tool.name === "write_inputs" || tool.name === "extract_selection" || tool.name === "sort_filter" || tool.name === "fill_range" || tool.name === "find_replace" || tool.name === "data_validation") {
       return `${tool.name} failed: ${msg}. This tool IS available — fix the arguments and retry. Do not use write_to_sheet.`;
     }
     return `Error: ${msg}`;

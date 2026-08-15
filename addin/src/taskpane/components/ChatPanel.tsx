@@ -5,7 +5,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { Message } from './App';
 import MessageBubble from './MessageBubble';
-import type { SlashSkill } from '../../services/slash-skills';
+import { TALK_EXAMPLES, type SlashSkill } from '../../services/slash-skills';
 
 interface Props {
   messages: Message[];
@@ -22,24 +22,21 @@ export default function ChatPanel({ messages, skills = [], onPickSkill, isStream
   }, [messages]);
 
   if (messages.length === 0) {
-    const starters = skills.filter((s) => s.id !== "skillify")
-      .concat(skills.filter((s) => s.id === "skillify"));
     return (
       <div className="empty-state">
         <div className="empty-inner">
           <div className="fx-hint">fx</div>
           <h2>对着工作簿说话</h2>
-          <p className="skill-start-label">从这些技能开始：</p>
+          <p className="skill-start-label">直接说要干什么，不必先选命令。</p>
           <div className="skill-start-list">
-            {starters.map((s) => (
+            {TALK_EXAMPLES.map((ask) => (
               <button
-                key={s.id}
+                key={ask}
                 type="button"
                 className="skill-start-btn"
-                title={s.title}
-                onClick={() => onPickSkill?.("/" + s.slash)}
+                onClick={() => onPickSkill?.(ask)}
               >
-                <span className="slash-cmd"><span className="slash-mark">/</span>{s.slash}</span>
+                {ask}
               </button>
             ))}
           </div>

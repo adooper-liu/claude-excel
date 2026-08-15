@@ -1,7 +1,7 @@
 {
   "name": "inspect",
-  "version": "1.0.0",
-  "description": "See workbook structure before changing anything",
+  "version": "1.1.0",
+  "description": "See workbook structure and live formulas before changing anything",
   "tools": [
     {
       "name": "inspect_workbook",
@@ -17,6 +17,30 @@
           "tableName": { "type": "string", "description": "Excel Table name (ListObject)" }
         },
         "required": ["tableName"]
+      }
+    },
+    {
+      "name": "inspect_formulas",
+      "description": "Read formulas AND cached values for a Table or range. Returns counts (inputs/formulas/cross-sheet/errors), up to 40 error cells, and a small formula sample. Does not dump the whole grid. Prefer this before editing formulas.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tableName": { "type": "string", "description": "Excel Table name. If set, sheetName/range are ignored." },
+          "sheetName": { "type": "string" },
+          "range": { "type": "string", "description": "A1 range. Omit to use the sheet used range." }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "scan_formula_errors",
+      "description": "Scan the workbook (or one sheet) for Excel error values: #REF! #DIV/0! #N/A #NAME? #VALUE! #NUM! and similar. Read-only. Returns up to 40 hits with address, formula, and displayed value.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string", "description": "Optional. Omit to scan every sheet." }
+        },
+        "required": []
       }
     }
   ]

@@ -3,6 +3,7 @@
 import { reconcile as reconcileCore, type Cell } from "./reconcile-core";
 import { readTable } from "./table";
 import { writeToNewSheet } from "./write";
+import { uniqueWorkbookSheetName } from "./sheet-name";
 
 export interface ReconcileTablesInput {
   leftTable: string;
@@ -10,23 +11,6 @@ export interface ReconcileTablesInput {
   keys: string[];
   compareColumns?: string[];
   outputSheet?: string;
-}
-
-async function uniqueSheetName(base: string): Promise<string> {
-  return Excel.run(async (context) => {
-    const sheets = context.workbook.worksheets;
-    sheets.load("items/name");
-    await context.sync();
-    const taken = new Set(sheets.items.map((s) => s.name));
-    const root = base.slice(0, 28);
-    let name = root;
-    let i = 2;
-    while (taken.has(name)) {
-      name = `${root}${i}`;
-      i += 1;
-    }
-    return name;
-  });
 }
 
 export async function reconcileTables(input: ReconcileTablesInput): Promise<{
@@ -45,7 +29,7 @@ export async function reconcileTables(input: ReconcileTablesInput): Promise<{
     compareColumns: input.compareColumns,
   });
 
-  const outputSheet = await uniqueSheetName(input.outputSheet || "对账结果");
+  const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || "对账结果");
   const grid = result.outputRows.map((row) =>
     row.map((c) => (c === null || c === undefined ? "" : c))
   ) as (string | number)[][];

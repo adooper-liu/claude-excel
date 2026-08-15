@@ -1,0 +1,45 @@
+---
+description: 洗表算子要通用，口令匹配不要堆。扩能力先加工具参数，禁止为某一句中文加 mergeXxxFollowup。
+alwaysApply: true
+---
+
+# 算子通用，口令不堆
+
+改 Excel 底座时：先扩**参数化工具**，不要为用户刚说的那句话加专用正则。
+
+## 该做厚（算子）
+
+- `reshape_table`：`dedupe | unpivot | split | coerce`
+- `extract_selection`：`column` / 选区 / `caseMode` / `unique`（任意列，不写死店铺）。按 2000 行分块读写。
+- `reshape_table` 的 `dedupe` 同样分块流式；反透视/拆列/转类型仍一次载入，超 200 万格会拒绝。
+- `reconcile_tables`、`calculate_table`、`create_pivot`、`write_inputs`
+- `sort_filter`：`filterBy` 必须真正按条件筛选；列可以是字母、序号或表头。
+- `fill_range`、`find_replace`（values 不碰公式格）、`data_validation`
+- `format_range`：边框 / 对齐 / 冻结，不要另开格式工具。
+
+列名、是否去重、大小写都是参数。万行在 Office JS 里处理，禁止经模型 `write_to_sheet`。
+
+## Office JS 优先
+
+能用 Office JS 做的（读写格、公式、格式、图表、透视、分块洗表）全部本地做。模型只做：听懂含糊需求、选工具/参数、列口径、解释结果。inspect 只送表头和样本，表体禁止进模型。
+
+## 该做薄（口令）
+
+斜杠和 `isXxxRequest` 只是加速器。默认对话 = 模型选工具 + 多轮历史。
+
+```
+# 禁止
+为「继续去重」拼回上一句提取，或为「继续排序」「提取国家列」各写一段正则
+
+# 允许
+用户说「继续去重」→ 对话历史 + extract_selection({ unique: true })
+或 reshape_table({ op: "dedupe" })
+「继续」复述上一句；其它补参数不写专用口令
+```
+
+## 短路只留给硬约束
+
+- 万行不能进模型再写回
+- 对账/整形不能用手写格子伪造结果表
+
+不是每种中文说法都要本地匹配。行业口径不进核心工具，走 `/拆解` + 用户技能。用户 SKILL.md 只能编排已有 Office JS 算子（见 `skill-create-guide.ts`），禁止发明工具名、禁止把表体读进模型。

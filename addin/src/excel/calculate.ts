@@ -6,11 +6,12 @@ import {
   type CalculateOp,
   type Cell,
 } from "./calculate-core";
-import { formulaColumnRuns, valuesWithoutFormulas } from "./range-chunk";
+import { formulaColumnRuns, valuesWithoutFormulas, CHUNK_ROWS, chunkRanges } from "./range-chunk";
 import { readTable } from "./table";
 import { writeFormulaRuns, writeToNewSheet } from "./write";
 import { deleteSheetIfExists } from "./sheet";
 import { sheetHistory } from "./sheet-history";
+import { uniqueWorkbookSheetName } from "./sheet-name";
 
 export interface CalculateTableInput {
   op: CalculateOp;
@@ -30,23 +31,6 @@ const DEFAULT_SHEET: Record<CalculateOp, string> = {
   sumifs: "汇总结果",
   fix_ref: "公式修复",
 };
-
-async function uniqueSheetName(base: string): Promise<string> {
-  return Excel.run(async (context) => {
-    const sheets = context.workbook.worksheets;
-    sheets.load("items/name");
-    await context.sync();
-    const taken = new Set(sheets.items.map((s) => s.name));
-    const root = base.slice(0, 28);
-    let name = root;
-    let i = 2;
-    while (taken.has(name)) {
-      name = `${root}${i}`;
-      i += 1;
-    }
-    return name;
-  });
-}
 
 async function writeFormulaGrid(sheetName: string, grid: Cell[][]): Promise<void> {
   await writeToNewSheet(sheetName, valuesWithoutFormulas(grid));
@@ -70,37 +54,42 @@ async function writeFormulaGrid(sheetName: string, grid: Cell[][]): Promise<void
 }
 
 async function fixRefSheet(sheetName: string, outputSheet: string): Promise<{ cells: number }> {
-  return Excel.run(async (context) => {
+  const packed = await Excel.run(async (context) => {
     const src = context.workbook.worksheets.getItem(sheetName);
     const used = src.getUsedRangeOrNullObject();
-    used.load(["formulas", "values", "rowCount", "columnCount", "isNullObject"]);
+    used.load(["rowCount", "columnCount", "isNullObject"]);
     await context.sync();
     if (used.isNullObject) throw new Error('工作表 "' + sheetName + '" 是空的');
-    const formulas = used.formulas as string[][];
-    const values = used.values as (string | number)[][];
+    const rowCount = used.rowCount;
     const grid: (string | number)[][] = [];
     let cells = 0;
-    for (let r = 0; r < formulas.length; r++) {
-      const row: (string | number)[] = [];
-      for (let c = 0; c < formulas[r].length; c++) {
-        const f = formulas[r][c];
-        if (typeof f === "string" && f.startsWith("=") && /#REF!/i.test(f)) {
-          row.push(fixRefFormula(f));
-          cells += 1;
-        } else if (typeof f === "string" && f.startsWith("=")) {
-          row.push(f);
-        } else {
-          const v = values[r][c];
-          row.push(v === null || v === undefined ? "" : (v as string | number));
+    for (const ch of chunkRanges(rowCount, CHUNK_ROWS)) {
+      const chunk = used.getRow(ch.start).getBoundingRect(used.getRow(ch.start + ch.count - 1));
+      chunk.load(["formulas", "values"]);
+      await context.sync();
+      const formulas = chunk.formulas as string[][];
+      const values = chunk.values as (string | number)[][];
+      for (let r = 0; r < formulas.length; r++) {
+        const row: (string | number)[] = [];
+        for (let c = 0; c < formulas[r].length; c++) {
+          const f = formulas[r][c];
+          if (typeof f === "string" && f.startsWith("=") && /#REF!/i.test(f)) {
+            row.push(fixRefFormula(f));
+            cells += 1;
+          } else if (typeof f === "string" && f.startsWith("=")) {
+            row.push(f);
+          } else {
+            const v = values[r][c];
+            row.push(v === null || v === undefined ? "" : (v as string | number));
+          }
         }
+        grid.push(row);
       }
-      grid.push(row);
     }
-    return { cells, grid, outputSheet };
-  }).then(async (r) => {
-    await writeFormulaGrid(r.outputSheet, r.grid as Cell[][]);
-    return { cells: r.cells };
+    return { cells, grid };
   });
+  await writeFormulaGrid(outputSheet, packed.grid as Cell[][]);
+  return { cells: packed.cells };
 }
 
 export async function calculateTable(input: CalculateTableInput): Promise<{
@@ -109,7 +98,7 @@ export async function calculateTable(input: CalculateTableInput): Promise<{
   rows: number;
   formulaCells?: number;
 }> {
-  const outputSheet = await uniqueSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);
+  const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);
 
   if (input.op === "fix_ref") {
     if (!input.sheetName) throw new Error("fix_ref 需要 sheetName");

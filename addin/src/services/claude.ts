@@ -297,6 +297,7 @@ export interface AgentCallbacks {
     }) => void;
     onUsage?: (info: { model: string; tokens: number }) => void;
     signal?: AbortSignal;
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 async function completeOnce(
@@ -329,7 +330,10 @@ async function completeOnce(
 export async function chatWithTools(
   systemPrompt: string, userMessage: string, tools: ToolDef[], cb: AgentCallbacks,
 ): Promise<string> {
-  const messages: Array<{ role: string; content: unknown }> = [{ role: 'user', content: userMessage }];
+  const prior = (cb.history || []).filter((m) => m && m.content);
+  const messages: Array<{ role: string; content: unknown }> = prior
+    .map((m) => ({ role: m.role, content: m.content }))
+    .concat([{ role: 'user', content: userMessage }]);
   let text = '';
   const digest: string[] = [];
   const maxIter = 20;

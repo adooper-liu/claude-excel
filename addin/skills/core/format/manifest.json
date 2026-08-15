@@ -1,4 +1,76 @@
-{"name":"format","version":"1.0.0","description":"Format cells and conditional formatting","tools":[
-  {"name":"format_range","description":"Format a range: bold, color, bgColor, numberFormat, fontSize, columnWidth.","input_schema":{"type":"object","properties":{"sheetName":{"type":"string"},"range":{"type":"string"},"bold":{"type":"boolean"},"color":{"type":"string"},"bgColor":{"type":"string"},"numberFormat":{"type":"string"},"fontSize":{"type":"number"},"columnWidth":{"type":"number"}},"required":["sheetName","range"]}},
-  {"name":"conditional_format","description":"Conditional formatting: dataBar|colorScale|iconSet|cellValue|topBottom.","input_schema":{"type":"object","properties":{"sheetName":{"type":"string"},"range":{"type":"string"},"type":{"type":"string","description":"dataBar|colorScale|iconSet|cellValue|topBottom"},"barColor":{"type":"string"},"minColor":{"type":"string"},"maxColor":{"type":"string"},"iconStyle":{"type":"string"},"operator":{"type":"string"},"compareTo":{"type":"string"},"fillColor":{"type":"string"},"rank":{"type":"number"},"top":{"type":"boolean"}},"required":["sheetName","range","type"]}}
-]}
+{
+  "name": "format",
+  "version": "1.0.0",
+  "description": "Format cells and conditional formatting",
+  "tools": [
+    {
+      "name": "format_range",
+      "description": "Format a range in Excel: bold, color, bgColor, numberFormat, fontSize, columnWidth, hAlign (left|center|right), vAlign (top|center|bottom), wrap, border (none|thin|medium|thick), borderColor, rowHeight, autoFit, freezeRows, freezeCols (0 unfreezes). For 规范表格: input numbers color=#0000FF, same-sheet formulas #000000, cross-sheet formulas #008000, key assumptions bgColor=#FFFF00. Amounts numberFormat ¥#,##0.00;¥(#,##0.00);- ; percents 0.0% (store 0.15 not 15).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string" },
+          "bold": { "type": "boolean" },
+          "color": { "type": "string" },
+          "bgColor": { "type": "string" },
+          "numberFormat": { "type": "string" },
+          "fontSize": { "type": "number" },
+          "columnWidth": { "type": "number" },
+          "hAlign": { "type": "string" },
+          "vAlign": { "type": "string" },
+          "wrap": { "type": "boolean" },
+          "border": { "type": "string" },
+          "borderColor": { "type": "string" },
+          "rowHeight": { "type": "number" },
+          "autoFit": { "type": "boolean" },
+          "freezeRows": { "type": "number" },
+          "freezeCols": { "type": "number" }
+        },
+        "required": ["sheetName", "range"]
+      }
+    },
+    {
+      "name": "conditional_format",
+      "description": "Conditional formatting: dataBar|colorScale|iconSet|cellValue|topBottom.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string" },
+          "type": { "type": "string", "description": "dataBar|colorScale|iconSet|cellValue|topBottom" },
+          "barColor": { "type": "string" },
+          "minColor": { "type": "string" },
+          "maxColor": { "type": "string" },
+          "iconStyle": { "type": "string" },
+          "operator": { "type": "string" },
+          "compareTo": { "type": "string" },
+          "fillColor": { "type": "string" },
+          "rank": { "type": "number" },
+          "top": { "type": "boolean" }
+        },
+        "required": ["sheetName", "range", "type"]
+      }
+    },
+    {
+      "name": "data_validation",
+      "description": "Set or clear Excel data validation on a range. type: list|whole|decimal|date|textLength|custom|clear. list needs source (是,否 or =Sheet!$A$1:$A$10). numeric types need formula1 and operator (between needs formula2).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string" },
+          "type": { "type": "string" },
+          "source": { "type": "string" },
+          "operator": { "type": "string" },
+          "formula1": { "type": "string" },
+          "formula2": { "type": "string" },
+          "formula": { "type": "string" },
+          "errorMessage": { "type": "string" },
+          "allowBlank": { "type": "boolean" }
+        },
+        "required": ["sheetName", "range", "type"]
+      }
+    }
+  ]
+}

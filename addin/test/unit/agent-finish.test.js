@@ -72,7 +72,7 @@ describe("appendSummaryNudge", function () {
     assert.strictEqual(last.role, "user");
     assert.strictEqual(messages.filter((m) => m.role === "user").length, 2);
     const texts = last.content.filter((b) => b.type === "text").map((b) => b.text);
-    assert.ok(texts.some((t) => t.indexOf("不要再调用工具") >= 0));
+    assert.ok(texts.some((t) => t.indexOf("若已写出新表") >= 0));
   });
 });
 

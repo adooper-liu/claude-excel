@@ -10,14 +10,15 @@ const {
 } = require("../../src/services/slash-skills");
 
 describe("slash-skills", function () {
-  it("lists product skills plus /skill to create one", function () {
+  it("lists product skills plus /skill-creator", function () {
     const names = SLASH_SKILLS.map((s) => s.slash);
-    assert.deepStrictEqual(names, ["对账", "整形", "计算", "skill"]);
+    assert.deepStrictEqual(names, ["对账", "整形", "计算", "透视", "假设", "取数", "规范", "拆解", "skill-creator"]);
   });
 
   it("treats a leading slash with no space as a query", function () {
     assert.strictEqual(slashQuery("/"), "");
     assert.strictEqual(slashQuery("/对"), "对");
+    assert.strictEqual(slashQuery("/skill-creator"), "skill-creator");
     assert.strictEqual(slashQuery("/skill"), "skill");
     assert.strictEqual(slashQuery("对账"), null);
     assert.strictEqual(slashQuery("/对账 按客户"), null);
@@ -25,10 +26,22 @@ describe("slash-skills", function () {
 
   it("filters by slash or title; /skills shows all", function () {
     assert.ok(filterSlashSkills("对").some((s) => s.slash === "对账"));
-    assert.ok(filterSlashSkills("skill").some((s) => s.slash === "skill"));
-    assert.ok(filterSlashSkills("skill").every((s) => s.slash === "skill" || /skill/i.test(s.title + s.id)));
-    assert.strictEqual(filterSlashSkills("skills").length, SLASH_SKILLS.length);
+    assert.ok(filterSlashSkills("skill").some((s) => s.slash === "skill-creator"));
+    assert.ok(filterSlashSkills("skill").every((s) => /skill/i.test(s.slash + s.title + s.id)));
     assert.strictEqual(filterSlashSkills("加粗").length, 0);
+  });
+
+  it("does not dump the catalog on a bare slash", function () {
+    assert.deepStrictEqual(filterSlashSkills(""), []);
+    assert.strictEqual(filterSlashSkills("skills").length, SLASH_SKILLS.length);
+  });
+
+  it("talk examples are plain asks, not slash commands", function () {
+    const { TALK_EXAMPLES } = require("../../src/services/slash-skills");
+    assert.ok(TALK_EXAMPLES.length >= 3);
+    TALK_EXAMPLES.forEach(function (ask) {
+      assert.ok(ask && ask.charAt(0) !== "/");
+    });
   });
 
   it("parses a skill without assuming 订单号", function () {
@@ -41,13 +54,38 @@ describe("slash-skills", function () {
     assert.strictEqual(parseSlashCommand("按订单号对账"), null);
   });
 
-  it("parses /skill as create-skill, with an optional workflow", function () {
-    assert.deepStrictEqual(parseSlashCommand("/skill"), { id: "skillify", extra: "" });
-    assert.deepStrictEqual(parseSlashCommand("/skill 月结关账"), {
-      id: "skillify",
+  it("parses /skill-creator, with /skill as an alias", function () {
+    assert.deepStrictEqual(parseSlashCommand("/skill-creator"), { id: "skill-creator", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/skill"), { id: "skill-creator", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/skill-creator 月结关账"), {
+      id: "skill-creator",
       extra: "月结关账",
     });
-    assert.deepStrictEqual(parseSlashCommand("/创建技能"), { id: "skillify", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/创建技能"), { id: "skill-creator", extra: "" });
+  });
+
+  it("maps 规范 plus aliases", function () {
+    assert.deepStrictEqual(parseSlashCommand("/规范"), { id: "craft", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/体检"), { id: "craft", extra: "检查公式错误" });
+  });
+
+  it("maps 透视 / 假设 / 取数", function () {
+    assert.deepStrictEqual(parseSlashCommand("/透视"), { id: "pivot", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/假设"), { id: "assume", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/情景"), { id: "assume", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/取数 https://example.com"), {
+      id: "fetch",
+      extra: "https://example.com",
+    });
+  });
+
+  it("maps /拆解", function () {
+    assert.deepStrictEqual(parseSlashCommand("/拆解"), { id: "deconstruct", extra: "" });
+    assert.deepStrictEqual(parseSlashCommand("/工作流 清关对账"), {
+      id: "deconstruct",
+      extra: "清关对账",
+    });
+    assert.ok(skillAsk("deconstruct").indexOf("不替用户拍板") >= 0);
   });
 
   it("maps op aliases onto the parent skill without canned schema", function () {
@@ -69,16 +107,23 @@ describe("slash-skills", function () {
     assert.strictEqual(slashDisplay("按类别求和"), null);
   });
 
+  it("skillAsk for fetch keeps picking on the web page", function () {
+    const ask = skillAsk("fetch");
+    assert.ok(ask.indexOf("点选") >= 0);
+    assert.ok(ask.indexOf("不必每次回到 Excel") >= 0);
+  });
+
   it("skillAsk does not hardcode 订单号 or 类别", function () {
     const ask = skillAsk("reconcile") + skillAsk("reshape") + skillAsk("calculate");
     assert.ok(ask.indexOf("订单号") < 0);
     assert.ok(ask.indexOf("类别") < 0);
   });
 
-  it("skillAsk for /skill asks to draft SKILL.md without assuming 订单号", function () {
-    const ask = skillAsk("skillify", "每月关账");
+  it("skillAsk for /skill-creator asks to draft SKILL.md without assuming 订单号", function () {
+    const ask = skillAsk("skill-creator", "每月关账");
     assert.ok(ask.indexOf("SKILL.md") >= 0);
     assert.ok(ask.indexOf("每月关账") >= 0);
+    assert.ok(ask.indexOf("Office JS") >= 0);
     assert.ok(ask.indexOf("订单号") < 0);
   });
 });

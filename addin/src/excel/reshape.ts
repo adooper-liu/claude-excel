@@ -1,8 +1,10 @@
 /// <reference types="@types/office-js" />
 
-import { reshape as reshapeCore, type Cell, type ReshapeInput, type ReshapeOp, type CoerceType } from "./reshape-core";
-import { readTable } from "./table";
-import { writeToNewSheet } from "./write";
+import { reshape as reshapeCore, dedupeChunk, type Cell, type ReshapeInput, type ReshapeOp, type CoerceType } from "./reshape-core";
+import { readTable, readTableMeta, readTableBodyChunk } from "./table";
+import { createSheetWithHeader, writeSheetRows, finishResultSheet, writeToNewSheet } from "./write";
+import { CHUNK_ROWS, chunkRanges } from "./range-chunk";
+import { uniqueWorkbookSheetName } from "./sheet-name";
 
 export interface ReshapeTableInput {
   tableName: string;
@@ -26,21 +28,38 @@ const DEFAULT_SHEET: Record<ReshapeOp, string> = {
   coerce: "类型结果",
 };
 
-async function uniqueSheetName(base: string): Promise<string> {
-  return Excel.run(async (context) => {
-    const sheets = context.workbook.worksheets;
-    sheets.load("items/name");
-    await context.sync();
-    const taken = new Set(sheets.items.map((s) => s.name));
-    const root = base.slice(0, 28);
-    let name = root;
-    let i = 2;
-    while (taken.has(name)) {
-      name = `${root}${i}`;
-      i += 1;
-    }
-    return name;
+function asWriteGrid(rows: Cell[][]): (string | number)[][] {
+  return rows.map(function (row) {
+    return row.map(function (c) {
+      return c === null || c === undefined ? "" : (c as string | number);
+    });
   });
+}
+
+async function reshapeDedupeStreaming(input: ReshapeTableInput): Promise<{
+  outputSheet: string;
+  op: ReshapeOp;
+  rows: number;
+  dropped?: number;
+}> {
+  const meta = await readTableMeta(input.tableName);
+  const keys = input.keys && input.keys.length ? input.keys : meta.headers;
+  const seen = new Set<string>();
+  const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET.dedupe);
+  await createSheetWithHeader(outputSheet, meta.headers);
+  let dropped = 0;
+  let written = 0;
+  for (const ch of chunkRanges(meta.dataRows, CHUNK_ROWS)) {
+    const body = await readTableBodyChunk(meta.name, ch.start, ch.count);
+    const part = dedupeChunk(meta.headers, body as Cell[][], keys, seen);
+    dropped += part.dropped;
+    if (part.kept.length) {
+      await writeSheetRows(outputSheet, 1 + written, asWriteGrid(part.kept));
+      written += part.kept.length;
+    }
+  }
+  await finishResultSheet(outputSheet, written, meta.headers.length);
+  return { outputSheet: outputSheet, op: "dedupe", rows: written, dropped: dropped };
 }
 
 export async function reshapeTable(input: ReshapeTableInput): Promise<{
@@ -51,6 +70,9 @@ export async function reshapeTable(input: ReshapeTableInput): Promise<{
   converted?: number;
   blanked?: number;
 }> {
+  if (input.op === "dedupe") {
+    return reshapeDedupeStreaming(input);
+  }
   const table = await readTable(input.tableName);
   const coreInput: ReshapeInput = {
     headers: table.headers,
@@ -67,19 +89,12 @@ export async function reshapeTable(input: ReshapeTableInput): Promise<{
     type: input.type,
   };
   const result = reshapeCore(coreInput);
-  const outputSheet = await uniqueSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);
+  const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);
   const grid = result.outputRows.map((row) =>
     row.map((c) => (c === null || c === undefined ? "" : c))
   ) as (string | number)[][];
   await writeToNewSheet(outputSheet, grid);
-
-  await Excel.run(async (context) => {
-    const sheet = context.workbook.worksheets.getItem(outputSheet);
-    const used = sheet.getUsedRange();
-    sheet.tables.add(used, true);
-    sheet.activate();
-    await context.sync();
-  });
+  await finishResultSheet(outputSheet, result.rows.length, result.headers.length);
 
   return {
     outputSheet,

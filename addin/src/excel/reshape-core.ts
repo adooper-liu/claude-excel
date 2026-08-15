@@ -39,6 +39,38 @@ function requireColumn(headers: string[], name: string): void {
   }
 }
 
+/** Dedupe one block against a running `seen` set. Does not keep prior rows in memory. */
+export function dedupeChunk(
+  headers: string[],
+  rows: Cell[][],
+  keys: string[],
+  seen: Set<string>
+): { kept: Cell[][]; dropped: number } {
+  const useKeys = keys && keys.length ? keys : headers;
+  useKeys.forEach(function (k) {
+    requireColumn(headers, k);
+  });
+  const idxs = useKeys.map(function (k) {
+    return headers.indexOf(k);
+  });
+  const kept: Cell[][] = [];
+  let dropped = 0;
+  (rows || []).forEach(function (row) {
+    const key = idxs
+      .map(function (i) {
+        return norm(row[i] ?? null);
+      })
+      .join("\x1f");
+    if (seen.has(key)) {
+      dropped += 1;
+      return;
+    }
+    seen.add(key);
+    kept.push(row.slice());
+  });
+  return { kept: kept, dropped: dropped };
+}
+
 function toObjects(headers: string[], rows: Cell[][]): Record<string, Cell>[] {
   return rows.map(function (cells) {
     const obj: Record<string, Cell> = {};
@@ -56,26 +88,9 @@ function pack(headers: string[], rows: Cell[][], extra?: Partial<ReshapeResult>)
 
 function dedupe(input: ReshapeInput): ReshapeResult {
   const keys = input.keys && input.keys.length ? input.keys : input.headers;
-  keys.forEach(function (k) {
-    requireColumn(input.headers, k);
-  });
   const seen = new Set<string>();
-  const kept: Cell[][] = [];
-  let dropped = 0;
-  input.rows.forEach(function (row) {
-    const key = keys
-      .map(function (k) {
-        return norm(row[input.headers.indexOf(k)] ?? null);
-      })
-      .join("\x1f");
-    if (seen.has(key)) {
-      dropped += 1;
-      return;
-    }
-    seen.add(key);
-    kept.push(row.slice());
-  });
-  return pack(input.headers, kept, { dropped: dropped });
+  const part = dedupeChunk(input.headers, input.rows, keys, seen);
+  return pack(input.headers, part.kept, { dropped: part.dropped });
 }
 
 function unpivot(input: ReshapeInput): ReshapeResult {

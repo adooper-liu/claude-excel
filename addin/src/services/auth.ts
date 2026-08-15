@@ -28,7 +28,8 @@ export async function setupDirectMode(key: string): Promise<AuthState> {
     return { status: 'error', error: 'Invalid key format. DeepSeek keys start with "sk-".' };
   }
 
-  // Skip validation — will be checked on first API call
+  const ok = await validateApiKey(trimmed);
+  if (!ok) return { status: 'error', error: 'Key 校验失败。请确认 Key 和供应商。' };
   setDirectApiKey(trimmed);
   return { status: 'ready' };
 }

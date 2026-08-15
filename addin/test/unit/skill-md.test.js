@@ -33,7 +33,11 @@ describe("parseSkillMarkdown", function () {
 
   it("rejects reserved builtin ids", function () {
     assert.strictEqual(reservedSkillId("reconcile"), true);
-    assert.strictEqual(reservedSkillId("对账"), true);
+    assert.strictEqual(reservedSkillId("规范"), true);
+    assert.strictEqual(reservedSkillId("skill-creator"), true);
+    assert.strictEqual(reservedSkillId("透视"), true);
+    assert.strictEqual(reservedSkillId("假设"), true);
+    assert.strictEqual(reservedSkillId("拆解"), true);
     assert.throws(function () {
       parseSkillMarkdown("---\nname: 对账\ndescription: x\n---\nbody");
     }, /内置/);

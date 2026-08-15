@@ -20,7 +20,9 @@ echo 证书已配置。
 
 echo.
 echo [2/3] 安装 Python 依赖...
-pip install fastapi uvicorn httpx -q
+pip install -r backend\requirements.txt -q
+echo 安装 Chromium（ERP 网页登录用，仅本机）...
+playwright install chromium
 echo 依赖已安装。
 
 echo.

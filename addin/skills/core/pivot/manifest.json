@@ -1,0 +1,35 @@
+{
+  "name": "pivot",
+  "version": "1.0.0",
+  "description": "Create an Excel PivotTable from a Table or range using live headers",
+  "tools": [
+    {
+      "name": "create_pivot",
+      "description": "Create a PivotTable on a new sheet. Field names must match live headers from inspect. rows/columns/filters are header names; values are [{field, aggregation}] with aggregation sum|count|average|min|max.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "tableName": { "type": "string", "description": "Source Excel Table name from ensure_table / inspect" },
+          "sourceSheet": { "type": "string" },
+          "sourceRange": { "type": "string", "description": "A1 range including headers if not using tableName" },
+          "outputSheet": { "type": "string" },
+          "rows": { "type": "array", "items": { "type": "string" } },
+          "columns": { "type": "array", "items": { "type": "string" } },
+          "filters": { "type": "array", "items": { "type": "string" } },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": { "type": "string" },
+                "aggregation": { "type": "string" }
+              },
+              "required": ["field"]
+            }
+          }
+        },
+        "required": ["values"]
+      }
+    }
+  ]
+}
