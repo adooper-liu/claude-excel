@@ -44,17 +44,20 @@ ingest_router = APIRouter()
 
 
 @ingest_router.post("/api/web-ingest")
-async def api_web_ingest(req: dict):
+async def api_web_ingest(req: dict, request: Request):
+    require_loopback(request)
     return push_ingest(req)
 
 
 @ingest_router.get("/api/web-ingest/pending")
-async def api_web_ingest_pending():
+async def api_web_ingest_pending(request: Request):
+    require_loopback(request)
     return pending_ingest()
 
 
 @ingest_router.post("/api/web-ingest/ack")
-async def api_web_ingest_ack(req: dict):
+async def api_web_ingest_ack(req: dict, request: Request):
+    require_loopback(request)
     return ack_ingest(str((req or {}).get("id") or ""))
 
 
@@ -89,7 +92,8 @@ app.add_middleware(
 ingest_app = FastAPI(title="Claude Excel ingest")
 ingest_app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[],
+    allow_origin_regex=r"chrome-extension://.*",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -137,7 +141,8 @@ async def health():
 
 
 @app.post("/api/chat")
-async def api_chat(req: dict):
+async def api_chat(req: dict, request: Request):
+    require_loopback(request)
     messages = req.get("messages", [])
     system = req.get("system")
     model = req.get("model")
@@ -187,7 +192,8 @@ async def api_validate_key(req: dict):
 
 
 @app.post("/api/key/set")
-async def api_set_key(req: dict):
+async def api_set_key(req: dict, request: Request):
+    require_loopback(request)
     api_key = req.get("apiKey", "")
     if not api_key:
         raise HTTPException(400, "apiKey required")
@@ -226,7 +232,8 @@ async def api_get_templates():
 
 
 @app.put("/api/templates")
-async def api_put_templates(req: dict):
+async def api_put_templates(req: dict, request: Request):
+    require_loopback(request)
     items = req.get("templates")
     if not isinstance(items, list):
         raise HTTPException(400, "templates must be a list")
@@ -239,7 +246,8 @@ async def api_list_user_skills():
 
 
 @app.post("/api/user-skills")
-async def api_install_user_skill(req: dict):
+async def api_install_user_skill(req: dict, request: Request):
+    require_loopback(request)
     markdown = req.get("markdown") or req.get("content") or ""
     if not str(markdown).strip():
         raise HTTPException(400, "markdown required")
@@ -333,7 +341,8 @@ async def api_web_fetch_picker_status(req: dict, request: Request):
 
 
 @app.delete("/api/user-skills/{skill_id}")
-async def api_delete_user_skill(skill_id: str):
+async def api_delete_user_skill(skill_id: str, request: Request):
+    require_loopback(request)
     try:
         delete_skill(None, skill_id)
     except FileNotFoundError:
