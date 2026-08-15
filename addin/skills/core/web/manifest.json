@@ -5,7 +5,7 @@
   "tools": [
     {
       "name": "web_fetch",
-      "description": "Fetch readable text of a known http(s) URL via the local backend. Use after web_search finds a link, or when the user gave a URL. If fetch errors (Amazon often 403), do not invent prices/ASINs — mark 未能获取 and fall back to web_search snippets.",
+      "description": "Fetch readable text of a known http(s) URL via the local backend. Never pass username or password. If the site needs login, tell the user to use the task pane 取数 bar (credentials stay on this machine). If fetch errors (Amazon often 403), mark 未能获取 — do not invent prices/ASINs.",
       "input_schema": {
         "type": "object",
         "properties": {

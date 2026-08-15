@@ -2,6 +2,10 @@
 
 export const INSPECT_SAMPLE_ROWS = 5;
 export const CHUNK_ROWS = 2000;
+/** Skip Excel Table on huge result sheets — tables.add on 十万+ rows is too slow. */
+export const TABLE_ADD_MAX_ROWS = 50000;
+/** Full-grid readTable / unpivot / reconcile stay in JS; above this, throw and use streaming ops. */
+export const FULL_LOAD_MAX_CELLS = 2000000;
 
 export type Cell = string | number | boolean | null;
 

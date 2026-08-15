@@ -4,6 +4,7 @@
 
 import React, { useState, useRef, useCallback, KeyboardEvent } from 'react';
 import PromptMenu from './PromptMenu';
+import FetchBar, { type FetchRows } from './FetchBar';
 import { filterSlashSkills, parseSlashCommand, slashQuery, type SlashSkill } from '../../services/slash-skills';
 import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
 
@@ -14,10 +15,11 @@ interface Props {
   disabled: boolean;
   installed?: InstalledSkill[];
   onInstalledChange?: (skills: InstalledSkill[]) => void;
+  onFetched?: (rows: FetchRows, sheetName: string, opts?: { append?: boolean }) => Promise<string | void>;
 }
 
 export default function ChatInput({
-  onSend, onStop, isStreaming, disabled, installed = [], onInstalledChange,
+  onSend, onStop, isStreaming, disabled,   installed = [], onInstalledChange, onFetched,
 }: Props): JSX.Element {
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
@@ -25,6 +27,7 @@ export default function ChatInput({
   const [pasteMd, setPasteMd] = useState('');
   const [installErr, setInstallErr] = useState('');
   const [installing, setInstalling] = useState(false);
+  const [showFetch, setShowFetch] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const query = slashQuery(text);
@@ -122,6 +125,13 @@ export default function ChatInput({
   }, []);
 
   return (
+    <div className="composer">
+      {showFetch && onFetched && (
+        <FetchBar
+          disabled={disabled || isStreaming}
+          onFetched={onFetched}
+        />
+      )}
     <div className="chat-input-area">
       <div className="chat-input-tools">
         <button
@@ -132,6 +142,14 @@ export default function ChatInput({
           title="预置指令"
           aria-label="预置指令"
         >⚡</button>
+        <button
+          type="button"
+          className={`icon-btn${showFetch ? " on" : ""}`}
+          disabled={disabled || isStreaming}
+          onClick={() => setShowFetch((v) => !v)}
+          title="从网址取数"
+          aria-label="从网址取数"
+        >网</button>
         {showPrompts && (
           <PromptMenu
             draft={text}
@@ -148,8 +166,8 @@ export default function ChatInput({
           />
         )}
         {showSlash && (
-          <div className="flyout prompt-flyout skill-flyout" role="listbox" aria-label="技能">
-            <div className="flyout-head"><span>技能</span></div>
+          <div className="flyout prompt-flyout skill-flyout" role="listbox" aria-label="加速器">
+            <div className="flyout-head"><span>加速器</span></div>
             {skills.length > 0 && (
               <ul className="prompt-list">
                 {skills.map((s, i) => (
@@ -161,8 +179,8 @@ export default function ChatInput({
                       onMouseEnter={() => setActive(i)}
                       onClick={() => applySkill(s)}
                     >
+                      <span className="skill-pick-title">{s.title}</span>
                       <span className="slash-cmd"><span className="slash-mark">/</span>{s.slash}</span>
-                      {s.title}
                     </button>
                     {s.installed && (
                       <button
@@ -198,7 +216,7 @@ export default function ChatInput({
         onChange={e => { setText(e.target.value); setActive(0); }}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
-        placeholder={disabled ? '请先在设置里配置接口' : '输入 / 选择技能，/skill 创建技能…'}
+        placeholder={disabled ? '请先在设置里配置接口' : '对着工作簿说话…'}
         disabled={disabled}
         rows={1}
       />
@@ -209,6 +227,7 @@ export default function ChatInput({
           发送
         </button>
       )}
+    </div>
     </div>
   );
 }

@@ -12,10 +12,22 @@ import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
 import { fetchUserSkills, installUserSkill, type InstalledSkill } from '../../services/user-skills';
-import { calculateSkill, reconcileSkill, reshapeSkill, skillifySkill } from '../../services/builtin-skills';
+import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
+import SessionList from './SessionList';
 import TokenBadge from './TokenBadge';
+import {
+  bootChat,
+  hasChatContent,
+  hydrateMessages,
+  loadSessions,
+  maxMsgId,
+  newSessionId,
+  persistSession,
+  removeSession,
+  saveSessions,
+} from '../../services/chat-sessions';
 import { addUsage, type TokenUsage } from '../../services/token-meter';
 import type { SheetRecord } from '../../excel/sheet-history';
 import {
@@ -43,44 +55,52 @@ export interface Message {
   samplePrompt?: { kits: SampleKit[] };
 }
 
-const SYSTEM_PROMPT = `You are an Excel AI agent inside an add-in.
+const SYSTEM_PROMPT = `你是 Excel 里的通用 AI 助手（Office JS 加载项）。Office JS 能改的表，不要用模型代劳。你只做：听懂含糊需求、选出工具和参数、用中文解释工具结果，并列出口径选项。斜杠只是加速器。
 
-These tools ARE available in this session: inspect_workbook, inspect_table, ensure_table, reconcile_tables, reshape_table, calculate_table, web_fetch. DeepSeek also has server-side web_search (injected by the proxy). Never say they are missing or unavailable.
+本回合可用的工具都在 tools 列表里。禁止说工具不存在。DeepSeek 时服务端还会注入 web_search。
 
-For product lookup ("获取产品数据" / Amazon / ASIN / 商品页): web_search first if there is no URL, then web_fetch on a concrete link. If fetch errors (Amazon often 403), use search snippets only and mark missing fields 未能获取. Never invent prices, ratings, or ASINs. Write results to a new sheet only. Never paste web_search JSON, encrypted_content, or raw tool payloads into the user-visible reply — cite title and URL only.
+## 分工（强制）
+改表、洗表、去重、对账、透视、格式、公式、改假设、筛选、填充、查找替换、数据验证一律调用对应 Office JS 工具。inspect 只取表头和少量样本。禁止把整列/整表读进对话再 write_to_sheet。不要在回复里手算格子或粘贴表体。
+填充用 fill_range，替换用 find_replace（values 模式不碰公式格），下拉用 data_validation，筛选用 sort_filter 的 filterBy，不要自己读列再写回。
 
-## How to work
-For matching, reconciling, or "对账" two lists:
-1. inspect_workbook — see sheets, Tables, headers. Use each sheet's \`range\` field (A1:D6), not the sheet-qualified usedAddress.
-2. If the workbook is empty or has no headed data: if the user asked to 生成/随机/准备样例, CREATE small sample tables with write_to_sheet (headers + a few rows). Otherwise reply in Chinese with exactly: 「当前工作簿没有带表头的表。请勾选要生成的样例后点确认。」 The UI adds checkboxes — do not list sample schemas, do not ask them to type 生成, and do not invent business data.
-3. If a range is not an Excel Table yet, ensure_table. range may be omitted (uses the sheet's used range) or A1:D6. Use the returned \`name\` as leftTable/rightTable (Chinese names become T_系统订单表).
-4. reconcile_tables with leftTable, rightTable, and keys (e.g. "订单号"). This WRITES A NEW SHEET only.
-Exact match after trim. Blank keys never match. No fuzzy matching.
-Never simulate reconcile with write_to_sheet. If a tool fails, retry with the returned table names; do not invent comparison results.
+## 改表模式
+- 对账、整形：源表只读，结果只写新表。用 reconcile_tables / reshape_table，不要用 write_to_sheet 伪造结果。
+- 提取选中列、去空格、统一大小写：必须调用 extract_selection（column / caseMode / unique 都是参数）。加载项在 Excel 里处理整列（可数万行）。禁止把整列读进对话再用 write_to_sheet 回写。inspect / read_selection 只是探路，没有写出新表就不算完成。已有 *_规范 表时，去重优先对该表 extract_selection unique:true，或 reshape_table op=dedupe。
+- 默认对话、格式、图表、写公式、透视、取数：就地改或按用户指定写新表。
+- 改增长率/折现率等假设：先 inspect_formulas，只用 write_inputs。公式格不准覆盖。改完再看下游值和 scan_formula_errors。
+- 透视：create_pivot，字段名必须来自 inspect 的真实表头。
+- 分类汇总若用户要的是活 SUMIFS 而不是透视表，用 calculate_table。
+- 查找用 INDEX/MATCH，不要默认 XLOOKUP。合计必须是公式，不要把心算结果贴进格子。
+- 「继续」表示接着做上一句还没做完的事。用户补了去重/大小写等参数时，对已有工具设对应参数，不要改问要不要透视或对账。
 
-For cleaning a dirty table ("去重" / "反透视" / "拆列" / "转数字"):
-1. inspect_workbook then ensure_table on the source sheet.
-2. reshape_table with op dedupe|unpivot|split|coerce. WRITES A NEW SHEET only. Never overwrite the source.
-Never fake reshape with write_to_sheet.
-If empty / no headed table: same short checkbox ask as above.
+## 空表
+工作簿空或没有表头：若用户要求生成/随机/准备样例，用 write_to_sheet 建小表。否则只回这句中文：「当前工作簿没有带表头的表。请勾选要生成的样例后点确认。」界面会出勾选框。不要列举样例表头，不要编造业务数据。
 
-For live formulas ("求和" / "匹配过来" / "修#REF"):
-1. inspect_workbook then ensure_table.
-2. calculate_table with op lookup|sumifs|fix_ref. WRITES A NEW SHEET of formulas (INDEX/MATCH / SUMIFS), never paste computed totals.
-Never fake calculate with write_to_sheet.
-If empty / no headed table: same short checkbox ask as above.
-If the user asked to generate sample data AND test these: first write 订单 (订单号,类别,金额) and 流水 (订单号,金额); on a third sheet 公式源 write a formula containing #REF!; ensure_table; then calculate_table for sumifs, lookup, and fix_ref. Always pass sheetName to write_to_sheet. After the three calculate_table calls succeed, STOP calling tools and reply in Chinese with the new sheet names. Never paste computed totals.
+## 对账（仅当用户要核对两份名单）
+inspect_workbook → ensure_table → reconcile_tables。精确匹配（去空格）。空键不配。不要模糊匹配。用返回的 table name（中文表名可能是 T_系统订单表）。
 
-For other requests, use the existing read/write/format tools. Prefer Tables over raw A1 ranges when possible.
+## 取数
+公开 https 用 web_fetch，再写入新表。禁止在工具参数或回复里写账号密码。三方站/ERP：让用户勾选取数栏登录，用本机 Chrome/Edge 跟手操作（验证码自己点）；在网页窗口里点选同类或框选，写入按钮在网页上，不必回到 Excel。失败标「未能获取」，不要编数字。不要把 web_search 的 JSON / encrypted_content 贴进对用户可见的回复。
 
-## Output
-Be concise. Respond in the user's language. After reconcile, report the four counts and the new sheet name. After reshape or calculate, report the new sheet name and that formulas stay live.`;
+## 规范表
+inspect_formulas 后 format_range：输入蓝 #0000FF，同表公式黑，跨表绿 #008000，关键假设黄底 #FFFF00。金额人民币格式；比例格子里存 0.15。边框/对齐/换行/冻结用同一工具的 border、hAlign、wrap、freezeRows。
+
+## 决策与行业
+口径、排除规则、异常阈值只列 2–3 个选项和适用场合，让用户选，不要替他拍板。清关、跨境电商等行业流程先 /拆解，再把 🟢 步骤 /skill-creator。不要编造关税、广告费率、行业基准。
+
+## 输出
+用用户的语言，短。对账报四类计数和新表名。透视/取数报新表名。改假设报改了哪些格子、下游是否还报错。`;
 
 const SKILL_BODY: Record<string, string> = {
   reconcile: reconcileSkill,
   reshape: reshapeSkill,
   calculate: calculateSkill,
-  skillify: skillifySkill,
+  pivot: pivotSkill,
+  assume: assumeSkill,
+  fetch: fetchSkill,
+  craft: craftSkill,
+  deconstruct: deconstructSkill,
+  "skill-creator": skillCreatorSkill,
 };
 
 function systemForTurn(skillId?: string, skillBody?: string): string {
@@ -106,7 +126,11 @@ function withSamplePrompt(assistantText: string, userText: string): Pick<Message
 // ── App ────────────────────────────────────────────────────────
 
 export default function App(): JSX.Element {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [boot] = useState(bootChat);
+  const [messages, setMessages] = useState<Message[]>(() => boot.messages as Message[]);
+  const [sessionId, setSessionId] = useState(boot.id);
+  const [sessions, setSessions] = useState(() => loadSessions());
+  const [showSessions, setShowSessions] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('unconfigured');
   const [showSettings, setShowSettings] = useState(false);
@@ -114,10 +138,15 @@ export default function App(): JSX.Element {
   const [selection, setSelection] = useState<{ address: string; rows: number; cols: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
-  const msgIdRef = useRef(0);
+  const chatGenRef = useRef(0);
+  const msgIdRef = useRef(maxMsgId(boot.messages));
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
   const [installed, setInstalled] = useState<InstalledSkill[]>([]);
   const installedRef = useRef<InstalledSkill[]>([]);
   installedRef.current = installed;
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
   const nextMsgId = () => {
     msgIdRef.current += 1;
     return String(msgIdRef.current);
@@ -168,42 +197,56 @@ export default function App(): JSX.Element {
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim() || sendingRef.current) return;
     sendingRef.current = true;
+    const gen = chatGenRef.current;
+    const setIf = (update: React.SetStateAction<Message[]>) => {
+      if (chatGenRef.current !== gen) return;
+      setMessages(update);
+    };
     const uid = nextMsgId();
     const aid = nextMsgId();
-    setMessages(prev => [...prev, { id: uid, role: 'user', content: text }, { id: aid, role: 'assistant', content: '' }]);
+    setIf(prev => [...prev, { id: uid, role: 'user', content: text }, { id: aid, role: 'assistant', content: '' }]);
     setIsStreaming(true);
     const ac = new AbortController(); abortRef.current = ac;
 
     const ctx = { excel: Excel, showMessage: (t: string) => {
-      setMessages(prev => [...prev, { id: nextMsgId(), role: 'tool', content: t }]);
+      setIf(prev => [...prev, { id: nextMsgId(), role: 'tool', content: t }]);
     }};
 
     try {
       const catalog = installedRef.current;
-      const slash = parseSlashCommand(text, catalog);
-      if (!slash && isSkipSampleRequest(text)) {
-        setMessages(prev => prev.map(m => m.id === aid ? { ...m, content: SKIP_SAMPLE_REPLY } : m));
+      const priorUsers = messagesRef.current
+        .filter((m) => m.role === "user" && m.id !== uid)
+        .map((m) => m.content);
+      const workText = Excel.resolveContinuedAsk(text, priorUsers);
+      const slash = parseSlashCommand(workText, catalog);
+      if (!slash && isSkipSampleRequest(workText)) {
+        setIf(prev => prev.map(m => m.id === aid ? { ...m, content: SKIP_SAMPLE_REPLY } : m));
         return;
       }
       if (!slash) {
-        if (Excel.isReconcileRequest(text)) {
-          const final = await Excel.runReconcileIntent(text, ctx.showMessage);
-          setMessages(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, text) } : m));
+        if (Excel.isReconcileRequest(workText)) {
+          const final = await Excel.runReconcileIntent(workText, ctx.showMessage);
+          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
-        if (Excel.isReshapeRequest(text)) {
-          const final = await Excel.runReshapeIntent(text, ctx.showMessage);
-          setMessages(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, text) } : m));
+        if (Excel.isExtractRequest(workText)) {
+          const final = await Excel.runExtractIntent(workText, ctx.showMessage);
+          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
-        if (Excel.isCalculateRequest(text)) {
-          const final = await Excel.runCalculateIntent(text, ctx.showMessage);
-          setMessages(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, text) } : m));
+        if (Excel.isReshapeRequest(workText)) {
+          const final = await Excel.runReshapeIntent(workText, ctx.showMessage);
+          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
+          return;
+        }
+        if (Excel.isCalculateRequest(workText)) {
+          const final = await Excel.runCalculateIntent(workText, ctx.showMessage);
+          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
       }
-      let userText = slash ? skillAsk(slash.id, slash.extra) : text;
-      if (slash?.id === "skillify") {
+      let userText = slash ? skillAsk(slash.id, slash.extra) : workText;
+      if (slash?.id === "skill-creator") {
         const listed = mergeSlashSkills(catalog).map((s) => "/" + s.slash).join(" ");
         userText += " 现有斜杠：" + listed + "。";
       }
@@ -211,17 +254,25 @@ export default function App(): JSX.Element {
       const skillBody = slash
         ? (SKILL_BODY[slash.id] || catalog.find((s) => s.id === slash.id)?.body)
         : undefined;
+      const history = messagesRef.current
+        .filter((m) => (m.role === "user" || m.role === "assistant") && String(m.content || "").trim())
+        .slice(-6)
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: String(m.content).slice(0, 1200),
+        }));
       let final = await chatWithTools(systemForTurn(slash?.id, skillBody), userText, tools, {
         signal: ac.signal,
-        onToken: (t: string) => setMessages(prev => prev.map(m => m.id === aid ? { ...m, content: m.content + t } : m)),
-        onThinking: (t: string) => setMessages(prev => {
+        history,
+        onToken: (t: string) => setIf(prev => prev.map(m => m.id === aid ? { ...m, content: m.content + t } : m)),
+        onThinking: (t: string) => setIf(prev => {
           const last = prev[prev.length - 1];
           return last?.role === 'tool' && !last.steps
             ? [...prev.slice(0, -1), { ...last, content: last.content + '\n' + t }]
             : [...prev, { id: nextMsgId(), role: 'tool', content: t }];
         }),
         onToolStep: (step) => {
-          setMessages(prev => {
+          setIf(prev => {
             const last = prev[prev.length - 1];
             if (step.phase === 'start') {
               const next = { name: step.name, input: step.input };
@@ -240,7 +291,7 @@ export default function App(): JSX.Element {
         onToolUse: (tc: ToolCall) => executeHandler(tc, ctx),
         onUsage: (info) => setUsage((u) => addUsage(u, info.model, info.tokens)),
       });
-      if (slash?.id === "skillify") {
+      if (slash?.id === "skill-creator") {
         const md = extractSkillMarkdown(final);
         if (md) {
           try {
@@ -254,7 +305,7 @@ export default function App(): JSX.Element {
         }
       }
       const shown = withSamplePrompt(String(final || ""), userText);
-      setMessages(prev => prev.map(m => m.id === aid ? {
+      setIf(prev => prev.map(m => m.id === aid ? {
         ...m,
         content: shown.samplePrompt ? shown.content : (m.content || final),
         samplePrompt: shown.samplePrompt,
@@ -266,7 +317,7 @@ export default function App(): JSX.Element {
       const hint = /Failed to fetch|NetworkError|Load failed/i.test(msg)
         ? '后端连不上（https://localhost:8765）。请先运行 launch.bat，或单独执行：python backend/server.py'
         : msg;
-      setMessages(prev => prev.map(m => m.id === aid ? { ...m, content: `Error: ${hint}` } : m));
+      setIf(prev => prev.map(m => m.id === aid ? { ...m, content: `Error: ${hint}` } : m));
     } finally {
       sendingRef.current = false;
       setIsStreaming(false);
@@ -275,6 +326,71 @@ export default function App(): JSX.Element {
   }, []);
 
   const handleStop = useCallback(() => abortRef.current?.abort(), []);
+
+  const flushSession = useCallback(() => {
+    const next = persistSession(messagesRef.current, sessionIdRef.current);
+    setSessions(next);
+    return next;
+  }, []);
+
+  const startNewSession = useCallback(() => {
+    chatGenRef.current += 1;
+    abortRef.current?.abort();
+    flushSession();
+    if (!hasChatContent(messagesRef.current)) {
+      setShowSessions(false);
+      setShowHistory(false);
+      return;
+    }
+    const id = newSessionId();
+    sessionIdRef.current = id;
+    setSessionId(id);
+    setMessages([]);
+    msgIdRef.current = 0;
+    setShowSessions(false);
+    setShowHistory(false);
+  }, [flushSession]);
+
+  const openSession = useCallback((id: string) => {
+    if (id === sessionIdRef.current) {
+      setShowSessions(false);
+      return;
+    }
+    chatGenRef.current += 1;
+    abortRef.current?.abort();
+    flushSession();
+    const found = loadSessions().find((s) => s.id === id);
+    if (!found) {
+      setSessions(loadSessions());
+      return;
+    }
+    const restored = hydrateMessages(found.messages) as Message[];
+    sessionIdRef.current = found.id;
+    setSessionId(found.id);
+    setMessages(restored);
+    msgIdRef.current = maxMsgId(restored);
+    setShowSessions(false);
+    setShowHistory(false);
+  }, [flushSession]);
+
+  const deleteSession = useCallback((id: string) => {
+    const next = removeSession(loadSessions(), id);
+    saveSessions(next);
+    setSessions(next);
+    if (id !== sessionIdRef.current) return;
+    chatGenRef.current += 1;
+    abortRef.current?.abort();
+    const fresh = newSessionId();
+    sessionIdRef.current = fresh;
+    setSessionId(fresh);
+    setMessages([]);
+    msgIdRef.current = 0;
+  }, []);
+
+  useEffect(() => {
+    if (isStreaming) return;
+    setSessions(persistSession(messages, sessionId));
+  }, [messages, isStreaming, sessionId]);
 
   const handleAuthReady = useCallback(() => { localStorage.setItem('claude_excel_configured', 'true'); setAuthStatus('ready'); setShowSettings(false); }, []);
 
@@ -286,6 +402,64 @@ export default function App(): JSX.Element {
     sync();
     return Excel.sheetHistory.subscribe(sync);
   }, []);
+  const ingestBusy = useRef(false);
+  useEffect(() => {
+    let stop = false;
+    let timer = 0;
+    const tick = async () => {
+      if (stop) return;
+      if (!ingestBusy.current) {
+        ingestBusy.current = true;
+        try {
+          const r = await fetch("https://localhost:8765/api/web-ingest/pending");
+          const data = await r.json();
+          const job = data && data.job;
+          if (job && Array.isArray(job.rows) && job.rows.length) {
+            const name = String(job.sheetName || "取数").trim() || "取数";
+            try {
+              if (job.append) {
+                const n = await Excel.appendSheetRows(name, job.rows);
+                setMessages((prev) => prev.concat({
+                  id: nextMsgId(),
+                  role: "assistant",
+                  content: "网页已追加 " + n + " 行到「" + name + "」。",
+                }));
+              } else {
+                const written = await Excel.writeToNewSheet(name, job.rows);
+                setMessages((prev) => prev.concat({
+                  id: nextMsgId(),
+                  role: "assistant",
+                  content: "网页已写入「" + written + "」（" + job.rows.length + " 行）。",
+                }));
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              setMessages((prev) => prev.concat({
+                id: nextMsgId(),
+                role: "assistant",
+                content: msg,
+              }));
+            }
+            await fetch("https://localhost:8765/api/web-ingest/ack", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ id: job.id }),
+            });
+          }
+        } catch {
+          /* backend down */
+        }
+        ingestBusy.current = false;
+      }
+      if (!stop) timer = window.setTimeout(tick, 800);
+    };
+    timer = window.setTimeout(tick, 1200);
+    return () => {
+      stop = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   const handleUndoSheet = useCallback(async (sheet: string) => {
     try {
       await Excel.undoResultSheet(sheet);
@@ -323,12 +497,30 @@ export default function App(): JSX.Element {
       />
       <div className="header-meta">
         <TokenBadge usage={usage} />
+        <button className="icon-btn" onClick={startNewSession} title="新会话" aria-label="新会话">＋</button>
         <div className="header-flyout">
           <button
             className="icon-btn"
-            onClick={() => setShowHistory((v) => !v)}
+            onClick={() => { setShowHistory(false); setShowSessions((v) => !v); }}
+            title="历史会话"
+            aria-label="历史会话"
+          >☰</button>
+          {showSessions && (
+            <SessionList
+              items={sessions}
+              activeId={sessionId}
+              onOpen={openSession}
+              onDelete={deleteSession}
+              onClose={() => setShowSessions(false)}
+            />
+          )}
+        </div>
+        <div className="header-flyout">
+          <button
+            className="icon-btn"
+            onClick={() => { setShowSessions(false); setShowHistory((v) => !v); }}
             disabled={history.length === 0}
-            title={history.length ? '操作历史' : '没有可撤销的结果表'}
+            title={history.length ? '操作历史（撤销结果表）' : '没有可撤销的结果表'}
             aria-label="操作历史"
           >↩</button>
           {showHistory && (
@@ -355,6 +547,24 @@ export default function App(): JSX.Element {
       disabled={false}
       installed={installed}
       onInstalledChange={setInstalled}
+      onFetched={async (rows, sheetName, opts) => {
+        if (opts && opts.append) {
+          const n = await Excel.appendSheetRows(sheetName, rows);
+          setMessages((prev) => prev.concat({
+            id: nextMsgId(),
+            role: "assistant",
+            content: "已追加 " + n + " 行到「" + sheetName + "」。窗口仍开着，可翻页后再追加，或点结束。",
+          }));
+          return sheetName;
+        }
+        const written = await Excel.writeToNewSheet(sheetName, rows);
+        setMessages((prev) => prev.concat({
+          id: nextMsgId(),
+          role: "assistant",
+          content: "已从网址写入新表「" + written + "」（" + rows.length + " 行）。可在窗口里翻页后追加本页。密码没有进入对话。",
+        }));
+        return written;
+      }}
     />
   </>;
 }

@@ -1,5 +1,5 @@
 export const SUMMARY_NUDGE =
-  "不要再调用工具。用中文写两三句总结：新建了哪些工作表、哪些步骤失败。不要贴表格、JSON 或工具原文。";
+  "用中文写两三句：若已写出新表就报表名；若还没写完就说还缺哪一步。不要贴表格、JSON 或工具原文。";
 
 export interface ParsedToolUse {
   id: string;

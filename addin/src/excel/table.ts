@@ -1,6 +1,6 @@
 /// <reference types="@types/office-js" />
 
-import { CHUNK_ROWS, chunkRanges } from "./range-chunk";
+import { CHUNK_ROWS, chunkRanges, FULL_LOAD_MAX_CELLS } from "./range-chunk";
 import { parseA1Range, resolveTableName, sanitizeTableName } from "./table-name";
 
 export interface EnsuredTable {
@@ -56,6 +56,16 @@ export async function readTable(tableName: string): Promise<{
     table.rows.load("count");
     await context.sync();
     const headers = (header.values[0] || []).map((c) => String(c ?? "").trim());
+    const dataRows = table.rows.count;
+    if (dataRows > 0 && dataRows * headers.length > FULL_LOAD_MAX_CELLS) {
+      throw new Error(
+        "表有 " +
+          dataRows +
+          " 行 × " +
+          headers.length +
+          " 列，超过一次载入上限。请先提取需要的列，或用去重（会分块处理）。"
+      );
+    }
     let rows: (string | number | boolean | null)[][] = [];
     if (table.rows.count > 0) {
       const body = table.getDataBodyRange();
@@ -67,6 +77,52 @@ export async function readTable(tableName: string): Promise<{
       }
     }
     return { name: table.name, sheet: ws.name, headers, rows };
+  });
+}
+
+export async function readTableMeta(tableName: string): Promise<{
+  name: string;
+  sheet: string;
+  headers: string[];
+  dataRows: number;
+}> {
+  return Excel.run(async (context) => {
+    const tables = context.workbook.tables;
+    tables.load("items/name");
+    await context.sync();
+    const existing = tables.items.map((t) => t.name);
+    const resolved = resolveTableName(tableName, existing);
+    const table = tables.getItem(resolved);
+    const ws = table.worksheet;
+    ws.load("name");
+    const header = table.getHeaderRowRange();
+    header.load("values");
+    table.load("name");
+    table.rows.load("count");
+    await context.sync();
+    const headers = (header.values[0] || []).map((c) => String(c ?? "").trim());
+    return { name: table.name, sheet: ws.name, headers: headers, dataRows: table.rows.count };
+  });
+}
+
+export async function readTableBodyChunk(
+  tableName: string,
+  start: number,
+  count: number
+): Promise<(string | number | boolean | null)[][]> {
+  if (count <= 0) return [];
+  return Excel.run(async (context) => {
+    const tables = context.workbook.tables;
+    tables.load("items/name");
+    await context.sync();
+    const existing = tables.items.map((t) => t.name);
+    const resolved = resolveTableName(tableName, existing);
+    const table = tables.getItem(resolved);
+    const body = table.getDataBodyRange();
+    const chunk = body.getRow(start).getBoundingRect(body.getRow(start + count - 1));
+    chunk.load("values");
+    await context.sync();
+    return chunk.values as (string | number | boolean | null)[][];
   });
 }
 

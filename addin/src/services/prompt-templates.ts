@@ -15,12 +15,17 @@ export const BUILTIN_PROMPTS: PromptTemplate[] = [
   {
     id: "pivot",
     title: "透视分析",
-    prompt: "inspect 当前表，按类别对金额做 SUMIFS 汇总，写到新表，公式保持活的。",
+    prompt: "inspect 当前表，按实际表头用 create_pivot 做透视（行字段用分类列，值字段用金额等求和）。不要猜列名。",
   },
   {
     id: "clean",
     title: "清洗脏数据",
     prompt: "inspect 当前表，去重并去掉首尾空格，结果写到新表，不要改源表。",
+  },
+  {
+    id: "craft",
+    title: "规范当前表",
+    prompt: "先 inspect 再检查公式错误。输入数字用蓝字、同表公式黑字、跨表公式绿字。金额用人民币格式。不要覆盖源表数值，汇总值必须是活公式。",
   },
 ];
 

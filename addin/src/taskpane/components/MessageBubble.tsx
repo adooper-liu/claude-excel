@@ -173,8 +173,9 @@ function pretty(value: unknown): string {
 }
 
 function ToolStepView({ step }: { step: ToolStep }): JSX.Element {
+  const input = step.input || {};
   const bits = ['op', 'sheetName', 'tableName', 'leftTable', 'rightTable', 'key', 'groupBy', 'outputSheet']
-    .map((k) => step.input[k])
+    .map((k) => input[k])
     .filter((v) => v != null && String(v) !== '')
     .map(String);
   const title = bits.length ? `${step.name} · ${bits.join(' · ')}` : step.name;
@@ -193,7 +194,7 @@ function ToolStepView({ step }: { step: ToolStep }): JSX.Element {
           dangerouslySetInnerHTML={{ __html: renderContent(trimMarkdownTable(table)) }}
         />
       )}
-      <pre className="tool-step-json">{pretty(step.input)}</pre>
+      <pre className="tool-step-json">{pretty(input)}</pre>
       {step.result != null && (
         <pre className={`tool-step-json${/^Error:/.test(step.result) ? ' err' : ''}`}>{pretty(step.result)}</pre>
       )}

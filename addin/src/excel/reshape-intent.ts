@@ -71,7 +71,7 @@ export function parseReshapeIntent(text: string): ReshapeIntent {
   throw new Error("请说明要去重、反透视、拆列还是转数字");
 }
 
-const RESULT_SHEET = /对账|去重结果|反透视|拆列|类型结果|reshape|reconcile/i;
+const RESULT_SHEET = /对账|去重结果|反透视|拆列|类型结果|reshape|reconcile|_规范|提取结果/i;
 
 export function pickSourceSheet(sheets: SourceSheet[], intent: ReshapeIntent): SourceSheet | null {
   const candidates = sheets.filter(function (s) {

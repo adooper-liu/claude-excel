@@ -1,20 +1,39 @@
 import type { ToolDef } from "./claude";
 import { isSetupRequest } from "../excel/intent-guard";
 
-const NATIVE_HINT = /对账|reconcile|比对|核对|对上|去重|反透视|拆列|转成数字|转数字|reshape|unpivot|dedupe|求和|匹配过来|XLOOKUP|SUMIFS|#REF|查找填充/;
-const NATIVE_BLOCKED = new Set(["write_to_sheet", "write_to_range", "write_formula", "web_fetch"]);
+const NATIVE_HINT = /对账|reconcile|比对|核对|对上|去重|反透视|拆列|转成数字|转数字|reshape|unpivot|dedupe|求和|匹配过来|XLOOKUP|SUMIFS|#REF|查找填充|透视|pivot|提取选中|提取.{0,12}列|大小写统一|统一大小写|规范大小写|extract_selection/;
+const NATIVE_BLOCKED = new Set(["write_to_sheet", "write_to_range", "write_formula", "write_inputs", "web_fetch", "fill_range", "find_replace"]);
 
-/** For 对账/整形/活公式, drop sheet-writing primitives so the model must call native tools. */
+/** For 对账/整形/活公式/透视, drop sheet-writing primitives so the model must call native tools. */
 export function selectToolsForRequest(
   userText: string,
   tools: ToolDef[],
   skillId?: string
 ): ToolDef[] {
   if (isSetupRequest(userText)) return tools;
-  if (skillId === "skillify") {
-    return tools.filter((t) => t.name === "inspect_workbook" || t.name === "inspect_table");
+  if (skillId === "skill-creator" || skillId === "deconstruct") {
+    const allow = new Set(["inspect_workbook", "inspect_table", "inspect_formulas", "scan_formula_errors"]);
+    return tools.filter((t) => allow.has(t.name));
   }
-  const nativeSkill = skillId === "reconcile" || skillId === "reshape" || skillId === "calculate";
+  if (skillId === "assume") {
+    const allow = new Set([
+      "inspect_workbook",
+      "inspect_table",
+      "inspect_formulas",
+      "scan_formula_errors",
+      "write_inputs",
+      "format_range",
+      "data_validation",
+      "get_sheet_names",
+    ]);
+    return tools.filter((t) => allow.has(t.name));
+  }
+  if (skillId === "fetch") {
+    const allow = new Set(["inspect_workbook", "inspect_table", "web_fetch", "write_to_sheet", "get_sheet_names"]);
+    return tools.filter((t) => allow.has(t.name));
+  }
+  const nativeSkill =
+    skillId === "reconcile" || skillId === "reshape" || skillId === "calculate" || skillId === "pivot";
   if (!nativeSkill && !NATIVE_HINT.test(userText)) return tools;
   return tools.filter((t) => !NATIVE_BLOCKED.has(t.name));
 }

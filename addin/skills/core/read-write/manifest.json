@@ -21,6 +21,22 @@
       }
     },
     {
+      "name": "extract_selection",
+      "description": "Extract the current selection (or a named range) to a NEW sheet. Trims whitespace, unifies Latin letter case, optionally dedupes. Handles tens of thousands of rows in Excel — do NOT read the whole column into the model and write_to_sheet it back. inspect/read_selection is not enough; this tool must run to finish.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string", "description": "Optional. Source sheet. Default: current selection." },
+          "column": { "type": "string", "description": "Optional. Header to extract, e.g. 店铺. Preferred over the current selection when the user named a column." },
+          "range": { "type": "string", "description": "Optional. Source range e.g. G2:G27934. Default: current selection." },
+          "caseMode": { "type": "string", "description": "title (default) | lower | upper | keep" },
+          "unique": { "type": "boolean", "description": "If true, keep first occurrence only. Default false." },
+          "outputSheet": { "type": "string", "description": "New sheet name. Default 列名_规范 or 列名_去重" }
+        },
+        "required": []
+      }
+    },
+    {
       "name": "write_to_sheet",
       "description": "Create a NEW sheet with data starting at A1. Do NOT use this to simulate reconciliation; use reconcile_tables.",
       "input_schema": {
@@ -34,7 +50,7 @@
     },
     {
       "name": "write_to_range",
-      "description": "Write values to a specific range in an existing sheet.",
+      "description": "Write values to a specific range in an existing sheet. For assumption cells in a live model, prefer write_inputs so formula cells are refused.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -46,9 +62,49 @@
       }
     },
     {
+      "name": "write_inputs",
+      "description": "Change assumption/input cells only. Refuses any cell that already contains a formula so downstream recalculation stays intact. Use after inspect_formulas. Never send passwords here.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "cells": {
+            "type": "array",
+            "description": "[{address:'B5', value:0.08}, ...]",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": { "type": "string" },
+                "value": {}
+              },
+              "required": ["address", "value"]
+            }
+          }
+        },
+        "required": ["sheetName", "cells"]
+      }
+    },
+    {
       "name": "get_sheet_names",
       "description": "List all sheet names.",
       "input_schema": { "type": "object", "properties": {}, "required": [] }
+    },
+    {
+      "name": "find_replace",
+      "description": "Find/replace inside Excel (chunked). lookIn=values skips formula cells so live models stay intact. lookIn=formulas rewrites formula text. completeMatch replaces only whole-cell text. Do not read the sheet into the model to substitute strings.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string", "description": "Optional A1. Default: used range." },
+          "find": { "type": "string" },
+          "replace": { "type": "string" },
+          "matchCase": { "type": "boolean" },
+          "completeMatch": { "type": "boolean" },
+          "lookIn": { "type": "string", "description": "values (default) | formulas" }
+        },
+        "required": ["sheetName", "find"]
+      }
     }
   ]
 }

@@ -1,6 +1,6 @@
 require("ts-node/register/transpile-only");
 const assert = require("assert");
-const { reshape } = require("../../src/excel/reshape-core");
+const { reshape, dedupeChunk } = require("../../src/excel/reshape-core");
 
 describe("reshape-core", function () {
   it("dedupes by key and keeps the first row", function () {
@@ -30,6 +30,15 @@ describe("reshape-core", function () {
       keys: ["id"],
     });
     assert.strictEqual(result.rows.length, 1);
+  });
+
+  it("dedupes across blocks using a shared seen set", function () {
+    const seen = new Set();
+    const a = dedupeChunk(["id"], [["A"], ["B"]], ["id"], seen);
+    const b = dedupeChunk(["id"], [[" A "], ["C"]], ["id"], seen);
+    assert.deepStrictEqual(a.kept, [["A"], ["B"]]);
+    assert.deepStrictEqual(b.kept, [["C"]]);
+    assert.strictEqual(b.dropped, 1);
   });
 
   it("unpivots value columns into 属性/值", function () {

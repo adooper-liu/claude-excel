@@ -9,6 +9,7 @@ describe("prompt-templates", function () {
     assert.ok(titles.indexOf("月度报告") >= 0);
     assert.ok(titles.indexOf("透视分析") >= 0);
     assert.ok(titles.indexOf("清洗脏数据") >= 0);
+    assert.ok(titles.indexOf("规范当前表") >= 0);
   });
 
   it("puts custom templates after builtins and skips duplicate ids", function () {

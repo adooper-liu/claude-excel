@@ -13,6 +13,7 @@ const {
 const { isCalculateRequest } = require("../../src/excel/calculate-intent");
 const { isReshapeRequest } = require("../../src/excel/reshape-intent");
 const { isReconcileRequest } = require("../../src/excel/reconcile-intent");
+const { isExtractRequest } = require("../../src/excel/extract-intent");
 const { selectToolsForRequest } = require("../../src/services/tools-for-request");
 
 describe("askGenerateSample", function () {
@@ -78,6 +79,7 @@ describe("local shortcuts skip setup prompts", function () {
     assert.strictEqual(isCalculateRequest(prompt), false);
     assert.strictEqual(isReshapeRequest(prompt), false);
     assert.strictEqual(isReconcileRequest(prompt), false);
+    assert.strictEqual(isExtractRequest(prompt), false);
   });
 
   it("keeps write_to_sheet so the model can create sample tables", function () {

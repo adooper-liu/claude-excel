@@ -3,6 +3,8 @@ const assert = require("assert");
 const {
   CHUNK_ROWS,
   INSPECT_SAMPLE_ROWS,
+  TABLE_ADD_MAX_ROWS,
+  FULL_LOAD_MAX_CELLS,
   chunkRanges,
   inspectSampleRows,
   formulaColumnRuns,
@@ -26,6 +28,12 @@ describe("range-chunk", function () {
       { start: 2000, count: 2000 },
       { start: 4000, count: 1000 },
     ]);
+  });
+
+  it("keeps full-load and Excel Table off million-row result sheets", function () {
+    assert.ok(TABLE_ADD_MAX_ROWS < 100000);
+    assert.ok(FULL_LOAD_MAX_CELLS >= CHUNK_ROWS);
+    assert.ok(FULL_LOAD_MAX_CELLS < 1048576 * 10);
   });
 
   it("blanks formula cells so the first write is values-only", function () {

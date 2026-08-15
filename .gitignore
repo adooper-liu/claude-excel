@@ -39,3 +39,7 @@ Excel add-in*.xlsx
 venv/
 .venv/
 env/
+
+# Runtime logs
+*.log
+backend/debug_run.log

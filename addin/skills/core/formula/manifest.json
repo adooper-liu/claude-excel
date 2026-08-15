@@ -1,3 +1,35 @@
-{"name":"formula","version":"1.0.0","description":"Write Excel formulas","tools":[
-  {"name":"write_formula","description":"Write Excel formulas to cells (=SUM, =VLOOKUP, =IF etc). Example: write_formula('Sheet1','C2',[['=B2*1.1']]).","input_schema":{"type":"object","properties":{"sheetName":{"type":"string"},"range":{"type":"string"},"formulas":{"type":"array","description":"2D array of formula strings"}},"required":["sheetName","range","formulas"]}}
-]}
+{
+  "name": "formula",
+  "version": "1.1.0",
+  "description": "Write and fill Excel formulas",
+  "tools": [
+    {
+      "name": "write_formula",
+      "description": "Write Excel formulas to cells (=SUM, =INDEX, =IF etc). Example: write_formula('Sheet1','C2',[['=B2*1.1']]). Prefer fill_range to copy a formula down instead of sending thousands of formula strings.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string" },
+          "formulas": { "type": "array", "description": "2D array of formula strings" }
+        },
+        "required": ["sheetName", "range", "formulas"]
+      }
+    },
+    {
+      "name": "fill_range",
+      "description": "AutoFill from a source range down (default) or right using Excel, like dragging the fill handle. Omit destination to fill to the sheet used range. fillType: default|copy|series|formats|values (formulas aliases to copy). Do not read the column into the model and write_to_sheet it back.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string", "description": "Source cells, e.g. C2 or C2:C2" },
+          "destination": { "type": "string", "description": "Must include the source. Omit to fill to used last row/col." },
+          "direction": { "type": "string", "description": "down (default) | right" },
+          "fillType": { "type": "string" }
+        },
+        "required": ["sheetName", "range"]
+      }
+    }
+  ]
+}

@@ -10,11 +10,23 @@ export type SlashSkill = {
   installed?: boolean;
 };
 
+export const TALK_EXAMPLES = [
+  "提取选中列，去空格并去重",
+  "把两张表按键对账，结果写新表",
+  "按当前表头做透视",
+  "只改假设数字，不要覆盖公式",
+];
+
 export const SLASH_SKILLS: SlashSkill[] = [
   { id: "reconcile", slash: "对账", title: "两表精确对账，只写新表" },
   { id: "reshape", slash: "整形", title: "去重 / 反透视 / 拆列 / 转数字" },
   { id: "calculate", slash: "计算", title: "活公式：SUMIFS / INDEX+MATCH / 修 #REF!" },
-  { id: "skillify", slash: "skill", title: "把流程做成可复用技能" },
+  { id: "pivot", slash: "透视", title: "按表头做透视表" },
+  { id: "assume", slash: "假设", title: "只改输入格，下游公式重算" },
+  { id: "fetch", slash: "取数", title: "从网址取表；登录用本机取数栏" },
+  { id: "craft", slash: "规范", title: "检查公式、输入格着色、数字格式" },
+  { id: "deconstruct", slash: "拆解", title: "把工作流拆成可验证步骤，不改表" },
+  { id: "skill-creator", slash: "skill-creator", title: "把流程做成可复用技能" },
 ];
 
 const ALIAS: Record<string, { id: SkillId; extra: string }> = {
@@ -29,9 +41,23 @@ const ALIAS: Record<string, { id: SkillId; extra: string }> = {
   求和: { id: "calculate", extra: "求和" },
   匹配: { id: "calculate", extra: "匹配过来" },
   修公式: { id: "calculate", extra: "修复 #REF!" },
-  skill: { id: "skillify", extra: "" },
-  skillify: { id: "skillify", extra: "" },
-  创建技能: { id: "skillify", extra: "" },
+  pivot: { id: "pivot", extra: "" },
+  透视: { id: "pivot", extra: "" },
+  assume: { id: "assume", extra: "" },
+  假设: { id: "assume", extra: "" },
+  情景: { id: "assume", extra: "" },
+  fetch: { id: "fetch", extra: "" },
+  取数: { id: "fetch", extra: "" },
+  craft: { id: "craft", extra: "" },
+  规范: { id: "craft", extra: "" },
+  体检: { id: "craft", extra: "检查公式错误" },
+  deconstruct: { id: "deconstruct", extra: "" },
+  拆解: { id: "deconstruct", extra: "" },
+  工作流: { id: "deconstruct", extra: "" },
+  "skill-creator": { id: "skill-creator", extra: "" },
+  skill: { id: "skill-creator", extra: "" },
+  skillify: { id: "skill-creator", extra: "" },
+  创建技能: { id: "skill-creator", extra: "" },
 };
 
 const ASK: Record<string, string> = {
@@ -40,9 +66,19 @@ const ASK: Record<string, string> = {
   reshape:
     "对当前工作簿做整形。先 inspect，按实际表头选择去重、反透视、拆列或转数字，不要假设列名。结果只写新表。",
   calculate:
-    "对当前工作簿写活公式。先 inspect，按实际表头选择 lookup、sumifs 或 fix_ref，不要假设列名。禁止把汇总值写死。",
-  skillify:
-    "把用户的工作流做成一条可安装的 Excel 技能。若 /对账 /整形 /计算 或已有斜杠已经覆盖，说明该用哪个，不要新建。用户没说清楚要自动化什么时先问一两句。否则可 inspect_workbook（只读，不要改表），起草标准 SKILL.md：YAML 必须有 name、description，建议 slash（中文短命令，不能是 skill/对账/整形/计算）。正文写步骤，只用现有工具，按实际表头工作，结果只写新表。最后用一个 markdown 代码块给出完整 SKILL.md。",
+    "对当前工作簿写活公式。先 inspect，按实际表头选择 lookup、sumifs 或 fix_ref，不要假设列名。禁止把汇总值写死。要透视表时用 create_pivot。",
+  pivot:
+    "对当前工作簿做透视表。先 inspect_workbook，按实际表头选行字段和值字段，不要猜列名。用 create_pivot，不要手写汇总表。",
+  assume:
+    "就地改假设。先 inspect_formulas 认出输入格，只用 write_inputs 写入用户给的数字。公式格不要改。改完再看下游值和错误。",
+  fetch:
+    "从网址取数写入新表。用户给了公开 URL 就 web_fetch 再 write_to_sheet。登录或三方反爬站不要问密码，让用户用取数栏：本机 Chrome/Edge 跟手操作，在网页窗口点选同类或框选后写入，不必每次回到 Excel。不要编造数字。",
+  craft:
+    "规范当前工作簿。先 inspect_workbook，再用 inspect_formulas 或 scan_formula_errors 同时看公式和值。着色和数字格式用 format_range（输入蓝字 #0000FF、同表公式黑字、跨表绿字 #008000、关键假设黄底 #FFFF00）。汇总值必须是活公式。不要覆盖源表数值，不要假设列名。",
+  deconstruct:
+    "拆解用户说的工作流。先确认一句话命名，再写动作流、判断点、边界、验证。标 🟢🟡🔴。口径只列选项，不替用户拍板，不编数字。可 inspect 看表头。不要改表。末尾说明哪些 🟢 步骤可以做成技能。",
+  "skill-creator":
+    "把用户的工作流做成一条可安装的 Excel 技能。若流程还含糊，先拆解再写技能。若现有对账、整形、计算、透视、假设、取数、规范已经能做，用中文说明怎么开口即可，不要让用户先背斜杠清单，也不要新建技能。先判断用户处在哪一步（从零写 / 已有草稿要改 / 只要试跑）。用户没说清楚要自动化什么时，最多问四件事：做什么、什么口令触发、结果长什么样、要不要用当前表头走一遍。可 inspect_workbook（只读，不要改表）。起草 SKILL.md：YAML 必须有 name、description、slash。正文每步点名现有 Office JS 算子（extract_selection / reshape_table / reconcile_tables / calculate_table / create_pivot / write_inputs 等），禁止发明工具、禁止把表体读进对话再写回。附 2–3 句试跑口令。最后用一个 markdown 代码块给出完整 SKILL.md。",
 };
 
 export function mergeSlashSkills(installed?: SlashSkill[]): SlashSkill[] {
@@ -77,7 +113,8 @@ export function slashQuery(text: string): string | null {
 export function filterSlashSkills(query: string, installed?: SlashSkill[]): SlashSkill[] {
   const catalog = mergeSlashSkills(installed);
   const q = String(query || "").trim().toLowerCase();
-  if (!q || q === "skills") return catalog.slice();
+  if (!q) return [];
+  if (q === "skills") return catalog.slice();
   if (q === "安装" || q === "install") return [];
   return catalog.filter(function (s) {
     return (
@@ -126,7 +163,7 @@ export function slashDisplay(
 export function skillAsk(id: SkillId, extra?: string): string {
   const base =
     ASK[id] ||
-    "按已安装技能处理当前工作簿。先 inspect_workbook，按实际表头工作，不要假设列名。结果只写新表。";
+    "按已安装技能处理当前工作簿。先 inspect_workbook，按实际表头工作，不要假设列名。";
   const more = String(extra || "").trim();
   return more ? base + " 用户补充：" + more : base;
 }

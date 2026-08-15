@@ -1,3 +1,42 @@
-{"name":"sort-filter","version":"1.0.0","description":"Sort and filter data","tools":[
-  {"name":"sort_filter","description":"Sort or filter data. sort: sortBy=[{column:'B',order:'descending'}]. filter: filterBy=[{column:'B',operator:'greaterThan',value:'100'}].","input_schema":{"type":"object","properties":{"sheetName":{"type":"string"},"range":{"type":"string"},"action":{"type":"string","description":"sort|filter|clearFilter"},"sortBy":{"type":"array"},"filterBy":{"type":"array"}},"required":["sheetName","range","action"]}}
-]}
+{
+  "name": "sort-filter",
+  "version": "1.1.0",
+  "description": "Sort and filter Excel ranges in place",
+  "tools": [
+    {
+      "name": "sort_filter",
+      "description": "Sort or AutoFilter a range in Excel (never send the table body to the model). action: sort|filter|clearFilter. column may be a letter (B), 1-based index, or header (金额). filterBy operators: greaterThan|greaterThanOrEqual|lessThan|lessThanOrEqual|equals|notEqual|contains|notContains|beginsWith|endsWith|blanks|nonBlanks|between (value2 for between). Multiple filterBy entries are AND. sortBy: [{column, order:'ascending'|'descending'}].",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheetName": { "type": "string" },
+          "range": { "type": "string", "description": "A1 range including header row" },
+          "action": { "type": "string", "description": "sort|filter|clearFilter" },
+          "sortBy": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "column": { "type": "string" },
+                "order": { "type": "string" }
+              }
+            }
+          },
+          "filterBy": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "column": { "type": "string" },
+                "operator": { "type": "string" },
+                "value": { "type": "string" },
+                "value2": { "type": "string" }
+              }
+            }
+          }
+        },
+        "required": ["sheetName", "range", "action"]
+      }
+    }
+  ]
+}
