@@ -1,0 +1,6 @@
+order_id,order_date,platform_sku,quantity,item_price,currency,is_refund
+O001,2026-08-01,Widget-A,2,19.99,USD,false
+O002,2026-08-01,WIDGET-A,1,29.99,USD,false
+O003,2026-08-02,orphan-sku,1,9.99,USD,false
+O004,2026-08-03,Widget-B,1,15.00,EUR,false
+O005,2026-08-03,Widget-A,1,-19.99,USD,true

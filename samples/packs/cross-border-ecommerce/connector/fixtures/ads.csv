@@ -1,0 +1,5 @@
+ad_date,platform_sku,spend,currency
+2026-08-01,widget-a,5.50,USD
+2026-08-01, WIDGET-A ,3.00,USD
+2026-08-02,mismatch-sku,2.00,USD
+2026-08-04,widget-a,1.00,USD
