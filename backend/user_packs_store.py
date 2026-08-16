@@ -8,20 +8,26 @@ via the knowledge bar (not auto-ingested in P0).
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
 from config_store import CONFIG_DIR
+from user_extension_registry import (
+    INSTALLED_PACKS_FILE,
+    RUNTIME_PACKS_DIR,
+    list_catalog_extensions,
+    pack_capability_hash,
+)
 
 SAMPLES_DIR = Path(__file__).resolve().parents[1] / "samples"
 PACKS_DIR = SAMPLES_DIR / "packs"
 TAXONOMY_FILE = SAMPLES_DIR / "taxonomy.json"
 
-INSTALLED_PACKS_FILE = CONFIG_DIR / "installed_packs.json"
-
 # Cap so a malformed pack can't dump a huge number of skills.
 MAX_PACK_SKILLS = 20
 MAX_PACK_KNOWLEDGE = 20
+MAX_PACK_EXTENSIONS = 20
 
 
 def _read_json(path: Path) -> dict:
@@ -69,6 +75,7 @@ def list_packs() -> list[dict]:
             continue
         skills = _list_skills(pack_dir)
         knowledge = _list_knowledge(pack_dir)
+        extensions = list_catalog_extensions(pack_dir)
         out.append(
             {
                 "id": pid,
@@ -79,6 +86,7 @@ def list_packs() -> list[dict]:
                 "version": str(pack.get("version") or ""),
                 "skills": skills,
                 "knowledge": knowledge,
+                "extensions": extensions,
                 "deps": pack.get("deps") or {},
                 "installed": pid in _installed_ids(),
             }
@@ -132,17 +140,54 @@ def _list_knowledge(pack_dir: Path) -> list[str]:
     return sorted(p.name for p in know_root.iterdir() if p.is_file())
 
 
-def _installed_ids() -> set[str]:
+def _read_installed_records() -> list[dict[str, Any]]:
     try:
         data = json.loads(INSTALLED_PACKS_FILE.read_text(encoding="utf-8"))
         if isinstance(data, list):
-            return {str(p.get("id") or "") for p in data if isinstance(p, dict)}
+            return [r for r in data if isinstance(r, dict)]
     except (OSError, json.JSONDecodeError):
         pass
-    return set()
+    return []
 
 
-def install_pack(pack_id: str) -> dict:
+def _installed_ids() -> set[str]:
+    return {str(r.get("id") or "").strip() for r in _read_installed_records() if r.get("id")}
+
+
+def _copy_pack_extensions(pack_dir: Path, pack_id: str) -> list[dict[str, Any]]:
+    extensions = list_catalog_extensions(pack_dir)
+    runtime_pack = RUNTIME_PACKS_DIR / pack_id
+    ext_root = runtime_pack / "extensions"
+    if ext_root.exists():
+        shutil.rmtree(ext_root)
+    if not extensions:
+        return []
+    for ext in extensions:
+        src = pack_dir / "extensions" / ext["id"]
+        dst = ext_root / ext["id"]
+        shutil.copytree(src, dst)
+    return extensions
+
+
+def _load_runtime_manifests(pack_id: str) -> list[dict[str, Any]]:
+    ext_root = RUNTIME_PACKS_DIR / pack_id / "extensions"
+    if not ext_root.is_dir():
+        return []
+    manifests: list[dict[str, Any]] = []
+    for ext_dir in sorted(ext_root.iterdir()):
+        mf = ext_dir / "manifest.json"
+        if not mf.is_file():
+            continue
+        try:
+            data = json.loads(mf.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                manifests.append(data)
+        except (OSError, json.JSONDecodeError):
+            continue
+    return manifests
+
+
+def install_pack(pack_id: str, *, consent_extensions: bool = True) -> dict:
     """Install a sample pack: validate schema, then reuse install_skill() for each SKILL.md."""
     from user_skills_store import delete_skill, install_skill, list_skills
 
@@ -174,6 +219,23 @@ def install_pack(pack_id: str) -> dict:
     if declared_ids != disk_ids:
         raise ValueError("pack.json 的 skills 与 skills/ 目录不一致")
 
+    extensions = list_catalog_extensions(pack_dir)
+    if len(extensions) > MAX_PACK_EXTENSIONS:
+        raise ValueError(f"单个 pack 扩展数不能超过 {MAX_PACK_EXTENSIONS}")
+
+    declared_ext = pack.get("extensions")
+    if declared_ext is None:
+        declared_ext = []
+    if not isinstance(declared_ext, list):
+        raise ValueError("pack.json 的 extensions 必须是数组")
+    declared_ext_ids = {str(x).strip() for x in declared_ext if str(x).strip()}
+    disk_ext_ids = {e["id"] for e in extensions}
+    if declared_ext_ids != disk_ext_ids:
+        raise ValueError("pack.json 的 extensions 与 extensions/ 目录不一致")
+
+    if extensions and not consent_extensions:
+        raise ValueError("此 pack 含本机函数，需要用户同意后才可安装")
+
     knowledge = _list_knowledge(pack_dir)
     if len(knowledge) > MAX_PACK_KNOWLEDGE:
         raise ValueError(f"单个 pack 知识文件数不能超过 {MAX_PACK_KNOWLEDGE}")
@@ -200,11 +262,29 @@ def install_pack(pack_id: str) -> dict:
             raise ValueError(f"安装技能 {skill['id']} 失败: {exc}") from exc
         result_skills.append(parsed)
 
-    # Record installed pack (skills/knowledge listed; knowledge copy is left to the
-    # knowledge bar, matching the existing "user uploads to 知栏" flow).
-    installed = _installed_ids()
-    installed.add(pid)
-    records = [{"id": i, "installedAt": _now_iso()} for i in sorted(installed)]
+    try:
+        _copy_pack_extensions(pack_dir, pid)
+    except OSError as exc:
+        for done in result_skills:
+            try:
+                delete_skill(None, done["id"])
+            except Exception:
+                pass
+        raise ValueError(f"复制扩展失败: {exc}") from exc
+
+    manifests = _load_runtime_manifests(pid)
+    cap_hash = pack_capability_hash(manifests) if manifests else ""
+    now = _now_iso()
+    records = [r for r in _read_installed_records() if str(r.get("id") or "").strip() != pid]
+    records.append(
+        {
+            "id": pid,
+            "installedAt": now,
+            "version": str(pack.get("version") or ""),
+            "capabilityHash": cap_hash if extensions else "",
+            "consentedAt": now if extensions else "",
+        }
+    )
     _write_installed(records)
 
     return {
@@ -214,6 +294,7 @@ def install_pack(pack_id: str) -> dict:
         "title": str(pack.get("title") or pid),
         "skills": result_skills,
         "knowledge": knowledge,
+        "extensions": extensions,
     }
 
 

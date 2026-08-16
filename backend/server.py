@@ -17,6 +17,9 @@ from config_store import save_config, get_config
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
 from user_packs_store import install_pack, list_packs
+from extension_secrets import set_secret
+from user_extension_registry import list_extensions
+from user_fn_runner import run_user_fn
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
 from knowledge_store import delete_document, ingest_document, ingest_document_from_path, list_documents, search, status
@@ -392,11 +395,59 @@ async def api_install_pack(req: dict, request: Request):
     pack_id = str((req or {}).get("packId") or (req or {}).get("id") or "").strip()
     if not pack_id:
         raise HTTPException(400, "packId required")
+    consent = (req or {}).get("consentExtensions")
+    if consent is None:
+        consent = (req or {}).get("consent_extensions")
+    consent_extensions = True if consent is None else bool(consent)
     try:
-        result = install_pack(pack_id)
+        result = install_pack(pack_id, consent_extensions=consent_extensions)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"pack": result}
+
+
+@app.get("/api/user-fn")
+async def api_list_user_fn(request: Request):
+    require_loopback(request)
+    items = []
+    for ext in list_extensions():
+        items.append(
+            {
+                "name": ext.name,
+                "description": ext.description + "（本机函数）",
+                "authorized": ext.authorized,
+                "packId": ext.pack_id,
+                "network": bool(ext.manifest.get("network")),
+                "secrets": list(ext.manifest.get("secrets") or []),
+                "params": ext.manifest.get("params") or {"type": "object", "properties": {}},
+            }
+        )
+    return {"functions": items}
+
+
+@app.post("/api/user-fn/{name}")
+async def api_run_user_fn(name: str, req: dict, request: Request):
+    require_loopback(request)
+    params = req.get("params") if isinstance(req, dict) else None
+    if params is None and isinstance(req, dict):
+        params = {k: v for k, v in req.items() if k not in ("params",)}
+    if not isinstance(params, dict):
+        params = {}
+    return await run_user_fn(name, params)
+
+
+@app.post("/api/user-fn/{name}/secret")
+async def api_set_user_fn_secret(name: str, req: dict, request: Request):
+    require_loopback(request)
+    key = str((req or {}).get("key") or (req or {}).get("secretKey") or "").strip()
+    value = str((req or {}).get("value") or (req or {}).get("secret") or "")
+    if not key:
+        raise HTTPException(400, "key required")
+    try:
+        set_secret(name, key, value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"ok": True}
 
 
 @app.post("/api/user-skills")

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { chatWithTools, type ToolCall } from '../../services/claude';
-import { getAllTools } from '../../services/skill-loader';
+import { getAllTools, invalidateToolsCache } from '../../services/skill-loader';
 import { selectToolsForRequest } from '../../services/tools-for-request';
 import { executeHandler } from '../../services/skill-handlers';
+import { executeUserFn } from '../../services/user-fn';
 import * as Excel from '../../excel';
 import { selectionToMarkdown } from '../../services/context';
 import { type AuthStatus } from '../../services/auth';
@@ -11,7 +12,7 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, fetchPacks, installPack, installUserSkill, type InstalledSkill, type Pack } from '../../services/user-skills';
+import { fetchUserSkills, fetchPacks, installPack, installUserSkill, formatExtensionConsent, type InstalledSkill, type Pack } from '../../services/user-skills';
 import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
@@ -310,7 +311,10 @@ export default function App(): JSX.Element {
             return [...prev.slice(0, -1), { ...last, steps }];
           });
         },
-        onToolUse: (tc: ToolCall) => executeHandler(tc, ctx),
+        onToolUse: (tc: ToolCall) =>
+          tc.name.startsWith('user.')
+            ? executeUserFn(tc)
+            : executeHandler(tc, ctx),
         onUsage: (info) => setUsage((u) => addUsage(u, info.model, info.tokens)),
       });
       if (slash?.id === "skill-creator") {
@@ -579,7 +583,13 @@ export default function App(): JSX.Element {
       onPickSkill={handleSend}
       isStreaming={isStreaming}
       onInstallPack={async (packId) => {
-        const pack = await installPack(packId);
+        const catalog = packs.find((p) => p.id === packId);
+        if (catalog?.extensions?.length) {
+          const msg = formatExtensionConsent(catalog);
+          if (!window.confirm(msg)) return;
+        }
+        const pack = await installPack(packId, { consentExtensions: true });
+        invalidateToolsCache();
         setPacks((prev) => prev.map((p) => (p.id === pack.id ? { ...p, installed: true } : p)));
         const fresh = await fetchUserSkills();
         setInstalled(fresh);

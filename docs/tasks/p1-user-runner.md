@@ -11,7 +11,7 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 > Claude Code × Cursor 的唯一交接载体。禁止在聊天里互贴长方案；另一方 `git pull` 后读此文件。
 
 - **分支**：`feat/p1-user-runner`（本 brief 阶段先落 master，Cursor 开此分支写代码）
-- **状态**：`design`
+- **状态**：`coding`（待 review）
 - **主责（当前阶段）**：Claude Code（design）→ Cursor（coding）
 
 ## 目标
@@ -105,3 +105,4 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 |---|---|---|---|---|
 | 2026-08-16 | design | Claude Code | `—` | 初稿 brief（目标/边界/验收/方案 + 4 个设计待定点裁定） |
 | 2026-08-16 | design | Claude Code | `—` | review 收口：capabilityHash 定义、执行协议 envelope、缓存失效、重新授权联动 |
+| 2026-08-16 | coding | Cursor | `—` | P1 落码：registry/runner/secrets、pack extensions、API、前端路由与同意 UI、测试 94 passed |

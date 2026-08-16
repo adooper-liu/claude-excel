@@ -1,6 +1,7 @@
 import type { ToolDef } from './claude';
 import { assertManifestExecutors } from './skill-registry';
 import { CORE_SKILL_MANIFESTS } from './skill-manifests';
+import { fetchUserTools } from './user-skills';
 
 function localTools(): ToolDef[] {
   const tools = CORE_SKILL_MANIFESTS.flatMap(
@@ -12,9 +13,14 @@ function localTools(): ToolDef[] {
 
 let cachedTools: ToolDef[] | null = null;
 
+export function invalidateToolsCache(): void {
+  cachedTools = null;
+}
+
 export async function getAllTools(): Promise<ToolDef[]> {
   if (!cachedTools) {
-    cachedTools = localTools();
+    const userTools = await fetchUserTools();
+    cachedTools = [...localTools(), ...userTools];
   }
   return cachedTools;
 }

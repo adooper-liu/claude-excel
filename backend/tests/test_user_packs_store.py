@@ -41,6 +41,9 @@ def test_list_packs_lists_cross_border_ecommerce():
     assert any(s["id"] == "amazon-research" for s in p["skills"]), "pack.skills 应含 amazon-research"
     assert p["knowledge"] == ["serp-appendix.md"], "pack.knowledge 应含 serp-appendix.md"
     assert p["deps"].get("recipes") == ["amazon.com"], "pack.deps.recipes 应声明 amazon.com"
+    assert any(e["name"] == "user.profit_assumptions" for e in p.get("extensions") or []), (
+        "pack.extensions 应含 user.profit_assumptions"
+    )
 
 
 def test_install_pack_installs_skill(tmp_path, monkeypatch):
@@ -48,20 +51,29 @@ def test_install_pack_installs_skill(tmp_path, monkeypatch):
     # to tmp so we don't touch real config.
     import user_skills_store
     import user_packs_store
+    import user_extension_registry
 
     monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
     monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
 
-    result = install_pack("cross-border-ecommerce")
+    result = install_pack("cross-border-ecommerce", consent_extensions=True)
     assert result["packId"] == "cross-border-ecommerce"
     assert result["skills"], "应安装至少一个技能"
     assert any(s["id"] == "amazon-research" for s in result["skills"])
+    assert any(e["name"] == "user.profit_assumptions" for e in result.get("extensions") or [])
 
     # Skill actually landed on disk via install_skill.
     md = tmp_path / "skills" / "amazon-research" / "SKILL.md"
     assert md.is_file(), "SKILL.md 应被 install_skill 写入"
+    ext_manifest = tmp_path / "packs" / "cross-border-ecommerce" / "extensions" / "profit-assumptions" / "manifest.json"
+    assert ext_manifest.is_file(), "扩展 manifest 应复制到 runtime packs"
     # Installed pack recorded in tmp, not real config.
     assert (tmp_path / "installed_packs.json").is_file()
+    rec = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
+    assert rec[0].get("capabilityHash"), "含 extensions 的 pack 应记录 capabilityHash"
 
 
 def test_install_pack_unknown_id_raises(tmp_path, monkeypatch):
@@ -92,6 +104,21 @@ def test_install_pack_rolls_back_on_failure(tmp_path, monkeypatch):
         install_pack("cross-border-ecommerce")
 
     assert not (tmp_path / "skills" / "amazon-research").exists()
+
+
+def test_install_pack_requires_consent_for_extensions(tmp_path, monkeypatch):
+    import user_skills_store
+    import user_packs_store
+    import user_extension_registry
+
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    with pytest.raises(ValueError, match="需要用户同意"):
+        install_pack("cross-border-ecommerce", consent_extensions=False)
 
 
 def test_install_pack_rejects_skills_manifest_mismatch(tmp_path, monkeypatch):

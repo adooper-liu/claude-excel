@@ -1,0 +1,17 @@
+{
+  "name": "user.profit_assumptions",
+  "description": "利润 11 项假设值（参数化，不写格）",
+  "entry": "handler.py",
+  "params": {
+    "type": "object",
+    "properties": {
+      "asins": { "type": "array", "items": { "type": "string" } }
+    },
+    "required": ["asins"]
+  },
+  "returns": "json",
+  "network": false,
+  "secrets": [],
+  "timeoutMs": 5000,
+  "category": "跨境电商"
+}

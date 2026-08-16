@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "description": "Amazon 选品：取数表 project 规整 + 透视 + SERP 方法论知识。只编排核心算子，不进核心。",
   "skills": ["amazon-research"],
+  "extensions": ["profit-assumptions"],
   "knowledge": ["serp-appendix.md"],
   "deps": { "recipes": ["amazon.com"] }
 }

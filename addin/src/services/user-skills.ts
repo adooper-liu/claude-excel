@@ -1,3 +1,5 @@
+import type { ToolDef } from "./claude";
+
 export type InstalledSkill = {
   id: string;
   slash: string;
@@ -18,6 +20,14 @@ export type PackSkill = {
   title: string;
 };
 
+export type PackExtension = {
+  id: string;
+  name: string;
+  description: string;
+  network: boolean;
+  secrets: string[];
+};
+
 export type Pack = {
   id: string;
   category: string;
@@ -27,11 +37,13 @@ export type Pack = {
   version: string;
   skills: PackSkill[];
   knowledge: string[];
+  extensions: PackExtension[];
   deps: Record<string, unknown>;
   installed: boolean;
 };
 
 const API = "https://localhost:8765/api/user-skills";
+const USER_FN_API = "https://localhost:8765/api/user-fn";
 
 function asList(data: unknown): InstalledSkill[] {
   const skills = data && typeof data === "object" ? (data as { skills?: unknown }).skills : null;
@@ -131,6 +143,7 @@ export async function fetchPacks(): Promise<Pack[]> {
       version: String((p as Pack).version || ""),
       skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
       knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
+      extensions: Array.isArray((p as Pack).extensions) ? ((p as Pack).extensions as PackExtension[]) : [],
       deps: (p as Pack).deps && typeof (p as Pack).deps === "object" ? ((p as Pack).deps as Record<string, unknown>) : {},
       installed: Boolean((p as Pack).installed),
     });
@@ -138,11 +151,61 @@ export async function fetchPacks(): Promise<Pack[]> {
   return out;
 }
 
-export async function installPack(packId: string): Promise<Pack> {
+export function formatExtensionConsent(pack: Pick<Pack, "title" | "extensions">): string {
+  const exts = pack.extensions || [];
+  if (!exts.length) return "";
+  const lines = exts.map((e) => {
+    const caps: string[] = [];
+    if (e.network) caps.push("可联网");
+    if (e.secrets?.length) caps.push("会读取密钥");
+    const cap = caps.length ? "（" + caps.join("、") + "）" : "";
+    return "· " + (e.description || e.name) + cap;
+  });
+  return (
+    "此 pack「" +
+    pack.title +
+    "」含 " +
+    exts.length +
+    " 个本机函数：\n" +
+    lines.join("\n") +
+    "\n\n允许这些函数在本机运行？"
+  );
+}
+
+export async function fetchUserTools(): Promise<ToolDef[]> {
+  const r = await fetch(USER_FN_API);
+  if (!r.ok) return [];
+  const data = await r.json().catch(() => ({}));
+  const fns =
+    data && typeof data === "object" ? (data as { functions?: unknown }).functions : null;
+  if (!Array.isArray(fns)) return [];
+  const out: ToolDef[] = [];
+  for (const fn of fns) {
+    if (!fn || typeof fn !== "object") continue;
+    const name = String((fn as { name?: string }).name || "").trim();
+    if (!name.startsWith("user.")) continue;
+    const description = String((fn as { description?: string }).description || name);
+    const params = (fn as { params?: ToolDef["input_schema"] }).params;
+    const input_schema: ToolDef["input_schema"] =
+      params && typeof params === "object" && params.type === "object"
+        ? params
+        : { type: "object", properties: {} };
+    out.push({ name, description, input_schema });
+  }
+  return out;
+}
+
+export async function installPack(
+  packId: string,
+  opts?: { consentExtensions?: boolean }
+): Promise<Pack> {
   const r = await fetch(API + "/install-pack", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ packId }),
+    body: JSON.stringify({
+      packId,
+      consentExtensions: opts?.consentExtensions !== false,
+    }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
@@ -159,6 +222,7 @@ export async function installPack(packId: string): Promise<Pack> {
     version: String((p as Pack).version || ""),
     skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
     knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
+    extensions: Array.isArray((p as Pack).extensions) ? ((p as Pack).extensions as PackExtension[]) : [],
     deps: {},
     installed: true,
   };
