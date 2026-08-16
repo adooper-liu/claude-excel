@@ -11,7 +11,7 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, fetchPacks, installPack, installSampleSkill, installUserSkill, type InstalledSkill, type Pack } from '../../services/user-skills';
+import { fetchUserSkills, fetchPacks, installPack, installUserSkill, type InstalledSkill, type Pack } from '../../services/user-skills';
 import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
@@ -578,12 +578,6 @@ export default function App(): JSX.Element {
       packs={packs}
       onPickSkill={handleSend}
       isStreaming={isStreaming}
-      sampleInstalled={installed.some((s) => s.id === 'amazon-research')}
-      onInstallSample={async (id) => {
-        const skill = await installSampleSkill(id);
-        setInstalled((prev) => prev.filter((s) => s.id !== skill.id).concat([skill]));
-        handleSend('/' + skill.slash);
-      }}
       onInstallPack={async (packId) => {
         const pack = await installPack(packId);
         setPacks((prev) => prev.map((p) => (p.id === pack.id ? { ...p, installed: true } : p)));

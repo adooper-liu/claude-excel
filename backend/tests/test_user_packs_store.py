@@ -79,15 +79,49 @@ def test_install_pack_rolls_back_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
     monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
 
-    # Break the amazon-research SKILL.md so install_skill fails after the catalog read.
-    skill_md = ROOT / "samples" / "packs" / "cross-border-ecommerce" / "skills" / "amazon-research" / "SKILL.md"
-    original = skill_md.read_text(encoding="utf-8")
-    skill_md.write_text("not a skill at all", encoding="utf-8")
-    try:
-        with pytest.raises(ValueError):
-            install_pack("cross-border-ecommerce")
-    finally:
-        skill_md.write_text(original, encoding="utf-8")
+    real_read_text = Path.read_text
 
-    # No skill dir left behind from the failed pack.
+    def broken_read_text(self, encoding="utf-8"):
+        if self.name == "SKILL.md" and "amazon-research" in str(self):
+            return "not a skill at all"
+        return real_read_text(self, encoding=encoding)
+
+    monkeypatch.setattr(Path, "read_text", broken_read_text)
+
+    with pytest.raises(ValueError):
+        install_pack("cross-border-ecommerce")
+
     assert not (tmp_path / "skills" / "amazon-research").exists()
+
+
+def test_install_pack_rejects_skills_manifest_mismatch(tmp_path, monkeypatch):
+    import user_packs_store
+
+    pack_root = tmp_path / "packs" / "bad-pack"
+    (pack_root / "skills" / "only-one").mkdir(parents=True)
+    (pack_root / "skills" / "only-one" / "SKILL.md").write_text(
+        """---
+name: only-one
+description: one skill
+slash: 一
+---
+# one
+""",
+        encoding="utf-8",
+    )
+    (pack_root / "pack.json").write_text(
+        json.dumps(
+            {
+                "id": "bad-pack",
+                "category": "cross-border-ecommerce",
+                "title": "bad",
+                "skills": ["only-one", "missing"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(user_packs_store, "PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    with pytest.raises(ValueError, match="skills 与 skills/ 目录不一致"):
+        install_pack("bad-pack")

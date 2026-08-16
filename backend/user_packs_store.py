@@ -1,9 +1,8 @@
 """Packs: bundle sample skills + knowledge + recipe deps under samples/packs/.
 
 Pack is an organization layer, not a new mechanism. install_pack() reuses
-install_skill() (for SKILL.md) and knowledge ingest; it does not introduce
-new executors or write to Excel. The core manifest / HANDLED_TOOLS boundary
-is untouched.
+install_skill() for each SKILL.md; knowledge files are listed but indexed
+via the knowledge bar (not auto-ingested in P0).
 """
 
 from __future__ import annotations
@@ -145,7 +144,7 @@ def _installed_ids() -> set[str]:
 
 def install_pack(pack_id: str) -> dict:
     """Install a sample pack: validate schema, then reuse install_skill() for each SKILL.md."""
-    from user_skills_store import install_skill, list_skills, reserved_skill_id
+    from user_skills_store import delete_skill, install_skill, list_skills
 
     pid = str(pack_id or "").strip()
     if not pid:
@@ -166,15 +165,21 @@ def install_pack(pack_id: str) -> dict:
     skills = _list_skills(pack_dir)
     if len(skills) > MAX_PACK_SKILLS:
         raise ValueError(f"单个 pack 技能数不能超过 {MAX_PACK_SKILLS}")
+
+    declared = pack.get("skills")
+    if not isinstance(declared, list) or not declared:
+        raise ValueError("pack.json 需要非空 skills 列表")
+    declared_ids = {str(x).strip() for x in declared if str(x).strip()}
+    disk_ids = {s["id"] for s in skills}
+    if declared_ids != disk_ids:
+        raise ValueError("pack.json 的 skills 与 skills/ 目录不一致")
+
     knowledge = _list_knowledge(pack_dir)
     if len(knowledge) > MAX_PACK_KNOWLEDGE:
         raise ValueError(f"单个 pack 知识文件数不能超过 {MAX_PACK_KNOWLEDGE}")
 
     existing = list_skills()
-    installed_skill_ids = {s["id"] for s in existing}
-    if (
-        len(existing) + len(skills) > 40
-    ):
+    if len(existing) + len(skills) > 40:
         # install_skill enforces MAX_SKILLS=40 per call; pre-check gives a clearer error.
         raise ValueError("安装后技能总数超过 40，请先删除部分技能")
 
@@ -187,8 +192,6 @@ def install_pack(pack_id: str) -> dict:
         except ValueError as exc:
             # Roll back already-installed skills from this pack so a partial install
             # does not leave the user with half a bundle.
-            from user_skills_store import delete_skill
-
             for done in result_skills:
                 try:
                     delete_skill(None, done["id"])

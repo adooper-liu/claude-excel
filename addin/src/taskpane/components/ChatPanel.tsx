@@ -14,9 +14,7 @@ interface Props {
   packs?: Pack[];
   onPickSkill?: (text: string) => void;
   isStreaming?: boolean;
-  onInstallSample?: (id: string) => Promise<void>;
   onInstallPack?: (packId: string) => Promise<void>;
-  sampleInstalled?: boolean;
 }
 
 export default function ChatPanel({
@@ -25,13 +23,9 @@ export default function ChatPanel({
   packs = [],
   onPickSkill,
   isStreaming = false,
-  onInstallSample,
   onInstallPack,
-  sampleInstalled = false,
 }: Props): JSX.Element {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [sampleBusy, setSampleBusy] = useState(false);
-  const [sampleErr, setSampleErr] = useState('');
   const [packBusy, setPackBusy] = useState<string | null>(null);
   const [packErr, setPackErr] = useState('');
 
@@ -47,6 +41,8 @@ export default function ChatPanel({
     else packGroups.push({ label, items: [p] });
   }
 
+  const anyPackInstalled = packGroups.some((g) => g.items.some((p) => p.installed));
+
   if (messages.length === 0) {
     return (
       <div className="empty-state">
@@ -57,28 +53,11 @@ export default function ChatPanel({
           <p className="empty-onboard-hint">
             跨境示例见 samples，可上传知识库或 /skill-creator 安装。
           </p>
-          {onInstallSample && !sampleInstalled && (
-            <button
-              type="button"
-              className="empty-sample-install"
-              disabled={sampleBusy}
-              onClick={() => {
-                setSampleErr('');
-                setSampleBusy(true);
-                void onInstallSample('amazon-research')
-                  .catch((err) => {
-                    setSampleErr(err instanceof Error ? err.message : String(err));
-                  })
-                  .finally(() => setSampleBusy(false));
-              }}
-            >
-              {sampleBusy ? '安装中…' : '安装 Amazon 选品示例技能'}
-            </button>
+          {anyPackInstalled && (
+            <p className="empty-onboard-done">
+              场景包已安装 — 可用斜杠试跑；附录知识请用知栏上传 pack 内 knowledge 文件。
+            </p>
           )}
-          {sampleInstalled && (
-            <p className="empty-onboard-done">已安装 /亚马逊选品 — 可直接试跑或继续 /skill-creator 改步骤。</p>
-          )}
-          {sampleErr && <p className="empty-onboard-err">{sampleErr}</p>}
           {packGroups.length > 0 && (
             <div className="pack-groups">
               {packGroups.map((g) => (
