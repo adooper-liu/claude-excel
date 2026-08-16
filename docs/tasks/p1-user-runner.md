@@ -11,7 +11,7 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 > Claude Code × Cursor 的唯一交接载体。禁止在聊天里互贴长方案；另一方 `git pull` 后读此文件。
 
 - **分支**：`feat/p1-user-runner`（本 brief 阶段先落 master，Cursor 开此分支写代码）
-- **状态**：`review`
+- **状态**：`done`（已合 master `19d3662`）
 - **主责（当前阶段）**：Cursor（fix）← Claude Code 已评审
 
 ## 目标
