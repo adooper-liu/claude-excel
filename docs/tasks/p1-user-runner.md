@@ -11,8 +11,8 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 > Claude Code × Cursor 的唯一交接载体。禁止在聊天里互贴长方案；另一方 `git pull` 后读此文件。
 
 - **分支**：`feat/p1-user-runner`（本 brief 阶段先落 master，Cursor 开此分支写代码）
-- **状态**：`coding`（待 review）
-- **主责（当前阶段）**：Claude Code（design）→ Cursor（coding）
+- **状态**：`review`
+- **主责（当前阶段）**：Cursor（fix）← Claude Code 已评审
 
 ## 目标
 
@@ -97,7 +97,34 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 
 ## Review notes（Claude Code 填，review 阶段，只读不改代码）
 
-（待 coding 阶段后填）
+评审 commit `c177cad`。实测：后端 95 passed、前端 212 passing、`npm run typecheck` 绿。按严重度排序，**高 2 条须在合 master 前修**，中 1 条建议修，低 3 条可随后。
+
+### 🔴 高
+
+- **consent 默认放行，信任门可被省略绕过** —— `backend/server.py` `api_install_pack`：`consent_extensions = True if consent is None else bool(consent)`；`backend/user_packs_store.py` `install_pack(..., consent_extensions: bool = True)`；前端 `addin/src/services/user-skills.ts`：`consentExtensions: opts?.consentExtensions !== false`。三处都把「缺省」当「同意」——任何省略 `consentExtensions` 的调用方（curl / 未来代码）都会在用户未确认时把含本机函数的 pack 装成已授权（落 `consentedAt`+`capabilityHash`）。违背安全文档 §5「装 Pack 时一次确认」的轴心。
+   **修**：三处改 deny-by-default——后端 `consent_extensions = bool(consent)`（缺省 False）、`install_pack` 默认 `consent_extensions=False`、前端 `consentExtensions: opts?.consentExtensions === true`。
+
+- **`ce_http` 助手不可导入，`network:true` 路径死路** —— `user_fn_runner.py:48` `env["PYTHONPATH"] = str(_RUNTIME_DIR.parent)` 指向 `backend/`，而 `ce_http.py` 在 `backend/user_fn_runtime/`（无 `__init__.py`）。handler 写 `import ce_http` 会 ModuleNotFoundError → `network` 函数非零退出。无测试覆盖（样例 `network:false`）。
+   **修**：`PYTHONPATH` 指向 `_RUNTIME_DIR`（`backend/user_fn_runtime/`），并补 `network:true` + `ce_http.get` 测试。
+
+### 🟠 中
+
+- **子进程 stdout 编码未固定 UTF-8** —— `user_fn_runner.py:101` `subprocess.run(..., text=True)` 用父进程 locale（中文 Windows = cp936）解码；`clean_env` 又透传 `PYTHONIOENCODING`/`PYTHONUTF8`。用户设 `PYTHONUTF8=1` 时子进程写 UTF-8、父进程按 cp936 解码 → `UnicodeDecodeError`（未捕获 → 端点 500）。样例 `handler.py` 用 `ensure_ascii=False` 会输出非 ASCII。
+   **修**：`subprocess.run` 显式 `encoding="utf-8", errors="replace"`，`clean_env` 固定 `PYTHONIOENCODING=utf-8`。
+
+### 🟡 低
+
+- **`capabilityHash` 含 `name`，与 brief 公式不符 + 死代码** —— `user_extension_registry.py:45` `pack_capability_hash` 哈希了 `name`（brief 待定点 #3 定「只哈希 `network`+`secrets`」），改名会过度触发重授权（非漏洞）。`extension_capability_hash` 与 `UserExtension.capability_hash` 从未用于鉴权，是死代码。**修**：按 brief 去掉 `name`，或删掉 `extension_capability_hash`/`capability_hash`。
+
+- **`list_extensions` 的 `include_invalid` 是死参数** —— `user_extension_registry.py:144-147` 两个分支都 `continue`。
+
+- **`set_secret` 不校验 `fn_name`** —— `server.py` `api_set_user_fn_secret` 可为不存在的函数名写 `extension-secrets.json`。建议校验 `name` 匹配 `user.*` 且已注册。
+
+### 观察（非阻塞）
+
+- 卸载 pack 不清理 `extensions/`、也不失效工具缓存（brief 只覆盖安装）。
+- `test_user_tools_not_in_addin_handlers` 只断言 Python 侧 `ADDIN_HANDLERS`，TS 侧 `HANDLED_TOOLS` 无对应测试（`skill-registry.ts` 未改、天然不含 `user.*`，可接受）。
+- `fetchUserTools` 把 `authorized:false` 函数也列入工具（符合「未授权不隐藏」），但描述未标「未授权」。
 
 ## 进度 log（谁改谁 append，一行一条）
 
@@ -105,4 +132,5 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 |---|---|---|---|---|
 | 2026-08-16 | design | Claude Code | `—` | 初稿 brief（目标/边界/验收/方案 + 4 个设计待定点裁定） |
 | 2026-08-16 | design | Claude Code | `—` | review 收口：capabilityHash 定义、执行协议 envelope、缓存失效、重新授权联动 |
-| 2026-08-16 | coding | Cursor | `—` | P1 落码：registry/runner/secrets、pack extensions、API、前端路由与同意 UI、测试 94 passed |
+| 2026-08-16 | coding | Cursor | `c177cad` | P1 落码：registry/runner/secrets、pack extensions、API、前端路由与同意 UI、测试 94 passed |
+| 2026-08-16 | review | Claude Code | `—` | 评审：后端 95 + 前端 212 + typecheck 绿；2 高（consent 默认放行、ce_http 不可达）+ 1 中（编码）+ 3 低 |
