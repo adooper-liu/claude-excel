@@ -16,7 +16,7 @@ from ai_proxy import chat_complete, chat_stream, validate_key
 from config_store import save_config, get_config
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
-from user_packs_store import install_pack, list_packs
+from user_packs_store import install_pack, list_packs, uninstall_pack
 from extension_secrets import set_secret
 from user_extension_registry import list_extensions
 from user_fn_runner import run_user_fn
@@ -401,6 +401,16 @@ async def api_install_pack(req: dict, request: Request):
     consent_extensions = consent is True
     try:
         result = install_pack(pack_id, consent_extensions=consent_extensions)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"pack": result}
+
+
+@app.delete("/api/user-skills/packs/{pack_id}")
+async def api_uninstall_pack(pack_id: str, request: Request):
+    require_loopback(request)
+    try:
+        result = uninstall_pack(pack_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"pack": result}

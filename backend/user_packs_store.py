@@ -298,6 +298,32 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
     }
 
 
+def uninstall_pack(pack_id: str) -> dict:
+    """Uninstall a pack: delete its skills, extensions dir, and installed record."""
+    from user_skills_store import delete_skill
+
+    pid = str(pack_id or "").strip()
+    if not pid:
+        raise ValueError("packId required")
+    records = _read_installed_records()
+    if not any(str(r.get("id") or "").strip() == pid for r in records):
+        raise ValueError("示例包未安装: " + pid)
+
+    skill_ids = [s["id"] for s in _list_skills(PACKS_DIR / pid)]
+    for sid in skill_ids:
+        try:
+            delete_skill(None, sid)
+        except (FileNotFoundError, ValueError):
+            pass
+
+    runtime_pack = RUNTIME_PACKS_DIR / pid
+    if runtime_pack.exists():
+        shutil.rmtree(runtime_pack)
+
+    _write_installed([r for r in records if str(r.get("id") or "").strip() != pid])
+    return {"packId": pid, "skills": skill_ids}
+
+
 def _now_iso() -> str:
     from datetime import datetime, timezone
 

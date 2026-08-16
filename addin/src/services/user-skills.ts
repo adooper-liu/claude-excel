@@ -184,7 +184,10 @@ export async function fetchUserTools(): Promise<ToolDef[]> {
     if (!fn || typeof fn !== "object") continue;
     const name = String((fn as { name?: string }).name || "").trim();
     if (!name.startsWith("user.")) continue;
-    const description = String((fn as { description?: string }).description || name);
+    const authorized = (fn as { authorized?: boolean }).authorized !== false;
+    const description =
+      String((fn as { description?: string }).description || name) +
+      (authorized ? "" : "（未授权，需重新安装授权）");
     const params = (fn as { params?: ToolDef["input_schema"] }).params;
     const input_schema: ToolDef["input_schema"] =
       params && typeof params === "object" && params.type === "object"
@@ -232,5 +235,12 @@ export async function deleteUserSkill(id: string): Promise<void> {
   const r = await fetch(API + "/" + encodeURIComponent(id), { method: "DELETE" });
   if (!r.ok && r.status !== 404) {
     throw new Error("删除失败");
+  }
+}
+
+export async function uninstallPack(packId: string): Promise<void> {
+  const r = await fetch(API + "/packs/" + encodeURIComponent(packId), { method: "DELETE" });
+  if (!r.ok && r.status !== 404) {
+    throw new Error("卸载失败");
   }
 }

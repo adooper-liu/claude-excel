@@ -15,6 +15,7 @@ interface Props {
   onPickSkill?: (text: string) => void;
   isStreaming?: boolean;
   onInstallPack?: (packId: string) => Promise<void>;
+  onUninstallPack?: (packId: string) => Promise<void>;
 }
 
 export default function ChatPanel({
@@ -24,6 +25,7 @@ export default function ChatPanel({
   onPickSkill,
   isStreaming = false,
   onInstallPack,
+  onUninstallPack,
 }: Props): JSX.Element {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [packBusy, setPackBusy] = useState<string | null>(null);
@@ -87,6 +89,24 @@ export default function ChatPanel({
                           }}
                         >
                           {packBusy === p.id ? '安装中…' : '安装场景包'}
+                        </button>
+                      )}
+                      {p.installed && onUninstallPack && (
+                        <button
+                          type="button"
+                          className="pack-install-btn"
+                          disabled={packBusy === p.id}
+                          onClick={() => {
+                            setPackErr('');
+                            setPackBusy(p.id);
+                            void onUninstallPack(p.id)
+                              .catch((err) => {
+                                setPackErr(err instanceof Error ? err.message : String(err));
+                              })
+                              .finally(() => setPackBusy(null));
+                          }}
+                        >
+                          {packBusy === p.id ? '卸载中…' : '卸载'}
                         </button>
                       )}
                     </div>

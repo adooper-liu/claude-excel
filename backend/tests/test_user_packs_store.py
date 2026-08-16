@@ -15,6 +15,7 @@ from user_packs_store import (  # noqa: E402
     install_pack,
     list_packs,
     load_taxonomy,
+    uninstall_pack,
 )
 
 
@@ -158,3 +159,32 @@ slash: 一
 
     with pytest.raises(ValueError, match="skills 与 skills/ 目录不一致"):
         install_pack("bad-pack")
+
+
+def test_uninstall_pack_removes_skill_extensions_record(tmp_path, monkeypatch):
+    import user_skills_store
+    import user_packs_store
+    import user_extension_registry
+
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    install_pack("cross-border-ecommerce", consent_extensions=True)
+    result = uninstall_pack("cross-border-ecommerce")
+    assert result["packId"] == "cross-border-ecommerce"
+
+    assert not (tmp_path / "skills" / "amazon-research").exists()
+    assert not (tmp_path / "packs" / "cross-border-ecommerce").exists()
+    rec = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
+    assert rec == []
+
+
+def test_uninstall_pack_unknown_id_raises(tmp_path, monkeypatch):
+    import user_packs_store
+
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    with pytest.raises(ValueError, match="未安装"):
+        uninstall_pack("no-such-pack")

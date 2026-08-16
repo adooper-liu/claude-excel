@@ -12,7 +12,7 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, fetchPacks, installPack, installUserSkill, formatExtensionConsent, type InstalledSkill, type Pack } from '../../services/user-skills';
+import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, formatExtensionConsent, type InstalledSkill, type Pack } from '../../services/user-skills';
 import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
@@ -311,10 +311,19 @@ export default function App(): JSX.Element {
             return [...prev.slice(0, -1), { ...last, steps }];
           });
         },
-        onToolUse: (tc: ToolCall) =>
-          tc.name.startsWith('user.')
-            ? executeUserFn(tc)
-            : executeHandler(tc, ctx),
+        onToolUse: async (tc: ToolCall) => {
+          if (!tc.name.startsWith('user.')) return executeHandler(tc, ctx);
+          const result = await executeUserFn(tc);
+          try {
+            const parsed = JSON.parse(result);
+            if (parsed && parsed.ok === false && parsed.error && parsed.error.code === 'NOT_AUTHORIZED') {
+              window.alert('此 pack 的本机函数未授权或能力已变化，请在场景包里重新安装该 pack 并确认。');
+            }
+          } catch {
+            /* non-JSON result — pass through */
+          }
+          return result;
+        },
         onUsage: (info) => setUsage((u) => addUsage(u, info.model, info.tokens)),
       });
       if (slash?.id === "skill-creator") {
@@ -595,6 +604,13 @@ export default function App(): JSX.Element {
         setInstalled(fresh);
         const first = pack.skills[0];
         if (first) handleSend('/' + first.slash);
+      }}
+      onUninstallPack={async (packId) => {
+        await uninstallPack(packId);
+        invalidateToolsCache();
+        setPacks((prev) => prev.map((p) => (p.id === packId ? { ...p, installed: false } : p)));
+        const fresh = await fetchUserSkills();
+        setInstalled(fresh);
       }}
     />
     <ChatInput
