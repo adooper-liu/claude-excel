@@ -1,0 +1,20 @@
+{
+  "name": "knowledge",
+  "version": "1.0.0",
+  "description": "Search the local knowledge base indexed on this machine. Not for fetching web tables into Excel.",
+  "tools": [
+    {
+      "name": "search_knowledge",
+      "description": "Semantic search over the user's local knowledge base (~/.claude-excel-web/knowledge/). Use for internal SOP, policies, tariff notes the user uploaded. Returns snippets with docName and score — cite them in the reply. Not for public web research (use web_search) or structured table ingest (use /取数). If no hits, say so; do not invent policy text.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "What to look up in local documents" },
+          "topK": { "type": "integer", "description": "Max snippets to return (1–12, default 5)" },
+          "docId": { "type": "string", "description": "Optional document id to search within one file" }
+        },
+        "required": ["query"]
+      }
+    }
+  ]
+}

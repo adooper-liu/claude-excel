@@ -11,8 +11,8 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, installUserSkill, type InstalledSkill } from '../../services/user-skills';
-import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, deconstructSkill } from '../../services/builtin-skills';
+import { fetchUserSkills, installSampleSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
+import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
 import SessionList from './SessionList';
@@ -83,8 +83,14 @@ const SYSTEM_PROMPT = `你是 Excel 里的通用 AI 助手（Office JS 加载项
 ## 对账（仅当用户要核对两份名单）
 inspect_workbook → ensure_table → reconcile_tables。精确匹配（去空格）。空键不配。不要模糊匹配。用返回的 table name（中文表名可能是 T_系统订单表）。
 
-## 取数
-公开 https 用 web_fetch，再写入新表。禁止在工具参数或回复里写账号密码。三方站/ERP：让用户用取数栏打开本机 Chrome/Edge 跟手操作（验证码自己点）；在网页窗口里点选同类或框选，写入按钮在网页上，不必回到 Excel。失败标「未能获取」，不要编数字。不要把 web_search 的 JSON / encrypted_content 贴进对用户可见的回复。
+## 取数（结构化进簿）
+目标是把网页/ERP 的**表行**写进工作簿。公开 https：web_fetch 再写新表。登录/三方站：取数栏 + 本机浏览器跟手点选，密码不进对话。失败标「未能获取」，不要编数字。取数栏/recipe/扩展 picker 只服务取数，不要拿来做政策解读或竞品长文。
+
+## 调研（开放信息核实）
+目标是摘要、引用、口径选项。用 web_search（DeepSeek）或用户给的公开 URL + web_fetch 只读正文；多源核对，标 URL 与日期。默认**不写表**；用户明确要求「整理成表」才可 write_to_sheet 小摘要。登录站、需人判断的外部核实标 🔴，引导 /取数栏或用户自行查。**禁止**把调研和取数合成一步。不要把 web_search 的 JSON / encrypted_content 贴进对用户可见的回复。
+
+## 知识库（本机文档）
+检索用户上传到 ~/.claude-excel-web/knowledge/ 的私有文档（任务窗格「知」栏）。用 search_knowledge，引用 docName 与片段；无命中就说没有，不要编内部规定。与 /调研（开放网）和 /取数（表行进簿）分列，禁止合成一步。默认不写表。
 
 ## 规范表
 inspect_formulas 后 format_range：输入蓝 #0000FF，同表公式黑，跨表绿 #008000，关键假设黄底 #FFFF00。金额人民币格式；比例格子里存 0.15。边框/对齐/换行/冻结用同一工具的 border、hAlign、wrap、freezeRows。
@@ -102,6 +108,8 @@ const SKILL_BODY: Record<string, string> = {
   pivot: pivotSkill,
   assume: assumeSkill,
   fetch: fetchSkill,
+  research: researchSkill,
+  knowledge: knowledgeSkill,
   craft: craftSkill,
   deconstruct: deconstructSkill,
   "skill-creator": skillCreatorSkill,
@@ -435,6 +443,11 @@ export default function App(): JSX.Element {
               const tailNotes: string[] = [];
               if (job.fetchWarning) tailNotes.push(String(job.fetchWarning));
               if (job.recipePath) tailNotes.push("配方已保存：" + job.recipePath);
+              const steps = String(job.stepsMarkdown || "").trim();
+              if (steps) {
+                const preview = steps.split("\n").slice(0, 6).join("\n");
+                tailNotes.push("采集路径：\n" + preview + (steps.split("\n").length > 6 ? "\n…" : ""));
+              }
               if (job.projectReady && job.reshapeHint) tailNotes.push(String(job.reshapeHint));
               const tail = tailNotes.length ? "\n" + tailNotes.join("\n") : "";
               if (job.append) {
@@ -559,6 +572,12 @@ export default function App(): JSX.Element {
       skills={mergeSlashSkills(installed)}
       onPickSkill={handleSend}
       isStreaming={isStreaming}
+      sampleInstalled={installed.some((s) => s.id === 'amazon-research')}
+      onInstallSample={async (id) => {
+        const skill = await installSampleSkill(id);
+        setInstalled((prev) => prev.filter((s) => s.id !== skill.id).concat([skill]));
+        handleSend('/' + skill.slash);
+      }}
     />
     <ChatInput
       onSend={handleSend}

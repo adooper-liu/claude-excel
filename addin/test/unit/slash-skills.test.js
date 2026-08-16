@@ -12,7 +12,7 @@ const {
 describe("slash-skills", function () {
   it("lists product skills plus /skill-creator", function () {
     const names = SLASH_SKILLS.map((s) => s.slash);
-    assert.deepStrictEqual(names, ["对账", "整形", "计算", "透视", "假设", "取数", "规范", "拆解", "skill-creator"]);
+    assert.deepStrictEqual(names, ["对账", "整形", "计算", "透视", "假设", "取数", "调研", "知识", "规范", "拆解", "skill-creator"]);
   });
 
   it("treats a leading slash with no space as a query", function () {
@@ -31,8 +31,8 @@ describe("slash-skills", function () {
     assert.strictEqual(filterSlashSkills("加粗").length, 0);
   });
 
-  it("does not dump the catalog on a bare slash", function () {
-    assert.deepStrictEqual(filterSlashSkills(""), []);
+  it("shows full catalog on a bare slash", function () {
+    assert.strictEqual(filterSlashSkills("").length, SLASH_SKILLS.length);
     assert.strictEqual(filterSlashSkills("skills").length, SLASH_SKILLS.length);
   });
 
@@ -111,6 +111,12 @@ describe("slash-skills", function () {
     const ask = skillAsk("fetch");
     assert.ok(ask.indexOf("点选") >= 0);
     assert.ok(ask.indexOf("不必每次回到 Excel") >= 0);
+    assert.ok(ask.indexOf("/调研") >= 0);
+  });
+
+  it("parseSlashCommand maps 调研 to research", function () {
+    assert.deepStrictEqual(parseSlashCommand("/调研 欧盟 VAT"), { id: "research", extra: "欧盟 VAT" });
+    assert.deepStrictEqual(parseSlashCommand("/查资料"), { id: "research", extra: "" });
   });
 
   it("skillAsk does not hardcode 订单号 or 类别", function () {

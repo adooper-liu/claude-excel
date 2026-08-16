@@ -271,6 +271,20 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const body = await r.text();
         return body || JSON.stringify({ error: 'empty web-fetch response' });
       }
+      case 'search_knowledge': {
+        const query = String(input.query || '').trim();
+        if (!query) return JSON.stringify({ error: 'query required' });
+        const payload: Record<string, unknown> = { query };
+        if (input.topK != null) payload.topK = input.topK;
+        if (input.docId != null) payload.docId = input.docId;
+        const r = await fetch('https://localhost:8765/api/knowledge/search', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await r.text();
+        return body || JSON.stringify({ error: 'empty knowledge search response' });
+      }
       default: return `Unknown tool: ${tool.name}`;
     }
   } catch (err) {

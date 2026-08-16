@@ -1,0 +1,46 @@
+host: amazon.com
+notes: Amazon 搜索结果 DOM 抓取常见 25 列布局；售价 K/M/N/O 四段合并。
+iterate:
+  site: amazon.com
+  sort: relevanceblender
+  page: 1
+  device: desktop
+  deliveryZip: ""
+display:
+  reviewTextMode: keep
+  markSponsored: true
+project:
+  headerless: true
+  targets:
+    - 排名
+    - 标题
+    - 尺码数
+    - 评分
+    - 评论数
+    - 月购买
+    - 售价
+    - 市场价
+    - 配送费
+  columns:
+    - as: 排名
+      from: 0
+    - as: 标题
+      from: 1
+    - as: 尺码数
+      from: 3
+    - as: 评分
+      from: 5
+      coerce: number
+    - as: 评论数
+      from: 7
+    - as: 月购买
+      from: 8
+    - as: 售价
+      merge: [11, 12, 13]
+      separator: ""
+      coerce: number
+    - as: 市场价
+      from: 21
+      coerce: number
+    - as: 配送费
+      from: 24

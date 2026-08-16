@@ -1,0 +1,18 @@
+{
+  "host": "amazon.com",
+  "match": {
+    "hostSuffix": [".amazon.com", ".amazon.co.uk", ".amazon.de"]
+  },
+  "extract": {
+    "mode": "list",
+    "listQuery": "[data-component-type='s-search-result']",
+    "fields": [
+      { "as": "商品名", "query": "h2 a span", "type": "text" },
+      { "as": "价格", "query": ".a-price .a-offscreen", "type": "text" },
+      { "as": "评分", "query": ".a-row.a-size-small > span", "type": "attr", "attribute": "aria-label" },
+      { "as": "链接", "query": "h2 a", "type": "link" }
+    ]
+  },
+  "iterate": { "type": "manual" },
+  "meta": { "source": "template", "updatedAt": "2026-08-16" }
+}

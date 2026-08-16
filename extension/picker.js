@@ -11,70 +11,23 @@
   const STYLE_ID = "ce-excel-picker-style";
   const UI_SEL = "#ce-excel-picker-bar, #ce-excel-box-root, #ce-excel-banner, #ce-excel-marks";
 
+  const mergeGrids = global.ceMergeGrids;
+  const looksLikeHeaderRow = global.ceLooksLikeHeaderRow;
+  const cellsToGrid = global.ceCellsToGrid;
+  const usefulClass = global.ceUsefulClass;
+  if (!mergeGrids || !looksLikeHeaderRow || !cellsToGrid) {
+    throw new Error("picker-core.js must load before picker.js");
+  }
+
+  /** DOM-coupled: not in picker-core (no vm behavior spec yet). */
+  let templateListQuery = "";
+
   function txt(el) {
     return ((el && (el.innerText || el.textContent || el.value)) || "").replace(/\s+/g, " ").trim();
   }
 
   function isOurUi(el) {
     return !!(el && el.closest && el.closest(UI_SEL));
-  }
-
-  function usefulClass(c) {
-    if (!c || c.length < 2 || c.length > 48) return false;
-    if (/^ce-/.test(c)) return false;
-    if (/^(active|hover|selected|focus|open|show|hide|hidden|disabled|current|on|off)$/i.test(c)) return false;
-    if (/^(is-|has-|ant-click|css-)/i.test(c)) return false;
-    if (/^[a-f0-9_-]{8,}$/i.test(c)) return false;
-    return true;
-  }
-
-  function mergeGrids(grids) {
-    const cleaned = [];
-    for (const g of grids || []) {
-      const rows = (g || [])
-        .filter((r) => Array.isArray(r))
-        .map((r) => r.map((c) => String(c == null ? "" : c)));
-      if (rows.some((r) => r.some(Boolean))) cleaned.push(rows);
-    }
-    if (!cleaned.length) return [];
-    if (cleaned.length === 1) return cleaned[0];
-    const width = Math.max(...cleaned[0].map((r) => r.length), 0);
-    const head0 = (cleaned[0][0] || []).map((c) => String(c).trim());
-    const same = cleaned.every((g) => Math.max(...g.map((r) => r.length), 0) === width);
-    if (same && width) {
-      const out = [cleaned[0][0].slice()];
-      for (const g of cleaned) {
-        const head = (g[0] || []).map((c) => String(c).trim());
-        const start = head.join("\0") === head0.join("\0") ? 1 : 0;
-        out.push(...g.slice(start));
-      }
-      return out;
-    }
-    const out = [];
-    cleaned.forEach((g, i) => {
-      if (i) out.push([]);
-      out.push(...g);
-    });
-    return out;
-  }
-
-  function looksLikeHeaderRow(r0, r1) {
-    const cells = (r0 || []).map((c) => String(c || "").trim()).filter(Boolean);
-    if (!cells.length) return false;
-    const noisy = cells.filter((c) =>
-      c.length > 22 ||
-      /CNY|¥|\$\s?\d|€|市场价|颗星|过去一个月|顾客购买|商品页面|选项:/i.test(c) ||
-      /^\+?\d+(\.\d+)?$/.test(c) ||
-      /^\d+\.\d{2}$/.test(c)
-    ).length;
-    if (noisy >= Math.max(2, Math.ceil(cells.length * 0.3))) return false;
-    const short = cells.filter((c) => c.length <= 12).length;
-    if (short < Math.max(2, Math.ceil(cells.length * 0.5))) return false;
-    if (r1) {
-      const same = (r0 || []).filter((c, i) => String(c).trim() === String(r1[i] || "").trim()).length;
-      if (same > (r0.length || 1) * 0.6) return false;
-    }
-    return true;
   }
 
   function filterSimilar(parent, node) {
@@ -102,6 +55,33 @@
   function looksLikeRecords(items) {
     const sample = items.slice(0, 10).map(txt);
     return sample.filter((t) => t.length >= 2).length >= Math.min(2, items.length);
+  }
+
+  function similarItems(start) {
+    if (templateListQuery) {
+      try {
+        const templated = [...document.querySelectorAll(templateListQuery)].filter((el) => !isOurUi(el));
+        if (templated.length >= 2 && templated.length <= 400) return templated;
+      } catch (e) {
+        /* ignore */
+      }
+    }
+    if (!start || start === document.documentElement || start === document.body) return [start];
+    const row = start.closest(
+      'tr, [role="row"], .ant-table-row, .el-table__row, .vxe-body--row, .kd-table tr'
+    );
+    if (row && row.parentElement) {
+      const sibs = filterSimilar(row.parentElement, row);
+      if (sibs.length >= 2 && sibs.length <= 400) return sibs;
+    }
+    let el = start;
+    for (let d = 0; d < 12 && el && el.parentElement; d++) {
+      if (/^(HTML|BODY|HEAD)$/.test(el.tagName)) break;
+      const sibs = filterSimilar(el.parentElement, el);
+      if (sibs.length >= 2 && sibs.length <= 400 && looksLikeRecords(sibs)) return sibs;
+      el = el.parentElement;
+    }
+    return [start];
   }
 
   function virtualScrollHint(items) {
@@ -133,25 +113,6 @@
       /* ignore */
     }
     return "";
-  }
-
-  function similarItems(start) {
-    if (!start || start === document.documentElement || start === document.body) return [start];
-    const row = start.closest(
-      'tr, [role="row"], .ant-table-row, .el-table__row, .vxe-body--row, .kd-table tr'
-    );
-    if (row && row.parentElement) {
-      const sibs = filterSimilar(row.parentElement, row);
-      if (sibs.length >= 2 && sibs.length <= 400) return sibs;
-    }
-    let el = start;
-    for (let d = 0; d < 12 && el && el.parentElement; d++) {
-      if (/^(HTML|BODY|HEAD)$/.test(el.tagName)) break;
-      const sibs = filterSimilar(el.parentElement, el);
-      if (sibs.length >= 2 && sibs.length <= 400 && looksLikeRecords(sibs)) return sibs;
-      el = el.parentElement;
-    }
-    return [start];
   }
 
   function isTableLike(items) {
@@ -478,6 +439,13 @@
         })
         .join("");
     }
+    if (f.query) {
+      const el = item.querySelector(f.query);
+      if (!el) return "";
+      if (f.type === "attr" && f.attribute) return el.getAttribute(f.attribute) || "";
+      if (f.type === "link") return el.href || el.getAttribute("href") || "";
+      return txt(el);
+    }
     return txt(getField(item, f));
   }
 
@@ -530,6 +498,7 @@
   function getField(item, key) {
     if (!item || !key) return null;
     try {
+      if (key.query) return item.querySelector(key.query);
       if (key.path) return item.querySelector(key.sel);
       const all = [...item.querySelectorAll(key.sel)];
       return all[key.i] || all[0] || null;
@@ -617,58 +586,6 @@
       }
     }
     return out.slice(0, 4000);
-  }
-
-  function cellsToGrid(cells) {
-    const raw = (cells || []).filter((c) => c && c.t);
-    if (!raw.length) return [];
-    const hs = raw.map((c) => Math.max(c.h || 1, 1)).sort((a, b) => a - b);
-    const medH = hs[Math.floor(hs.length / 2)];
-    const rowTol = Math.max(8, medH * 0.55);
-    const ordered = raw.slice().sort((a, b) => a.y - b.y || a.x - b.x);
-    const rows = [];
-    for (const c of ordered) {
-      const cy = c.y + Math.max(c.h || 1, 1) / 2;
-      if (rows.length && Math.abs(cy - rows[rows.length - 1].y) <= rowTol) {
-        rows[rows.length - 1].cells.push(c);
-        const n = rows[rows.length - 1].cells.length;
-        rows[rows.length - 1].y = (rows[rows.length - 1].y * (n - 1) + cy) / n;
-      } else {
-        rows.push({ y: cy, cells: [c] });
-      }
-    }
-    const xs = raw.map((c) => c.x).sort((a, b) => a - b);
-    const ws = raw.map((c) => Math.max(c.w || 1, 1)).sort((a, b) => a - b);
-    const colTol = Math.max(12, ws[Math.floor(ws.length / 2)] * 0.35);
-    const clusters = [];
-    for (const x of xs) {
-      if (clusters.length && x - clusters[clusters.length - 1][clusters[clusters.length - 1].length - 1] <= colTol) {
-        clusters[clusters.length - 1].push(x);
-      } else clusters.push([x]);
-    }
-    const colX = clusters.map((g) => g.reduce((a, b) => a + b, 0) / g.length);
-    const grid = [];
-    for (const rg of rows) {
-      const row = colX.map(() => "");
-      rg.cells
-        .slice()
-        .sort((a, b) => a.x - b.x)
-        .forEach((c) => {
-          let idx = 0;
-          let best = Infinity;
-          colX.forEach((x, j) => {
-            const d = Math.abs(c.x - x);
-            if (d < best) {
-              best = d;
-              idx = j;
-            }
-          });
-          const t = String(c.t || "");
-          if (!row[idx] || t.length > row[idx].length) row[idx] = t;
-        });
-      if (row.some(Boolean)) grid.push(row);
-    }
-    return grid;
   }
 
   function ceInstallPagePicker(opts) {
@@ -908,6 +825,33 @@
       return msg;
     }
 
+    function showFetchSteps(afterMsg) {
+      const url = location.href;
+      fetch("http://127.0.0.1:8766/api/fetch-recipe?url=" + encodeURIComponent(url))
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          const steps = (data && data.stepsMarkdown) || "";
+          const box = document.getElementById("ce-excel-steps");
+          if (box) {
+            if (steps) {
+              box.hidden = false;
+              box.textContent = steps;
+            } else {
+              box.hidden = true;
+              box.textContent = "";
+            }
+          }
+          if (afterMsg && steps) {
+            setStatus(afterMsg + " 采集路径已更新（见下方）。");
+          }
+        })
+        .catch(function () {
+          /* ignore */
+        });
+    }
+
     function exportRecipeJson() {
       const url = location.href;
       fetch("http://127.0.0.1:8766/api/fetch-recipe?url=" + encodeURIComponent(url))
@@ -992,7 +936,9 @@
             return;
           }
           state.written = true;
-          setStatus(ingestSuccessStatus(res, rows.length, payload.append));
+          const msg = ingestSuccessStatus(res, rows.length, payload.append);
+          setStatus(msg);
+          showFetchSteps(msg);
           refreshBtns();
         });
         return;
@@ -1532,7 +1478,8 @@
         "#ce-excel-net-list .ce-net-lab span{color:#64748b;font-size:11px;}" +
         "#ce-excel-net-list .ce-chips{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 4px;}" +
         "#ce-excel-net-list .ce-chip{background:#f1f5f9;color:#334155;border-radius:999px;padding:1px 7px;font-size:10px;}" +
-        "#ce-excel-net-list button.ce-go{width:auto;padding:6px 10px;margin-top:0;font-size:12px;}";
+        "#ce-excel-net-list button.ce-go{width:auto;padding:6px 10px;margin-top:0;font-size:12px;}" +
+        "#ce-excel-steps{white-space:pre-wrap;font-size:11px;line-height:1.45;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;margin-top:8px;max-height:160px;overflow:auto;}";
       document.documentElement.appendChild(st);
       const bar = document.createElement("div");
       bar.id = BAR_ID;
@@ -1552,6 +1499,7 @@
         '<div class="ce-body">' +
         '<div id="ce-excel-picker-status">点「点选」，再点列表里的一条。</div>' +
         '<div id="ce-excel-preview"></div>' +
+        '<div id="ce-excel-steps" hidden></div>' +
         '<div id="ce-excel-net-list"></div>' +
         "</div></div>";
       (document.body || document.documentElement).appendChild(bar);
@@ -1571,7 +1519,59 @@
       refreshBtns();
     }
 
+    function loadTemplateRecipe() {
+      fetch("http://127.0.0.1:8766/api/fetch-recipe?url=" + encodeURIComponent(location.href))
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (!data || data.source !== "template" || !data.recipe) return;
+          if (state.fields.length || state.locked) return;
+          const ex = data.recipe.extract || {};
+          const fields = (ex.fields || [])
+            .map(function (f) {
+              return {
+                name: String(f.name || f.as || "").trim(),
+                query: String(f.query || "").trim(),
+                type: f.type || "text",
+                attribute: f.attribute || "",
+                col: typeof f.col === "number" ? f.col : undefined,
+                mergeCols: f.mergeCols || null,
+              };
+            })
+            .filter(function (f) {
+              return f.name || f.query || typeof f.col === "number";
+            });
+          if (!fields.length) return;
+          state.fields = fields;
+          templateListQuery = String(ex.list || ex.listQuery || "").trim();
+          if (templateListQuery) {
+            try {
+              const items = [...document.querySelectorAll(templateListQuery)].filter(function (el) {
+                return !isOurUi(el);
+              });
+              if (items.length >= 2) {
+                state.locked = items.slice(0, 400);
+                state.draft = gridFromItems(state.locked, state.fields);
+                paint();
+                refreshBtns();
+                setStatus("已加载站点模板 · " + state.locked.length + " 条 · 仍可点选改列");
+                return;
+              }
+            } catch (e) {
+              /* ignore */
+            }
+          }
+          setStatus("已加载站点模板列名 · 请点选列表锁定行");
+          refreshBtns();
+        })
+        .catch(function () {
+          /* ignore */
+        });
+    }
+
     function teardown() {
+      templateListQuery = "";
       window.removeEventListener("mousemove", onMove, true);
       window.removeEventListener("click", onClick, true);
       window.removeEventListener("keydown", onKey, true);
@@ -1609,6 +1609,7 @@
     if (options.mode === "box") setMode("box");
     else if (options.mode === "click") setMode("click");
     else setMode("browse");
+    loadTemplateRecipe();
     return "ok";
   }
 

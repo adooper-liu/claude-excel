@@ -1,0 +1,26 @@
+key: 1688.product
+headerless: false
+targets:
+  - 标题
+  - 批发价
+  - 代发价
+  - 起订量
+  - 订单数
+  - 销量
+  - 预估销售额
+  - 店铺
+  - 商品ID
+  - 商品链接
+  - 店铺链接
+columns:
+  - { as: 标题, from: title }
+  - { as: 批发价, from: price, coerce: number }
+  - { as: 代发价, from: consignPrice, coerce: number }
+  - { as: 起订量, from: quantityBegin, coerce: number }
+  - { as: 订单数, from: salesOrderCount, coerce: number }
+  - { as: 销量, from: salesQuantity, coerce: number }
+  - { as: 预估销售额, from: estimatedSalesAmount, coerce: number }
+  - { as: 店铺, from: company }
+  - { as: 商品ID, from: offerId }
+  - { as: 商品链接, from: asinUrl }
+  - { as: 店铺链接, from: shopUrl }

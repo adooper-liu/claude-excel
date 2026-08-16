@@ -30,6 +30,12 @@ export const BUILTIN_PROMPTS: PromptTemplate[] = [
     title: "规范当前表",
     prompt: "先 inspect 再检查公式错误。输入数字用蓝字、同表公式黑字、跨表公式绿字。金额用人民币格式。不要覆盖源表数值，汇总值必须是活公式。",
   },
+  {
+    id: "reshape-fetch",
+    title: "规整取数列",
+    prompt:
+      "inspect 当前取数表表头。用 reshape_table op=project（有 recipe 模板时 headerless:true）把列映射成规范列名，只写新表不改源表。列位置必须来自 inspect，不要猜。",
+  },
 ];
 
 export function mergeTemplates(

@@ -1,0 +1,23 @@
+host: walmart.com
+notes: Walmart 列表/详情；DOM 列位置靠点选写入 recipe.fields，规整目标列见 targets。
+iterate:
+  site: walmart.com
+  sort: best_match
+  page: 1
+  device: desktop
+display:
+  reviewTextMode: keep
+  markSponsored: true
+project:
+  headerless: true
+  targets:
+    - 标题
+    - 售价
+    - 原价
+    - 评分
+    - 评论数
+    - 卖家
+    - 是否广告
+    - 运费
+    - ItemId
+  columns: []

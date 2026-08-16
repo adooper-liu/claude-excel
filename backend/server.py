@@ -15,9 +15,10 @@ import uvicorn
 from ai_proxy import chat_complete, chat_stream, validate_key
 from config_store import save_config, get_config
 from templates_store import read_templates, write_templates
-from user_skills_store import delete_skill, install_skill, list_skills
+from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
+from knowledge_store import delete_document, ingest_document, ingest_document_from_path, list_documents, search, status
 from fetch_recipe import (
     export_recipe,
     host_from_sheet_name,
@@ -120,6 +121,59 @@ async def api_fetch_recipe_project(
     }
 
 
+@ingest_router.get("/api/knowledge")
+async def api_knowledge_list(request: Request):
+    require_loopback(request)
+    return {"documents": list_documents(), "status": status()}
+
+
+@ingest_router.post("/api/knowledge")
+async def api_knowledge_ingest(req: dict, request: Request):
+    require_loopback(request)
+    filename = str((req or {}).get("filename") or (req or {}).get("name") or "note.md")
+    content = str((req or {}).get("content") or (req or {}).get("text") or "")
+    if not content.strip():
+        raise HTTPException(400, "content required")
+    try:
+        doc = await ingest_document(filename, content)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"document": doc, "status": status()}
+
+
+@ingest_router.post("/api/knowledge/from-path")
+async def api_knowledge_from_path(req: dict, request: Request):
+    require_loopback(request)
+    path = str((req or {}).get("path") or (req or {}).get("filePath") or "")
+    try:
+        doc = await ingest_document_from_path(path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"document": doc, "status": status()}
+
+
+@ingest_router.post("/api/knowledge/search")
+async def api_knowledge_search(req: dict, request: Request):
+    require_loopback(request)
+    query = str((req or {}).get("query") or "")
+    top_k = (req or {}).get("topK") or (req or {}).get("top_k") or 5
+    doc_id = str((req or {}).get("docId") or (req or {}).get("doc_id") or "") or None
+    try:
+        return await search(query, int(top_k), doc_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@ingest_router.delete("/api/knowledge/{doc_id}")
+async def api_knowledge_delete(doc_id: str, request: Request):
+    require_loopback(request)
+    try:
+        delete_document(doc_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "document not found")
+    return {"ok": True, "status": status()}
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     try:
@@ -141,7 +195,11 @@ app = FastAPI(title="Claude Excel", version="3.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://localhost:3000"],
+    allow_origins=[
+        "https://localhost:3000",
+        "http://localhost:3000",
+        "https://localhost:8765",
+    ],
     allow_origin_regex=r"chrome-extension://.*",
     allow_credentials=False,
     allow_methods=["*"],
@@ -301,7 +359,25 @@ async def api_put_templates(req: dict, request: Request):
 
 @app.get("/api/user-skills")
 async def api_list_user_skills():
-    return {"skills": list_skills()}
+    return {"skills": list_skills(), "samples": list_sample_skills()}
+
+
+@app.get("/api/user-skills/samples")
+async def api_list_sample_skills():
+    return {"samples": list_sample_skills()}
+
+
+@app.post("/api/user-skills/install-sample")
+async def api_install_sample_skill(req: dict, request: Request):
+    require_loopback(request)
+    sample_id = str((req or {}).get("id") or "").strip()
+    if not sample_id:
+        raise HTTPException(400, "id required")
+    try:
+        skill = install_sample_skill(sample_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"skill": skill}
 
 
 @app.post("/api/user-skills")

@@ -28,6 +28,7 @@ async function openPicker() {
     return;
   }
   try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["picker-core.js"] });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["picker.js"] });
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },

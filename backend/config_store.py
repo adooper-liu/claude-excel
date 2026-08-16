@@ -12,6 +12,7 @@ DEFAULT_CONFIG = {
     "baseUrl": "https://api.deepseek.com/anthropic",
     "model": "deepseek-v4-pro[1m]",
     "smallFastModel": "deepseek-v4-flash",
+    "embeddingModel": "",
 }
 
 _config: dict = {}

@@ -5,208 +5,24 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 from config_store import CONFIG_DIR
+from recipe_hosts import load_host_templates, load_sheet_templates
 
 RECIPE_FILE = CONFIG_DIR / "fetch-recipe-last.json"
 RECIPES_DIR = CONFIG_DIR / "fetch-recipes"
 DATA_DIR = CONFIG_DIR / "fetch-data"
+SITE_RECIPES_DIR = Path(__file__).resolve().parent / "site_recipes"
 ITERATE_TYPES = ("manual", "pager", "scroll", "detail")
 EXTRACT_MODES = ("table", "box", "list", "xhr", "file", "picker")
 FETCH_COOLDOWN_HOURS = 24
 
-# Host templates: SERP field semantics for common marketplaces (browser fetch + picker).
-HOST_TEMPLATES: dict[str, dict[str, Any]] = {
-    "amazon.com": {
-        "notes": "Amazon 搜索结果 DOM 抓取常见 25 列布局；售价 K/M/N/O 四段合并。",
-        "iterate": {
-            "site": "amazon.com",
-            "sort": "relevanceblender",
-            "page": 1,
-            "device": "desktop",
-            "deliveryZip": "",
-        },
-        "display": {"reviewTextMode": "keep", "markSponsored": True},
-        "project": {
-            "headerless": True,
-            "targets": ["排名", "标题", "尺码数", "评分", "评论数", "月购买", "售价", "市场价", "配送费"],
-            "columns": [
-                {"as": "排名", "from": 0},
-                {"as": "标题", "from": 1},
-                {"as": "尺码数", "from": 3},
-                {"as": "评分", "from": 5, "coerce": "number"},
-                {"as": "评论数", "from": 7},
-                {"as": "月购买", "from": 8},
-                {"as": "售价", "merge": [11, 12, 13], "separator": "", "coerce": "number"},
-                {"as": "市场价", "from": 21, "coerce": "number"},
-                {"as": "配送费", "from": 24},
-            ],
-        },
-    },
-    "walmart.com": {
-        "notes": "Walmart 列表/详情；DOM 列位置靠点选写入 recipe.fields，规整目标列见 targets。",
-        "iterate": {"site": "walmart.com", "sort": "best_match", "page": 1, "device": "desktop"},
-        "display": {"reviewTextMode": "keep", "markSponsored": True},
-        "project": {
-            "headerless": True,
-            "targets": ["标题", "售价", "原价", "评分", "评论数", "卖家", "是否广告", "运费", "ItemId"],
-            "columns": [],
-        },
-    },
-    "ebay.com": {
-        "notes": "eBay 搜索列表；已售/拍卖/成色筛选见 iterate。列位置靠点选或导入表头映射。",
-        "iterate": {
-            "site": "ebay.com",
-            "orderBy": "12",
-            "page": 1,
-            "pageSize": 50,
-            "showOnly": "",
-            "buyingFormat": "",
-        },
-        "display": {"markSponsored": True},
-        "project": {
-            "headerless": True,
-            "targets": ["标题", "售价", "成色", "运费", "卖家", "好评率", "已售", "是否广告", "链接"],
-            "columns": [],
-        },
-    },
-    "1688.com": {
-        "notes": "1688 搜索列表；关键词须中文。导入 JSON/CSV 用表名含「1688选品/店雷达」走 header 映射。",
-        "iterate": {"site": "1688.com", "cycle": "30", "pageIndex": 1, "pageSize": 20},
-        "display": {},
-        "project": {
-            "headerless": True,
-            "targets": ["标题", "批发价", "代发价", "起订量", "订单数", "销量", "店铺", "商品链接"],
-            "columns": [],
-        },
-    },
-}
-
-# Imported / pasted API tables (English headers → 中文规范列). Not browser URLs.
-DATA_SHEET_TEMPLATES: dict[str, dict[str, Any]] = {
-    "1688.product": {
-        "headerless": False,
-        "targets": [
-            "标题",
-            "批发价",
-            "代发价",
-            "起订量",
-            "订单数",
-            "销量",
-            "预估销售额",
-            "店铺",
-            "商品ID",
-            "商品链接",
-            "店铺链接",
-        ],
-        "columns": [
-            {"as": "标题", "from": "title"},
-            {"as": "批发价", "from": "price", "coerce": "number"},
-            {"as": "代发价", "from": "consignPrice", "coerce": "number"},
-            {"as": "起订量", "from": "quantityBegin", "coerce": "number"},
-            {"as": "订单数", "from": "salesOrderCount", "coerce": "number"},
-            {"as": "销量", "from": "salesQuantity", "coerce": "number"},
-            {"as": "预估销售额", "from": "estimatedSalesAmount", "coerce": "number"},
-            {"as": "店铺", "from": "company"},
-            {"as": "商品ID", "from": "offerId"},
-            {"as": "商品链接", "from": "asinUrl"},
-            {"as": "店铺链接", "from": "shopUrl"},
-        ],
-    },
-    "sif.keyword": {
-        "headerless": False,
-        "targets": [
-            "关键词",
-            "热度排名",
-            "周搜索量",
-            "供需比",
-            "搜索结果商品数",
-            "自然位商品数",
-            "SP广告数",
-            "付费广告总数",
-            "AmazonChoice数",
-            "数据周期起",
-            "数据周期止",
-        ],
-        "columns": [
-            {"as": "关键词", "from": "keyword"},
-            {"as": "热度排名", "from": "keywordPopularityRank", "coerce": "number"},
-            {"as": "周搜索量", "from": "estimatedWeeklySearchVolume", "coerce": "number"},
-            {"as": "供需比", "from": "supplyDemandRatio", "coerce": "number"},
-            {"as": "搜索结果商品数", "from": "totalSearchResultProductCount", "coerce": "number"},
-            {"as": "自然位商品数", "from": "naturalSearchProductCount", "coerce": "number"},
-            {"as": "SP广告数", "from": "sponsoredProductsCount", "coerce": "number"},
-            {"as": "付费广告总数", "from": "paidAdvertisingProductCount", "coerce": "number"},
-            {"as": "AmazonChoice数", "from": "amazonChoiceProductCount", "coerce": "number"},
-            {"as": "数据周期起", "from": "dataPeriodStartDate"},
-            {"as": "数据周期止", "from": "dataPeriodEndDate"},
-        ],
-    },
-    "jiimore.discovery": {
-        "headerless": False,
-        "targets": [
-            "ASIN",
-            "标题",
-            "售价",
-            "评论数",
-            "评分",
-            "点击转化率",
-            "周点击增长",
-            "月点击增长",
-            "年销量",
-            "毛利率",
-            "FBA费",
-            "上架日期",
-            "卖家国籍",
-        ],
-        "columns": [
-            {"as": "ASIN", "from": "asin"},
-            {"as": "标题", "from": "title"},
-            {"as": "售价", "from": "currentPrice", "coerce": "number"},
-            {"as": "评论数", "from": "totalReviews", "coerce": "number"},
-            {"as": "评分", "from": "customerRating", "coerce": "number"},
-            {"as": "点击转化率", "from": "clickConversionRate", "coerce": "number"},
-            {"as": "周点击增长", "from": "clickCountGrowthT7", "coerce": "number"},
-            {"as": "月点击增长", "from": "clickCountGrowthT30", "coerce": "number"},
-            {"as": "年销量", "from": "purchasedClicksT360", "coerce": "number"},
-            {"as": "毛利率", "from": "grossProfitMargin", "coerce": "number"},
-            {"as": "FBA费", "from": "fbaFee", "coerce": "number"},
-            {"as": "上架日期", "from": "launchDate"},
-            {"as": "卖家国籍", "from": "sellerCountry"},
-        ],
-    },
-    "walmart.detail": {
-        "headerless": False,
-        "targets": ["标题", "售价", "原价", "评分", "评论数", "卖家", "配送类型", "商品链接", "ItemId"],
-        "columns": [
-            {"as": "标题", "from": "title"},
-            {"as": "售价", "from": "price", "coerce": "number"},
-            {"as": "原价", "from": "wasPrice", "coerce": "number"},
-            {"as": "评分", "from": "rating", "coerce": "number"},
-            {"as": "评论数", "from": "reviews", "coerce": "number"},
-            {"as": "卖家", "from": "sellerName"},
-            {"as": "配送类型", "from": "fulfillmentType"},
-            {"as": "商品链接", "from": "productPageUrl"},
-            {"as": "ItemId", "from": "usItemId"},
-        ],
-    },
-    "ebay.listing": {
-        "headerless": False,
-        "targets": ["标题", "售价", "成色", "运费", "卖家", "好评率", "已售", "链接"],
-        "columns": [
-            {"as": "标题", "from": "title"},
-            {"as": "售价", "from": "price", "coerce": "number"},
-            {"as": "成色", "from": "condition"},
-            {"as": "运费", "from": "shipping"},
-            {"as": "卖家", "from": "sellerName"},
-            {"as": "好评率", "from": "positiveFeedbackInPercentage", "coerce": "number"},
-            {"as": "已售", "from": "soldQuantity", "coerce": "number"},
-            {"as": "链接", "from": "link"},
-        ],
-    },
-}
+# Site/sheet semantics live in repo/recipe/{hosts,sheets}/*.yml — engine only loads them.
+HOST_TEMPLATES: dict[str, dict[str, Any]] = load_host_templates()
+DATA_SHEET_TEMPLATES: dict[str, dict[str, Any]] = load_sheet_templates()
 
 _HOST_ALIASES = {
     "s.1688.com": "1688.com",
@@ -300,9 +116,12 @@ def _normalize_fields(raw: Any) -> list[dict[str, Any]]:
     for item in raw:
         if not isinstance(item, dict):
             continue
-        name = str(item.get("name") or "").strip()[:24]
+        name = str(item.get("name") or item.get("as") or "").strip()[:24]
         col = item.get("col")
         col_i = int(col) if isinstance(col, int) or (isinstance(col, str) and str(col).isdigit()) else None
+        query = str(item.get("query") or "").strip()[:240]
+        field_type = str(item.get("type") or "").strip()[:16]
+        attribute = str(item.get("attribute") or "").strip()[:48]
         merge = item.get("mergeCols") if isinstance(item.get("mergeCols"), list) else item.get("merge")
         merge_cols: list[int] = []
         if isinstance(merge, list):
@@ -316,7 +135,15 @@ def _normalize_fields(raw: Any) -> list[dict[str, Any]]:
             entry["col"] = col_i
         if merge_cols:
             entry["mergeCols"] = merge_cols
-        if name or col_i is not None or merge_cols:
+        if query:
+            entry["query"] = query
+        if field_type and field_type != "text":
+            entry["type"] = field_type
+        if attribute:
+            entry["attribute"] = attribute
+        if query and not name:
+            continue
+        if name or col_i is not None or merge_cols or query:
             out.append(entry)
     return out
 
@@ -389,7 +216,7 @@ def validate_recipe(raw: Any) -> dict[str, Any]:
         "rowTo": str(extract.get("rowTo") or ""),
         "colFrom": str(extract.get("colFrom") or "A"),
         "colTo": str(extract.get("colTo") or ""),
-        "list": str(extract.get("list") or ""),
+        "list": str(extract.get("list") or extract.get("listQuery") or ""),
         "fields": fields,
         "hasHead": bool(extract.get("hasHead")),
         "columnLabels": column_labels[:40],
@@ -530,23 +357,68 @@ def save_recipe(recipe: dict[str, Any]) -> dict[str, Any]:
     return clean
 
 
-def load_recipe(url: str = "") -> dict[str, Any]:
-    raw: dict[str, Any] | None = None
-    if url:
-        host_file = RECIPES_DIR / (recipe_host_key(url) + ".json")
-        if host_file.is_file():
-            try:
-                raw = json.loads(host_file.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                raw = None
-    if raw is None and RECIPE_FILE.is_file():
+def _host_matches_template(host: str, data: dict[str, Any]) -> bool:
+    if str(data.get("host") or "").strip().lower() == host:
+        return True
+    match = data.get("match") if isinstance(data.get("match"), dict) else {}
+    suffixes = match.get("hostSuffix") if isinstance(match.get("hostSuffix"), list) else []
+    for raw in suffixes:
+        suffix = str(raw or "").strip().lower()
+        if not suffix:
+            continue
+        if not suffix.startswith("."):
+            suffix = "." + suffix
+        bare = suffix.lstrip(".")
+        if host == bare or host.endswith(suffix):
+            return True
+    return False
+
+
+def load_site_template(host: str) -> dict[str, Any] | None:
+    key = recipe_host_key("https://" + host if host and "://" not in host else host or "")
+    if not SITE_RECIPES_DIR.is_dir():
+        return None
+    direct = SITE_RECIPES_DIR / (key + ".json")
+    if direct.is_file():
         try:
-            raw = json.loads(RECIPE_FILE.read_text(encoding="utf-8"))
+            data = json.loads(direct.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else None
         except (OSError, json.JSONDecodeError):
-            raw = None
-    if raw is None:
-        return default_recipe(url)
-    return validate_recipe(raw)
+            return None
+    for path in sorted(SITE_RECIPES_DIR.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict) and _host_matches_template(key, data):
+            return data
+    return None
+
+
+def resolve_recipe(url: str = "") -> tuple[dict[str, Any], str]:
+    url = str(url or "")
+    host = recipe_host_key(url)
+    host_file = RECIPES_DIR / (host + ".json")
+    if host_file.is_file():
+        try:
+            saved = validate_recipe(json.loads(host_file.read_text(encoding="utf-8")))
+            fields = (saved.get("extract") or {}).get("fields") or []
+            if fields:
+                if url:
+                    saved["url"] = url
+                return saved, "saved"
+        except (OSError, json.JSONDecodeError):
+            pass
+    tmpl = load_site_template(host)
+    if tmpl:
+        merged = validate_recipe({**dict(tmpl), "url": url, "host": host})
+        return merged, "template"
+    return default_recipe(url), "default"
+
+
+def load_recipe(url: str = "") -> dict[str, Any]:
+    recipe, _source = resolve_recipe(url)
+    return recipe
 
 
 def list_recipes() -> list[dict[str, Any]]:
@@ -573,11 +445,98 @@ def list_recipes() -> list[dict[str, Any]]:
     return out
 
 
+_EXTRACT_MODE_LABELS: dict[str, str] = {
+    "picker": "跟手点选同类，锁定列",
+    "box": "框选表格区域",
+    "table": "自动识别页面表格",
+    "xhr": "等接口表出现",
+    "list": "列表模式",
+    "file": "文件导入",
+}
+
+
+def render_fetch_steps(recipe: dict[str, Any]) -> str:
+    """Human-readable fetch path (🟢🟡🔴), no table body or credentials."""
+    data = validate_recipe(recipe) if isinstance(recipe, dict) else default_recipe("")
+    url = str(data.get("url") or "").strip()
+    host = str(data.get("host") or recipe_host_key(url))
+    extract = data.get("extract") if isinstance(data.get("extract"), dict) else {}
+    mode = str(extract.get("mode") or "table")
+    fields = extract.get("fields") if isinstance(extract.get("fields"), list) else []
+    iterate = data.get("iterate") if isinstance(data.get("iterate"), dict) else {}
+    proj = data.get("project") if isinstance(data.get("project"), dict) else {}
+    lines: list[str] = []
+
+    if url:
+        lines.append("🟢 打开 " + url[:240])
+    else:
+        lines.append("🟢 打开 " + host + " 列表页")
+
+    label = _EXTRACT_MODE_LABELS.get(mode, mode)
+    lines.append("🟢 采集方式：" + label)
+
+    if fields:
+        names = [
+            str(f.get("name") or "").strip()
+            for f in fields
+            if isinstance(f, dict) and str(f.get("name") or "").strip()
+        ]
+        if names:
+            shown = "、".join(names[:8])
+            if len(names) > 8:
+                shown += "…"
+            lines.append("🟡 锁定 " + str(len(names)) + " 列：" + shown)
+        else:
+            lines.append("🟡 锁定 " + str(len(fields)) + " 列（按列位置映射）")
+
+    cols = proj.get("columns") if isinstance(proj.get("columns"), list) else []
+    targets = proj.get("targets") if isinstance(proj.get("targets"), list) else []
+    if cols:
+        as_names = [str(c.get("as") or "") for c in cols if isinstance(c, dict) and c.get("as")]
+        if as_names:
+            shown = "、".join(as_names[:6])
+            if len(as_names) > 6:
+                shown += "…"
+            lines.append("🟢 规整目标列：" + shown)
+    elif targets:
+        shown = "、".join(str(t) for t in targets[:6])
+        if len(targets) > 6:
+            shown += "…"
+        lines.append("🟡 规范列待映射：" + shown)
+
+    iter_type = str(iterate.get("type") or "manual")
+    if iter_type == "manual":
+        lines.append("🟡 翻页后追加：人工翻页，在网页点「追加」")
+    else:
+        lines.append("🟡 翻页方式：" + iter_type + "（当前仅记录，不自动回放）")
+
+    lines.append("🔴 登录 / 验证码 / 人机验证：人工在浏览器完成")
+
+    last = data.get("lastFetchAt")
+    rows = data.get("lastFetchRows")
+    if last:
+        extra = "（上次 " + str(rows) + " 行）" if rows else ""
+        lines.append("ℹ️ 最近采集：" + str(last) + extra)
+
+    lines.append("")
+    lines.append(
+        "边界：跟手采集的列位为页面估算，非平台官方指标；缺失字段标待补全。"
+    )
+    return "\n".join(lines)
+
+
 def export_recipe(url: str) -> dict[str, Any]:
-    recipe = load_recipe(url)
+    recipe, source = resolve_recipe(url)
     path = recipe_path_for_url(recipe.get("url") or url)
     project = recipe_project_columns(recipe)
-    return {"recipe": recipe, "path": path, "project": project}
+    steps = render_fetch_steps(recipe)
+    return {
+        "recipe": recipe,
+        "path": path,
+        "project": project,
+        "stepsMarkdown": steps,
+        "source": source,
+    }
 
 
 def import_recipe(raw: Any) -> dict[str, Any]:

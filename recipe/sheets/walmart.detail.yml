@@ -1,0 +1,22 @@
+key: walmart.detail
+headerless: false
+targets:
+  - 标题
+  - 售价
+  - 原价
+  - 评分
+  - 评论数
+  - 卖家
+  - 配送类型
+  - 商品链接
+  - ItemId
+columns:
+  - { as: 标题, from: title }
+  - { as: 售价, from: price, coerce: number }
+  - { as: 原价, from: wasPrice, coerce: number }
+  - { as: 评分, from: rating, coerce: number }
+  - { as: 评论数, from: reviews, coerce: number }
+  - { as: 卖家, from: sellerName }
+  - { as: 配送类型, from: fulfillmentType }
+  - { as: 商品链接, from: productPageUrl }
+  - { as: ItemId, from: usItemId }

@@ -7,6 +7,7 @@ from typing import Any
 
 from fetch_recipe import (
     archive_ingest_rows,
+    export_recipe,
     fetch_repeat_warning,
     project_targets_for_sheet,
     recipe_path_for_url,
@@ -62,6 +63,7 @@ def push_ingest(req: dict | None) -> dict[str, Any]:
     elif not name:
         name = sheet_name_from_url(url) if url else "取数_网页"
     recipe_path = ""
+    steps_markdown = ""
     project_hint: dict[str, Any] | None = None
     template_targets: list[str] = []
     data_path = ""
@@ -87,8 +89,13 @@ def push_ingest(req: dict | None) -> dict[str, Any]:
                 saved = touch_recipe_fetch(url, len(clean))
             recipe_path = recipe_path_for_url(saved.get("url") or url)
             project_hint = resolve_project_for_sheet(name, url)
+            try:
+                steps_markdown = str(export_recipe(url).get("stepsMarkdown") or "")
+            except OSError:
+                steps_markdown = ""
         except OSError:
             recipe_path = ""
+            steps_markdown = ""
     summary = _ingest_summary(clean, url)
     can_reshape = bool(project_hint and project_hint.get("columns")) or bool(template_targets)
     reshape_hint = ""
@@ -104,6 +111,7 @@ def push_ingest(req: dict | None) -> dict[str, Any]:
         "truncated": len(rows) > MAX_ROWS,
         "sourceRows": len(rows),
         "recipePath": recipe_path,
+        "stepsMarkdown": steps_markdown,
         "dataPath": data_path,
         "summary": summary,
         "fetchWarning": fetch_warning,
@@ -123,6 +131,7 @@ def push_ingest(req: dict | None) -> dict[str, Any]:
         "sourceRows": len(rows),
         "truncated": bool(job["truncated"]),
         "recipePath": job.get("recipePath") or "",
+        "stepsMarkdown": job.get("stepsMarkdown") or "",
         "dataPath": data_path,
         "fetchWarning": fetch_warning,
         "projectReady": job["projectReady"],

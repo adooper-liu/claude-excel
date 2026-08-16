@@ -32,6 +32,32 @@ export function selectToolsForRequest(
     const allow = new Set(["inspect_workbook", "inspect_table", "web_fetch", "write_to_sheet", "get_sheet_names"]);
     return tools.filter((t) => allow.has(t.name));
   }
+  if (skillId === "research") {
+    const allow = new Set([
+      "inspect_workbook",
+      "inspect_table",
+      "inspect_formulas",
+      "scan_formula_errors",
+      "web_fetch",
+      "search_knowledge",
+      "write_to_sheet",
+      "get_sheet_names",
+    ]);
+    return tools.filter((t) => allow.has(t.name));
+  }
+  if (skillId === "knowledge") {
+    const allow = new Set([
+      "inspect_workbook",
+      "inspect_table",
+      "inspect_formulas",
+      "scan_formula_errors",
+      "search_knowledge",
+      "web_fetch",
+      "write_to_sheet",
+      "get_sheet_names",
+    ]);
+    return tools.filter((t) => allow.has(t.name));
+  }
   const nativeSkill =
     skillId === "reconcile" || skillId === "reshape" || skillId === "calculate" || skillId === "pivot";
   if (!nativeSkill && !NATIVE_HINT.test(userText)) return tools;

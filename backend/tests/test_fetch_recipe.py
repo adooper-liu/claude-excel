@@ -19,6 +19,7 @@ from fetch_recipe import (  # noqa: E402
     import_recipe,
     list_recipes,
     project_targets_for_sheet,
+    render_fetch_steps,
     resolve_project_for_sheet,
     resolve_project_for_url,
     save_recipe,
@@ -169,3 +170,75 @@ def test_data_sheet_sif_keyword():
 def test_project_targets_for_ebay_sheet():
     t = project_targets_for_sheet("取数_ebay.com", "https://www.ebay.com/sch/i.html")
     assert "成色" in t
+
+
+def test_render_fetch_steps_has_traffic_lights():
+    recipe = default_recipe("https://www.amazon.com/s?k=bed")
+    recipe["extract"] = {
+        **recipe["extract"],
+        "mode": "picker",
+        "fields": [{"name": "排名", "col": 0}, {"name": "售价", "col": 10}],
+    }
+    text = render_fetch_steps(recipe)
+    assert "🟢" in text
+    assert "🔴" in text
+    assert "排名" in text
+    assert "边界" in text
+
+
+def test_export_recipe_includes_steps_markdown(tmp_path, monkeypatch):
+    monkeypatch.setattr(fr, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(fr, "RECIPES_DIR", tmp_path / "fetch-recipes")
+    monkeypatch.setattr(fr, "RECIPE_FILE", tmp_path / "fetch-recipe-last.json")
+    url = "https://www.amazon.com/s"
+    update_recipe_from_picker(url, fields=[{"name": "标题", "col": 1}], has_head=True)
+    out = export_recipe(url)
+    assert "stepsMarkdown" in out
+    assert "标题" in out["stepsMarkdown"]
+    assert out["source"] == "saved"
+
+
+def test_load_site_template_amazon():
+    tmpl = fr.load_site_template("www.amazon.com")
+    assert tmpl is not None
+    fields = tmpl.get("extract", {}).get("fields") or []
+    assert any(f.get("as") == "商品名" for f in fields)
+
+
+def test_load_site_template_unknown():
+    assert fr.load_site_template("unknown-site.example") is None
+
+
+def test_resolve_recipe_uses_template_when_no_saved(tmp_path, monkeypatch):
+    monkeypatch.setattr(fr, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(fr, "RECIPES_DIR", tmp_path / "fetch-recipes")
+    monkeypatch.setattr(fr, "RECIPE_FILE", tmp_path / "fetch-recipe-last.json")
+    recipe, source = fr.resolve_recipe("https://www.amazon.com/s?k=bed")
+    assert source == "template"
+    assert len(recipe.get("extract", {}).get("fields") or []) >= 2
+    assert recipe["extract"]["list"]
+
+
+def test_resolve_recipe_saved_beats_template(tmp_path, monkeypatch):
+    monkeypatch.setattr(fr, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(fr, "RECIPES_DIR", tmp_path / "fetch-recipes")
+    monkeypatch.setattr(fr, "RECIPE_FILE", tmp_path / "fetch-recipe-last.json")
+    save_recipe(
+        {
+            "url": "https://www.amazon.com/s",
+            "extract": {"mode": "picker", "fields": [{"name": "自定义列", "col": 0}]},
+        }
+    )
+    recipe, source = fr.resolve_recipe("https://www.amazon.com/s")
+    assert source == "saved"
+    assert recipe["extract"]["fields"][0]["name"] == "自定义列"
+
+
+def test_validate_recipe_drops_invalid_template_fields():
+    r = validate_recipe(
+        {
+            "url": "https://example.com",
+            "extract": {"fields": [{"query": "div"}], "mode": "list"},
+        }
+    )
+    assert r["extract"]["fields"] == []

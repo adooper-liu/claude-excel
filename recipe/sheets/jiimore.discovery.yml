@@ -1,0 +1,30 @@
+key: jiimore.discovery
+headerless: false
+targets:
+  - ASIN
+  - 标题
+  - 售价
+  - 评论数
+  - 评分
+  - 点击转化率
+  - 周点击增长
+  - 月点击增长
+  - 年销量
+  - 毛利率
+  - FBA费
+  - 上架日期
+  - 卖家国籍
+columns:
+  - { as: ASIN, from: asin }
+  - { as: 标题, from: title }
+  - { as: 售价, from: currentPrice, coerce: number }
+  - { as: 评论数, from: totalReviews, coerce: number }
+  - { as: 评分, from: customerRating, coerce: number }
+  - { as: 点击转化率, from: clickConversionRate, coerce: number }
+  - { as: 周点击增长, from: clickCountGrowthT7, coerce: number }
+  - { as: 月点击增长, from: clickCountGrowthT30, coerce: number }
+  - { as: 年销量, from: purchasedClicksT360, coerce: number }
+  - { as: 毛利率, from: grossProfitMargin, coerce: number }
+  - { as: FBA费, from: fbaFee, coerce: number }
+  - { as: 上架日期, from: launchDate }
+  - { as: 卖家国籍, from: sellerCountry }

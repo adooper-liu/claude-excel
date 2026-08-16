@@ -67,6 +67,9 @@ def test_amazon_ingest_sets_recipe_and_archive(tmp_path, monkeypatch):
     assert r["recipePath"].endswith("amazon.com.json")
     assert r["dataPath"]
     assert "规整列" in r["reshapeHint"]
+    assert r.get("stepsMarkdown")
+    assert "🟢" in r["stepsMarkdown"]
     job = pending_ingest()["job"]
     assert job["projectReady"] is True
+    assert job.get("stepsMarkdown")
     assert job["summary"]["rowCount"] == 1

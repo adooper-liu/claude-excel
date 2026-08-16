@@ -1,14 +1,17 @@
 """In-page picker script is present and teaches click-similar."""
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PICKER = ROOT / "extension" / "picker.js"
-
+PICKER_CORE = ROOT / "extension" / "picker-core.js"
 
 def test_picker_js_has_click_similar_and_multi_box():
     text = PICKER.read_text(encoding="utf-8")
     assert "ceInstallPagePicker" in text
+    assert (ROOT / "extension" / "picker-core.js").is_file()
+    assert "ceMergeGrids" in text
     assert "similarItems" in text
     assert "点选" in text
     assert "框选" in text
@@ -16,6 +19,8 @@ def test_picker_js_has_click_similar_and_multi_box():
     assert "ce-ingest" in text
     assert "__cePicker" in text
     assert "ce-excel-preview" in text
+    assert "ce-excel-steps" in text
+    assert "showFetchSteps" in text
     assert "写入这" in text
     assert "ce-stat" in text
     assert "还没选中内容" in text
@@ -26,7 +31,9 @@ def test_picker_js_has_click_similar_and_multi_box():
     assert "撤销" in text
     assert "undoLast" in text
     assert "virtualScrollHint" in text or "虚拟滚动" in text
-    assert 'getAttribute("data-ce-ver") === PICKER_VER' in text
+    assert re.search(r'getAttribute\s*\(\s*["\']data-ce-ver["\']\s*\)', text)
+    assert re.search(r"liveVer\s*===\s*PICKER_VER", text)
+    assert re.search(r"liveVer\s*!==\s*PICKER_VER", text)
     assert "点选同类" not in text
     assert "再选一块" not in text
     assert "还没有接口表" not in text
@@ -46,28 +53,14 @@ def test_ver_tuple_orders_versions():
 def test_product_cards_are_not_headers():
     import subprocess
 
-    script = r"""
-const { runInNewContext } = require("vm");
-const fs = require("fs");
-const code = fs.readFileSync(process.env.PICKER, "utf8");
-const ctx = {
-  window: {},
-  globalThis: {},
-  document: { getElementById() { return null; }, querySelectorAll() { return []; } },
-};
-ctx.window = ctx;
-ctx.globalThis = ctx;
-runInNewContext(code, ctx);
-const fn = ctx.ceLooksLikeHeaderRow;
-const cards = ["+14", "Bedsure PureWove", "选项:", "CNY 67.29", "4.4 颗星"];
-const cards2 = ["+8", "BEDELITE", "选项:", "CNY 50.00", "4.3 颗星"];
-if (fn(cards, cards2)) { console.error("cards"); process.exit(1); }
-const head = ["店铺", "订单号", "金额", "日期"];
-const body = ["A店", "123", "12.5", "2024-01-01"];
-if (!fn(head, body)) { console.error("table"); process.exit(1); }
-console.log("ok");
-"""
-    env = dict(**__import__("os").environ, PICKER=str(PICKER))
+    script = (
+        "const { looksLikeHeaderRow } = require(process.env.PICKER_CORE);\n"
+        "const cards = ['+14','Bedsure PureWove','选项:','CNY 67.29','4.4 颗星'];\n"
+        "if (looksLikeHeaderRow(cards, ['+8','BEDELITE','选项:','CNY 50.00','4.3 颗星'])) process.exit(1);\n"
+        "if (!looksLikeHeaderRow(['店铺','订单号','金额','日期'], ['A店','123','12.5','2024-01-01'])) process.exit(1);\n"
+        "console.log('ok');"
+    )
+    env = dict(**__import__("os").environ, PICKER_CORE=str(PICKER_CORE))
     r = subprocess.run(
         ["node", "-e", script],
         capture_output=True,
@@ -86,6 +79,7 @@ def test_picker_bundle_is_new_ui():
 
     bundle = _picker_bundle()
     assert PICKER_UI_VER in bundle
+    assert "ceMergeGrids" in bundle
     assert "ce-stat" in bundle
     assert "还没选中内容" in bundle
     assert "写入新表" not in bundle

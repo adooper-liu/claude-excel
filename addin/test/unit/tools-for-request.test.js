@@ -77,6 +77,20 @@ describe("selectToolsForRequest", function () {
     assert.ok(names.indexOf("write_to_sheet") >= 0);
   });
 
+  it("limits /调研 to read + optional summary sheet", function () {
+    const withWeb = tools.concat([
+      { name: "web_fetch" },
+      { name: "write_to_sheet" },
+      { name: "inspect_table" },
+      { name: "reconcile_tables" },
+    ]);
+    const names = selectToolsForRequest("查一下 IOSS 政策", withWeb, "research").map((t) => t.name);
+    assert.ok(names.indexOf("web_fetch") >= 0);
+    assert.ok(names.indexOf("write_to_sheet") >= 0);
+    assert.ok(names.indexOf("inspect_table") >= 0);
+    assert.ok(names.indexOf("reconcile_tables") < 0);
+  });
+
   it("keeps web_fetch for product lookup", function () {
     const withWeb = tools.concat([{ name: "web_fetch" }]);
     const names = selectToolsForRequest("获取产品数据", withWeb).map((t) => t.name);

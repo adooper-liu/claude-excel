@@ -1,0 +1,26 @@
+key: sif.keyword
+headerless: false
+targets:
+  - 关键词
+  - 热度排名
+  - 周搜索量
+  - 供需比
+  - 搜索结果商品数
+  - 自然位商品数
+  - SP广告数
+  - 付费广告总数
+  - AmazonChoice数
+  - 数据周期起
+  - 数据周期止
+columns:
+  - { as: 关键词, from: keyword }
+  - { as: 热度排名, from: keywordPopularityRank, coerce: number }
+  - { as: 周搜索量, from: estimatedWeeklySearchVolume, coerce: number }
+  - { as: 供需比, from: supplyDemandRatio, coerce: number }
+  - { as: 搜索结果商品数, from: totalSearchResultProductCount, coerce: number }
+  - { as: 自然位商品数, from: naturalSearchProductCount, coerce: number }
+  - { as: SP广告数, from: sponsoredProductsCount, coerce: number }
+  - { as: 付费广告总数, from: paidAdvertisingProductCount, coerce: number }
+  - { as: AmazonChoice数, from: amazonChoiceProductCount, coerce: number }
+  - { as: 数据周期起, from: dataPeriodStartDate }
+  - { as: 数据周期止, from: dataPeriodEndDate }

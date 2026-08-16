@@ -13,13 +13,13 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["json-table.js", "net-hook.js"],
+      "js": ["json-table.js", "net-hook.js", "picker-core.js"],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["json-table.js", "picker.js", "content.js"],
+      "js": ["json-table.js", "picker-core.js", "picker.js", "content.js"],
       "run_at": "document_idle"
     }
   ],

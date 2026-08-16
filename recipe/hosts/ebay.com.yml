@@ -1,0 +1,24 @@
+host: ebay.com
+notes: eBay 搜索列表；已售/拍卖/成色筛选见 iterate。列位置靠点选或导入表头映射。
+iterate:
+  site: ebay.com
+  orderBy: "12"
+  page: 1
+  pageSize: 50
+  showOnly: ""
+  buyingFormat: ""
+display:
+  markSponsored: true
+project:
+  headerless: true
+  targets:
+    - 标题
+    - 售价
+    - 成色
+    - 运费
+    - 卖家
+    - 好评率
+    - 已售
+    - 是否广告
+    - 链接
+  columns: []

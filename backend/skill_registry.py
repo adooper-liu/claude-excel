@@ -92,6 +92,7 @@ ADDIN_HANDLERS: dict[str, str] = {
     "create_pivot": "skill-handlers.ts",
     "write_inputs": "skill-handlers.ts",
     "web_fetch": "skill-handlers.ts",
+    "search_knowledge": "skill-handlers.ts",
 }
 
 

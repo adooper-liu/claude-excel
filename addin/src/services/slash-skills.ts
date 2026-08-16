@@ -24,6 +24,8 @@ export const SLASH_SKILLS: SlashSkill[] = [
   { id: "pivot", slash: "透视", title: "按表头做透视表" },
   { id: "assume", slash: "假设", title: "只改输入格，下游公式重算" },
   { id: "fetch", slash: "取数", title: "从网址取表；登录用本机取数栏" },
+  { id: "research", slash: "调研", title: "查资料、多源核实；默认不落表" },
+  { id: "knowledge", slash: "知识", title: "检索本机已上传文档" },
   { id: "craft", slash: "规范", title: "检查公式、输入格着色、数字格式" },
   { id: "deconstruct", slash: "拆解", title: "把工作流拆成可验证步骤，不改表" },
   { id: "skill-creator", slash: "skill-creator", title: "把流程做成可复用技能" },
@@ -48,6 +50,12 @@ const ALIAS: Record<string, { id: SkillId; extra: string }> = {
   情景: { id: "assume", extra: "" },
   fetch: { id: "fetch", extra: "" },
   取数: { id: "fetch", extra: "" },
+  research: { id: "research", extra: "" },
+  调研: { id: "research", extra: "" },
+  查资料: { id: "research", extra: "" },
+  knowledge: { id: "knowledge", extra: "" },
+  知识: { id: "knowledge", extra: "" },
+  知识库: { id: "knowledge", extra: "" },
   craft: { id: "craft", extra: "" },
   规范: { id: "craft", extra: "" },
   体检: { id: "craft", extra: "检查公式错误" },
@@ -72,13 +80,17 @@ const ASK: Record<string, string> = {
   assume:
     "就地改假设。先 inspect_formulas 认出输入格，只用 write_inputs 写入用户给的数字。公式格不要改。改完再看下游值和错误。",
   fetch:
-    "从网址取数写入新表。用户给了公开 URL 就 web_fetch 再 write_to_sheet。登录或三方反爬站不要问密码，让用户用取数栏：本机 Chrome/Edge 跟手操作，在网页窗口点选同类或框选后写入，不必每次回到 Excel。不要编造数字。",
+    "从网址取结构化表写入新表。用户给了公开 URL 就 web_fetch 再 write_to_sheet。登录或三方反爬站不要问密码，让用户用取数栏：本机 Chrome/Edge 跟手操作，在网页窗口点选同类或框选后写入，不必每次回到 Excel。不要编造数字。若用户其实在问政策/竞品/口径，说明应走 /调研。",
+  research:
+    "开放信息调研：摘要、引用、口径选项。默认不改表。用 web_search 或公开 URL 的 web_fetch 只读正文，多源核对并标来源。登录站标 🔴 让用户自取数栏或自行查。不要和 /取数 混成一步。用户明确要求整理成表时才 write_to_sheet 小摘要。",
+  knowledge:
+    "检索本机知识库（任务窗格「知」栏上传的 .md/.txt/.csv）。用 search_knowledge，引用 docName 与片段；无命中不要编。可与 web_search 对照但内部文档优先说明来源。默认不改表。",
   craft:
     "规范当前工作簿。先 inspect_workbook，再用 inspect_formulas 或 scan_formula_errors 同时看公式和值。着色和数字格式用 format_range（输入蓝字 #0000FF、同表公式黑字、跨表绿字 #008000、关键假设黄底 #FFFF00）。汇总值必须是活公式。不要覆盖源表数值，不要假设列名。",
   deconstruct:
     "拆解用户说的工作流。先确认一句话命名，再写动作流、判断点、边界、验证。标 🟢🟡🔴。口径只列选项，不替用户拍板，不编数字。可 inspect 看表头。不要改表。末尾说明哪些 🟢 步骤可以做成技能。",
   "skill-creator":
-    "把用户的工作流做成一条可安装的 Excel 技能。若流程还含糊，先拆解再写技能。若现有对账、整形、计算、透视、假设、取数、规范已经能做，用中文说明怎么开口即可，不要让用户先背斜杠清单，也不要新建技能。先判断用户处在哪一步（从零写 / 已有草稿要改 / 只要试跑）。用户没说清楚要自动化什么时，最多问四件事：做什么、什么口令触发、结果长什么样、要不要用当前表头走一遍。可 inspect_workbook（只读，不要改表）。起草 SKILL.md：YAML 必须有 name、description、slash。正文每步点名现有 Office JS 算子（extract_selection / reshape_table / reconcile_tables / calculate_table / create_pivot / write_inputs 等），禁止发明工具、禁止把表体读进对话再写回。附 2–3 句试跑口令。最后用一个 markdown 代码块给出完整 SKILL.md。",
+    "把用户的工作流做成一条可安装的 Excel 技能。若流程还含糊，先拆解再写技能。若现有对账、整形、计算、透视、假设、取数、调研、规范已经能做，用中文说明怎么开口即可，不要让用户先背斜杠清单，也不要新建技能。先判断用户处在哪一步（从零写 / 已有草稿要改 / 只要试跑）。用户没说清楚要自动化什么时，最多问四件事：做什么、什么口令触发、结果长什么样、要不要用当前表头走一遍。可 inspect_workbook（只读，不要改表）。起草 SKILL.md：YAML 必须有 name、description、slash。正文每步点名现有 Office JS 算子（extract_selection / reshape_table / reconcile_tables / calculate_table / create_pivot / write_inputs 等），禁止发明工具、禁止把表体读进对话再写回。附 2–3 句试跑口令。最后用一个 markdown 代码块给出完整 SKILL.md。",
 };
 
 export function mergeSlashSkills(installed?: SlashSkill[]): SlashSkill[] {
@@ -113,7 +125,7 @@ export function slashQuery(text: string): string | null {
 export function filterSlashSkills(query: string, installed?: SlashSkill[]): SlashSkill[] {
   const catalog = mergeSlashSkills(installed);
   const q = String(query || "").trim().toLowerCase();
-  if (!q) return [];
+  if (!q) return catalog.slice();
   if (q === "skills") return catalog.slice();
   if (q === "安装" || q === "install") return [];
   return catalog.filter(function (s) {

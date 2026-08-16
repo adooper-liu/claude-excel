@@ -32,6 +32,7 @@ export const HANDLED_TOOLS: ReadonlySet<string> = new Set([
   "create_pivot",
   "write_inputs",
   "web_fetch",
+  "search_knowledge",
 ]);
 
 export function missingExecutors(toolNames: string[]): string[] {

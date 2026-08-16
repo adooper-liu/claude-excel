@@ -13,7 +13,9 @@
 | 能力 | 入口 | 建模 | 分析 | 决策支持 |
 |---|---|---|---|---|
 | 读结构 / 公式 / 错 | `inspect_*` `scan_formula_errors` | 分清输入格与公式格 | 错在哪 | 不编数字 |
-| 取数 | `/取数`、取数栏 | 外部表进簿 | — | 密码不进模型 |
+| 取数 | `/取数`、取数栏 | 外部**结构化表**进簿 | — | 密码不进模型 |
+| 调研 | `/调研`、默认对话 | 摘要、引用、口径选项 | 多源对比 | 不替拍板；默认不落表 |
+| 知识库 | `/知识`、知栏 | 检索已上传文档片段 | 与开放网对照 | 无命中不编造；默认不落表 |
 | 洗表 | `/整形`、提取选中列 | 长表才能建模；选区去空格/统一大小写 | 列可用 | — |
 | 对账 | `/对账` | 源表只读 | 四类差异 | 冲突给人判 |
 | 活公式 | `/计算` `write_formula` | INDEX/MATCH、SUMIFS | 合计随源表变 | — |
@@ -30,7 +32,27 @@
 
 `/拆解` 把「清关对账」「广告 ROI」还原成可执行步骤，并标哪些能用现有工具做。拆完的 🟢 步骤再 `/skill-creator` 装进 `~/.claude-excel-web/skills/`。
 
-### 第三层：行业包（后做，不进核心）
+### 第三层：行业包（已定，不进核心）
+
+**行业口径、方法论、阈值只进用户侧**（`~/.claude-excel-web/skills/`、知识库、用户上传文档）。**禁止**写回 `addin/src/services/` 核心 TS（含 `industry-workflows.ts` 一类预置）。**禁止**以 onboarding 为由把行业流程塞回核心——此边界已定，不再讨论。
+
+与**站点取数模板**分层（二者不混）：
+
+| 进核心（数据/引擎） | 不进核心（用户侧） |
+|---|---|
+| `backend/site_recipes/` — DOM 提取默认（`fields[].query`） | 选品/SERP/利润/VOC/清关归类等**怎么判** |
+| `recipe/hosts/` — 进簿后 `project` 列映射 | 公司阈值、排除规则、GMV 口径 |
+| 通用算子 + `/取数` recipe | 行业 SOP 正文、基准数字 |
+
+**onboarding 与示例稳定性**不靠核心预置行业 TS，靠三条线补（开发时维护 samples，不编译进 builtin）：
+
+1. **`samples/`** — 参考附录（如 `industry-deconstruct-appendix.md`）；用户自行阅读，或整份上传知识库
+2. **可选技能包** — 仓库 `samples/skills/`（如 `amazon-research/`）；任务窗格空状态可一键安装，或复制到 `~/.claude-excel-web/skills/`
+3. **知识库** — `~/.claude-excel-web/knowledge/` + `/知识` / `search_knowledge`；无命中不编造
+
+`/拆解` 只映射现有算子，需要行业细节时**指向上述三条线**，不把附录正文写进核心 prompt。拆完的 🟢 步骤走 `/skill-creator` 装进用户技能目录。
+
+可选参考见 `samples/industry-deconstruct-appendix.md`。
 
 | 场景 | 建模 | 分析 | 决策（列选项，不替拍板） |
 |---|---|---|---|
@@ -38,6 +60,24 @@
 | 跨境电商运营 | 到岸成本、广告费、退款率作假设；毛利重算 | 订单 vs 仓 vs 广告对账；按 SKU 透视 | 停投/加投、测试单是否计入 GMV |
 
 行业数字必须带来源或标「用户提供 / 待验证」。没有真表就不要生成假费率。
+
+## 取数 vs 调研（强制分列）
+
+二者都要保留，**禁止合成**成一个产品需求、一套 UI 或一条口令。
+
+| | 取数 | 调研 |
+|---|---|---|
+| 目标 | 把网页/ERP 里的**表行**写进工作簿 | 核实开放信息、对比口径、给摘要与引用 |
+| 产出 | Excel 表 + recipe + 可选 `reshape_table(project)` | 对话里的结论；用户明确要求才写小摘要表 |
+| 入口 | 取数栏、扩展点选、`/取数`、`web_fetch`→`write_to_sheet` | `/调研`、默认对话 + `web_search`（DeepSeek） |
+| 不做 | 竞品分析长文、政策解读、替用户拍板 | 登录站批量抓表、替代取数栏跟手操作 |
+| 重叠时 | 用户要「把这张公开表进簿」→ 取数 | 用户要「这个政策/竞品什么意思」→ 调研 |
+
+取数栏、Playwright picker、recipe 只服务取数。站点 DOM 默认在 **`backend/site_recipes/{host}.json`**；进簿后列映射在 **`recipe/hosts/{host}.yml`**（引擎加载，不进 picker 选择器）。不要把 web-access 类浏览器栈并进核心；调研靠模型检索 + 可选 `web_fetch` 只读正文，不并进取数栏。
+
+## 知识库（本机向量 RAG）
+
+与取数、调研**分列**。用户上传 .md/.txt/.csv 到 `~/.claude-excel-web/knowledge/`，本机分块 + 向量索引（默认本机哈希向量；`config.json` 设 `embeddingModel` 可走 API embeddings）。对话用 `search_knowledge` 或 `/知识` 检索片段并引用 docName；无命中不要编内部规定。不做表行进簿，默认不落表。
 
 ## 能力汲取
 
@@ -93,7 +133,7 @@ Excel 格子、公式、格式、图表、透视、分块洗表全部在加载�
 
 | 斜杠 | 层 | 作用 |
 |---|---|---|
-| `/取数` `/整形` `/对账` `/计算` `/透视` `/假设` `/规范` | 底座 | 见上表 |
+| `/取数` `/调研` `/知识` `/整形` `/对账` `/计算` `/透视` `/假设` `/规范` | 底座 | 见上表；**取数≠调研≠知识库** |
 | `/拆解` | 连接 | 五步拆流程，标 🟢🟡🔴，不改表 |
 | `/skill-creator` | 连接 | 把 🟢 步骤写成可安装技能 |
 
@@ -118,6 +158,6 @@ Excel 格子、公式、格式、图表、透视、分块洗表全部在加载�
 
 - **新工具**: `addin/skills/core/<name>/manifest.json` → `executeHandler` case → `HANDLED_TOOLS` 与 `ADDIN_HANDLERS` → `skill-loader.ts` import → 重启后端
 - **算子 vs 口令**: 先扩工具参数，再考虑短路。禁止为新说法堆 `isXxxRequest` / `mergeXxxFollowup`。见上文「算子要通用，口令不要堆」
-- **行业包**: 不要为清关/电商新增无执行器的工具名；用 `/拆解` + 现有工具 + 用户技能。用户 SKILL.md 必须编排 `skill-create-guide.ts` 里的算子，禁止发明工具。
+- **行业包**: 不要为清关/电商新增无执行器的工具名；用 `/拆解` + 现有工具 + 用户技能。用户 SKILL.md 必须编排 `skill-create-guide.ts` 里的算子，禁止发明工具。**禁止**恢复 `industry-workflows.ts` 或把行业 SOP 写进 `builtin-skills.ts` / `prompt-templates.ts`；onboarding 只维护 `samples/`、可选 `samples/skills/`、知识库文档。
 - **配置**: `C:\Users\<User>\.claude-excel-web\config.json` 或设置面板
 - 公司站点账号只在任务窗格本机填写，不要发给 LLM

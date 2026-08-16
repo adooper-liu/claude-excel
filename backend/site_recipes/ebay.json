@@ -1,0 +1,17 @@
+{
+  "host": "ebay.com",
+  "match": {
+    "hostSuffix": [".ebay.com", ".ebay.co.uk"]
+  },
+  "extract": {
+    "mode": "list",
+    "listQuery": ".s-item",
+    "fields": [
+      { "as": "标题", "query": ".s-item__title", "type": "text" },
+      { "as": "价格", "query": ".s-item__price", "type": "text" },
+      { "as": "链接", "query": ".s-item__link", "type": "link" }
+    ]
+  },
+  "iterate": { "type": "manual" },
+  "meta": { "source": "template", "updatedAt": "2026-08-16" }
+}

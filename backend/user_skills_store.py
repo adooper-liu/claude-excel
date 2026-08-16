@@ -9,6 +9,7 @@ from pathlib import Path
 from config_store import CONFIG_DIR
 
 SKILLS_DIR = CONFIG_DIR / "skills"
+SAMPLE_SKILLS_DIR = Path(__file__).resolve().parents[1] / "samples" / "skills"
 MAX_SKILLS = 40
 MAX_BYTES = 64 * 1024
 
@@ -34,6 +35,12 @@ RESERVED = {
     "情景",
     "取数",
     "fetch",
+    "调研",
+    "research",
+    "查资料",
+    "知识",
+    "knowledge",
+    "知识库",
     "拆解",
     "deconstruct",
     "工作流",
@@ -111,6 +118,34 @@ def list_skills(root: Path | None = None) -> list[dict]:
         if len(out) >= MAX_SKILLS:
             break
     return out
+
+
+def list_sample_skills() -> list[dict]:
+    if not SAMPLE_SKILLS_DIR.is_dir():
+        return []
+    out: list[dict] = []
+    for md in sorted(SAMPLE_SKILLS_DIR.glob("*/SKILL.md")):
+        try:
+            parsed = parse_skill_md(md.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        out.append(
+            {
+                "id": parsed["id"],
+                "slash": parsed["slash"],
+                "title": parsed["title"],
+                "path": "samples/skills/" + md.parent.name,
+            }
+        )
+    return out
+
+
+def install_sample_skill(sample_id: str, root: Path | None = None) -> dict:
+    sid = _safe_id(sample_id)
+    md_path = SAMPLE_SKILLS_DIR / sid / "SKILL.md"
+    if not md_path.is_file():
+        raise ValueError("示例技能不存在: " + sid)
+    return install_skill(root, md_path.read_text(encoding="utf-8"))
 
 
 def install_skill(root: Path | None, markdown: str) -> dict:

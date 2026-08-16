@@ -1,0 +1,20 @@
+host: 1688.com
+notes: 1688 搜索列表；关键词须中文。导入 JSON/CSV 用表名含「1688选品/店雷达」走 header 映射。
+iterate:
+  site: 1688.com
+  cycle: "30"
+  pageIndex: 1
+  pageSize: 20
+display: {}
+project:
+  headerless: true
+  targets:
+    - 标题
+    - 批发价
+    - 代发价
+    - 起订量
+    - 订单数
+    - 销量
+    - 店铺
+    - 商品链接
+  columns: []

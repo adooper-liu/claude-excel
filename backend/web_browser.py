@@ -11,7 +11,7 @@ from typing import Any
 from pathlib import Path
 
 from config_store import CONFIG_DIR
-from fetch_recipe import default_recipe, save_recipe, validate_recipe
+from fetch_recipe import default_recipe, load_recipe, save_recipe, validate_recipe
 from web_ingest import push_ingest
 from web_tools import (
     cells_to_grid,
@@ -127,6 +127,7 @@ def _picker_bundle() -> str:
         [
             (_EXT / "json-table.js").read_text(encoding="utf-8"),
             (_EXT / "net-hook.js").read_text(encoding="utf-8"),
+            (_EXT / "picker-core.js").read_text(encoding="utf-8"),
             (_EXT / "picker.js").read_text(encoding="utf-8"),
         ]
     )
@@ -456,31 +457,36 @@ async def picker_status(session_id: str) -> dict[str, Any]:
             rows = cells_to_grid(cmd.get("cells"))
         if not rows:
             return {"pending": True, "error": "还没有选中内容。请在网页窗口点选或框选后再写入。"}
+        fields = cmd.get("fields") if isinstance(cmd.get("fields"), list) else []
+        has_head = bool(cmd.get("hasHead"))
+        column_labels = cmd.get("columnLabels") if isinstance(cmd.get("columnLabels"), list) else []
+        extract_mode = str(cmd.get("extractMode") or "picker")
         pushed = push_ingest(
             {
                 "url": sess.page.url,
                 "rows": rows,
                 "append": kind == "append",
                 "sheetName": sheet_name_from_url(sess.page.url),
+                "fields": fields,
+                "hasHead": has_head,
+                "columnLabels": column_labels,
+                "extractMode": extract_mode,
             }
         )
         if pushed.get("error"):
             return {"pending": True, "error": pushed["error"]}
-        recipe = validate_recipe(sess.recipe or default_recipe(sess.page.url))
-        recipe["url"] = sess.page.url
-        recipe["extract"] = {**recipe["extract"], "mode": "picker"}
-        recipe["iterate"]["type"] = "manual"
-        sess.recipe = recipe
         try:
-            save_recipe(recipe)
+            sess.recipe = load_recipe(sess.page.url)
         except OSError:
-            pass
+            sess.recipe = validate_recipe(sess.recipe or default_recipe(sess.page.url))
         return {
             "pending": True,
             "pushed": True,
             "append": bool(pushed.get("append")),
             "sheetName": pushed.get("sheetName"),
             "rows": pushed.get("rows"),
+            "recipePath": pushed.get("recipePath") or "",
+            "stepsMarkdown": pushed.get("stepsMarkdown") or "",
         }
 
 

@@ -366,7 +366,22 @@ select:focus-visible {
   padding: 4px 6px;
   font-size: var(--fs-ui);
 }
-.skill-flyout { width: 280px; }
+.skill-flyout {
+  width: 300px;
+  max-height: min(560px, 68vh);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.skill-flyout-hint {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.skill-slash-list {
+  flex: 0 1 auto;
+  max-height: 240px;
+}
 .skill-install {
   display: flex;
   flex-direction: column;
@@ -374,34 +389,163 @@ select:focus-visible {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--rule);
+  flex-shrink: 0;
 }
-.skill-install textarea {
-  width: 100%;
-  min-height: 72px;
-  resize: vertical;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 4px 6px;
-  font-family: var(--mono);
+.skill-install-label {
   font-size: var(--fs-meta);
-  color: var(--ink);
-  background: var(--paper);
+  font-weight: 650;
+  color: var(--muted);
 }
-.skill-install button {
-  align-self: flex-end;
+.skill-file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.skill-upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 8px;
+  border: 1px dashed var(--rule);
+  border-radius: 6px;
+  background: var(--cell);
+  cursor: pointer;
+  text-align: center;
+}
+.skill-upload-zone:hover:not(:disabled) {
+  border-color: var(--fx);
+  background: var(--fx-fill);
+}
+.skill-upload-zone:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.skill-upload-icon {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--fx);
+}
+.skill-upload-title {
+  font-size: var(--fs-ui);
+  font-weight: 650;
+  color: var(--ink);
+}
+.skill-upload-sub {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.skill-install-file {
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skill-install-toggle {
+  align-self: flex-start;
   background: none;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 2px 8px;
+  border: none;
+  padding: 0;
   font-size: var(--fs-meta);
   color: var(--fx);
   cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
-.skill-install button:disabled { opacity: 0.5; cursor: default; }
+.skill-install textarea {
+  width: 100%;
+  min-height: 88px;
+  max-height: 140px;
+  resize: vertical;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-family: var(--mono);
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--paper);
+}
+.skill-install-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.skill-install-primary {
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: var(--fs-ui);
+  cursor: pointer;
+  background: var(--fx);
+  color: #fff;
+  border: 1px solid var(--fx);
+}
+.skill-install-primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.skill-install-note {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.skill-install button.skill-install-primary {
+  align-self: flex-end;
+}
 .skill-install-err {
   margin: 0;
   font-size: var(--fs-meta);
   color: var(--danger);
+}
+.skill-operator-ref {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--grid);
+}
+.skill-operator-list {
+  margin-top: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.skill-operator-group + .skill-operator-group {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--grid);
+}
+.skill-operator-group-label {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.skill-operator-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.skill-operator-items li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0;
+}
+.skill-operator-name {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fx);
+  font-weight: 650;
+}
+.skill-operator-hint {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--ink);
 }
 
 /* ── Formula bar (selection) ─────────────────────────────── */
@@ -740,6 +884,97 @@ select:focus-visible {
   border-top: 1px solid var(--rule);
   position: relative;
 }
+.knowledge-bar {
+  border-top: 1px dashed var(--rule);
+  padding-top: 8px;
+}
+.knowledge-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.knowledge-title {
+  font-weight: 650;
+  color: var(--ink);
+}
+.knowledge-meta {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.knowledge-upload {
+  margin-top: 4px;
+}
+.knowledge-upload.knowledge-drag-over {
+  border-color: var(--fx);
+  background: var(--fx-fill);
+}
+.knowledge-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.knowledge-path-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.knowledge-path-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-size: var(--fs-body);
+  background: var(--paper);
+  color: var(--ink);
+}
+.knowledge-path-input:focus {
+  outline: none;
+  border-color: var(--fx);
+  box-shadow: 0 0 0 3px var(--fx-fill);
+}
+.knowledge-upload-btn {
+  border: none;
+  background: none;
+  color: var(--fx);
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0;
+}
+.knowledge-upload-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.knowledge-doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.knowledge-doc-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.knowledge-doc-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-body);
+}
+.knowledge-doc-meta {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+  white-space: nowrap;
+}
 .fetch-bar {
   padding: 8px 10px 0;
   display: flex;
@@ -873,6 +1108,32 @@ select:focus-visible {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--rule);
+}
+.fetch-path-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.fetch-path-flyout {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 55;
+  width: min(320px, 92vw);
+  max-height: min(280px, 42vh);
+  overflow: auto;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.14);
+  padding: 8px 10px;
+}
+.fetch-path-body {
+  margin: 0;
+  font-family: inherit;
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: var(--ink);
 }
 .fetch-grids {
   display: flex;
@@ -1022,6 +1283,33 @@ select:focus-visible {
 .skill-start-label {
   margin-top: 10px;
   color: var(--muted);
+}
+.empty-onboard-hint {
+  margin-top: 6px;
+  font-size: var(--fs-ui);
+  line-height: 1.5;
+  color: var(--muted);
+}
+.empty-sample-install {
+  margin-top: 8px;
+  padding: 7px 12px;
+  font-size: var(--fs-ui);
+  border-radius: 999px;
+  border: 1px solid var(--fx);
+  background: var(--fx-fill);
+  color: var(--ink);
+  cursor: pointer;
+}
+.empty-sample-install:disabled { opacity: 0.6; cursor: wait; }
+.empty-onboard-done {
+  margin-top: 6px;
+  font-size: var(--fs-ui);
+  color: var(--fx);
+}
+.empty-onboard-err {
+  margin-top: 4px;
+  font-size: var(--fs-ui);
+  color: #b91c1c;
 }
 .skill-start-list {
   display: flex;

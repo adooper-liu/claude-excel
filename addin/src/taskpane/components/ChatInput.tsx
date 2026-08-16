@@ -2,11 +2,13 @@
  * ChatInput.tsx — Text input with send, stop, ⚡ templates, and / skills.
  */
 
-import React, { useState, useRef, useCallback, KeyboardEvent } from 'react';
+import React, { useState, useRef, useCallback, KeyboardEvent, useMemo } from 'react';
 import PromptMenu from './PromptMenu';
 import FetchBar, { type FetchRows } from './FetchBar';
+import KnowledgeBar from './KnowledgeBar';
 import { filterSlashSkills, parseSlashCommand, slashQuery, type SlashSkill } from '../../services/slash-skills';
 import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
+import { operatorCatalogByGroup } from '../../services/operator-catalog';
 
 interface Props {
   onSend: (text: string) => void;
@@ -25,16 +27,24 @@ export default function ChatInput({
   const [showPrompts, setShowPrompts] = useState(false);
   const [active, setActive] = useState(0);
   const [pasteMd, setPasteMd] = useState('');
+  const [installFileName, setInstallFileName] = useState('');
   const [installErr, setInstallErr] = useState('');
   const [installing, setInstalling] = useState(false);
   const [showFetch, setShowFetch] = useState(false);
+  const [showKnowledge, setShowKnowledge] = useState(false);
+  const [installPasteOpen, setInstallPasteOpen] = useState(false);
+  const [showOperatorRef, setShowOperatorRef] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const skillFileRef = useRef<HTMLInputElement>(null);
 
   const query = slashQuery(text);
   const skills = query == null ? [] : filterSlashSkills(query, installed);
   const completeSlash = !!parseSlashCommand(text.trim(), installed);
   const wantInstall = query === "安装" || query === "install";
-  const showSlash = !disabled && !isStreaming && query != null && !completeSlash && (skills.length > 0 || wantInstall);
+  const showSlash = !disabled && !isStreaming && query != null && !completeSlash;
+  const operatorGroups = useMemo(function () {
+    return operatorCatalogByGroup(false);
+  }, []);
 
   const applySkill = useCallback((skill: SlashSkill) => {
     setText('/' + skill.slash);
@@ -46,8 +56,8 @@ export default function ChatInput({
     }
   }, []);
 
-  const handleInstall = useCallback(async () => {
-    const md = pasteMd.trim();
+  const handleInstall = useCallback(async (mdOverride?: string) => {
+    const md = String(mdOverride ?? pasteMd).trim();
     if (!md || installing) return;
     setInstalling(true);
     setInstallErr('');
@@ -56,6 +66,8 @@ export default function ChatInput({
       const next = installed.filter((s) => s.id !== skill.id).concat([skill]);
       onInstalledChange?.(next);
       setPasteMd('');
+      setInstallFileName('');
+      setInstallPasteOpen(false);
       setText('/' + skill.slash);
     } catch (err) {
       setInstallErr(err instanceof Error ? err.message : String(err));
@@ -63,6 +75,56 @@ export default function ChatInput({
       setInstalling(false);
     }
   }, [pasteMd, installing, installed, onInstalledChange]);
+
+  const loadSkillMarkdown = useCallback((raw: string, fileName?: string) => {
+    setPasteMd(raw);
+    setInstallFileName(fileName || '');
+    setInstallErr('');
+  }, []);
+
+  const readSkillFile = useCallback(
+    (file: File) => {
+      const name = file.name || '';
+      const okExt = /\.(md|markdown|txt)$/i.test(name);
+      const okType = !file.type || /text|markdown|octet-stream/i.test(file.type);
+      if (!okExt && !okType) {
+        setInstallErr('请选择 .md / .markdown / .txt 文件');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = String(reader.result || '');
+        if (!text.trim()) {
+          setInstallErr('文件是空的');
+          return;
+        }
+        loadSkillMarkdown(text, name);
+        void handleInstall(text);
+      };
+      reader.onerror = () => setInstallErr('读取文件失败');
+      reader.readAsText(file, 'UTF-8');
+    },
+    [handleInstall, loadSkillMarkdown]
+  );
+
+  const onSkillFilePick = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) readSkillFile(file);
+      e.target.value = '';
+    },
+    [readSkillFile]
+  );
+
+  const onSkillDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = e.dataTransfer.files?.[0];
+      if (file) readSkillFile(file);
+    },
+    [readSkillFile]
+  );
 
   const handleDeleteInstalled = useCallback(async (id: string) => {
     try {
@@ -132,6 +194,9 @@ export default function ChatInput({
           onFetched={onFetched}
         />
       )}
+      {showKnowledge && (
+        <KnowledgeBar disabled={disabled || isStreaming} />
+      )}
     <div className="chat-input-area">
       <div className="chat-input-tools">
         <button
@@ -150,6 +215,14 @@ export default function ChatInput({
           title="从网址取数"
           aria-label="从网址取数"
         >网</button>
+        <button
+          type="button"
+          className={`icon-btn${showKnowledge ? " on" : ""}`}
+          disabled={disabled || isStreaming}
+          onClick={() => setShowKnowledge((v) => !v)}
+          title="本机知识库"
+          aria-label="本机知识库"
+        >知</button>
         {showPrompts && (
           <PromptMenu
             draft={text}
@@ -167,9 +240,12 @@ export default function ChatInput({
         )}
         {showSlash && (
           <div className="flyout prompt-flyout skill-flyout" role="listbox" aria-label="加速器">
-            <div className="flyout-head"><span>加速器</span></div>
+            <div className="flyout-head">
+              <span>加速器</span>
+              <span className="skill-flyout-hint">输入 / 筛选</span>
+            </div>
             {skills.length > 0 && (
-              <ul className="prompt-list">
+              <ul className="prompt-list skill-slash-list">
                 {skills.map((s, i) => (
                   <li key={s.id}>
                     <button
@@ -180,7 +256,11 @@ export default function ChatInput({
                       onClick={() => applySkill(s)}
                     >
                       <span className="skill-pick-title">{s.title}</span>
-                      <span className="slash-cmd"><span className="slash-mark">/</span>{s.slash}</span>
+                      <span className="slash-cmd">
+                        <span className="slash-mark">/</span>
+                        {s.slash}
+                      </span>
+                      {s.installed && <span className="prompt-pick-tag">已安装</span>}
                     </button>
                     {s.installed && (
                       <button
@@ -189,23 +269,113 @@ export default function ChatInput({
                         title="卸载"
                         aria-label={"卸载 " + s.slash}
                         onClick={() => handleDeleteInstalled(s.id)}
-                      >✕</button>
+                      >
+                        ✕
+                      </button>
                     )}
                   </li>
                 ))}
               </ul>
             )}
-            <div className="skill-install">
-              <textarea
-                value={pasteMd}
-                onChange={(e) => { setPasteMd(e.target.value); setInstallErr(''); }}
-                placeholder="粘贴 SKILL.md 安装外部技能"
-                rows={4}
+            {(wantInstall || skills.length === 0) && skills.length === 0 && (
+              <p className="flyout-empty">没有匹配的斜杠。可安装外部 SKILL.md。</p>
+            )}
+            <div
+              className="skill-install"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDrop={onSkillDrop}
+            >
+              <div className="skill-install-label">安装外部技能</div>
+              <input
+                ref={skillFileRef}
+                type="file"
+                accept=".md,.markdown,.txt,text/markdown,text/plain"
+                className="skill-file-input"
+                onChange={onSkillFilePick}
+                aria-hidden
+                tabIndex={-1}
               />
-              <button type="button" onClick={handleInstall} disabled={!pasteMd.trim() || installing}>
-                安装
+              <button
+                type="button"
+                className="skill-upload-zone"
+                disabled={installing}
+                onClick={() => skillFileRef.current?.click()}
+              >
+                <span className="skill-upload-icon">↑</span>
+                <span className="skill-upload-title">{installing ? '正在安装…' : '上传 SKILL.md'}</span>
+                <span className="skill-upload-sub">点击选择，或拖放 .md 到此处</span>
               </button>
+              {installFileName && !installErr && (
+                <p className="skill-install-file">已选：{installFileName}</p>
+              )}
+              <button
+                type="button"
+                className="skill-install-toggle"
+                onClick={() => setInstallPasteOpen((v) => !v)}
+              >
+                {installPasteOpen ? '收起粘贴' : '或粘贴内容'}
+              </button>
+              {installPasteOpen && (
+                <>
+                  <textarea
+                    value={pasteMd}
+                    onChange={(e) => {
+                      setPasteMd(e.target.value);
+                      setInstallFileName('');
+                      setInstallErr('');
+                    }}
+                    placeholder="---&#10;name: my-skill&#10;description: 简短说明&#10;slash: 我的技能&#10;---&#10;正文步骤…"
+                    rows={5}
+                    aria-label="粘贴 SKILL.md 内容"
+                  />
+                  <div className="skill-install-actions">
+                    <button
+                      type="button"
+                      className="skill-install-primary"
+                      onClick={() => void handleInstall()}
+                      disabled={!pasteMd.trim() || installing}
+                    >
+                      安装
+                    </button>
+                  </div>
+                </>
+              )}
               {installErr && <p className="skill-install-err">{installErr}</p>}
+              <p className="skill-install-note">需 YAML 头：name、description、slash；正文只编排现有 Office JS 算子。</p>
+            </div>
+            <div className="skill-operator-ref">
+              <button
+                type="button"
+                className="skill-install-toggle"
+                onClick={() => setShowOperatorRef((v) => !v)}
+                aria-expanded={showOperatorRef}
+              >
+                {showOperatorRef ? "收起算子参考" : "算子参考（" + operatorGroups.reduce(function (n, g) { return n + g.items.length; }, 0) + "）"}
+              </button>
+              {showOperatorRef && (
+                <div className="skill-operator-list" role="region" aria-label="算子参考">
+                  {operatorGroups.map(function (g) {
+                    return (
+                      <div key={g.id} className="skill-operator-group">
+                        <div className="skill-operator-group-label">{g.label}</div>
+                        <ul className="skill-operator-items">
+                          {g.items.map(function (item) {
+                            return (
+                              <li key={item.name}>
+                                <code className="skill-operator-name">{item.name}</code>
+                                <span className="skill-operator-hint">{item.hint}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -39,7 +39,12 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
   const [writtenSheet, setWrittenSheet] = useState("");
   const [note, setNote] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pathOpen, setPathOpen] = useState(false);
+  const [pathText, setPathText] = useState("");
+  const [pathErr, setPathErr] = useState("");
+  const [pathLoading, setPathLoading] = useState(false);
   const comboRef = useRef<HTMLDivElement>(null);
+  const pathRef = useRef<HTMLDivElement>(null);
 
   const busy = phase === "opening";
   const picking = phase === "picking";
@@ -93,6 +98,34 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
     setMenuOpen(false);
     setErr("");
   }, []);
+
+  const loadFetchPath = useCallback(async () => {
+    const target = url.trim();
+    if (!target) {
+      setPathText("请先输入或选择取数网址，写入一次后再查看采集路径。");
+      setPathOpen(true);
+      return;
+    }
+    setPathLoading(true);
+    setPathErr("");
+    try {
+      const r = await fetch(API + "/api/fetch-recipe?url=" + encodeURIComponent(target));
+      const data = (await r.json()) as Record<string, unknown>;
+      const steps = String(data.stepsMarkdown || "").trim();
+      const disk = String(data.path || "").trim();
+      if (steps) {
+        setPathText(disk ? steps + "\n\n本机配方：" + disk : steps);
+      } else {
+        setPathText("还没有该站点的采集配方。请先在网页跟手写入一次（点选列后写入）。");
+      }
+      setPathOpen(true);
+    } catch {
+      setPathErr("读取采集路径失败。请确认本机后端已启动。");
+      setPathOpen(true);
+    } finally {
+      setPathLoading(false);
+    }
+  }, [url]);
 
   const run = useCallback(async () => {
     const target = url.trim();
@@ -157,6 +190,22 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
             if (!data.append) setWrittenSheet(name);
             setNote(data.append ? `已追加到「${name}」。可在网页翻页后再追加。` : `已写入「${name}」。翻页后在网页点追加。`);
             setErr("");
+            if (url.trim()) {
+              void fetch(API + "/api/fetch-recipe?url=" + encodeURIComponent(url.trim()))
+                .then(function (r) {
+                  return r.json();
+                })
+                .then(function (recipeData) {
+                  const steps = String(recipeData.stepsMarkdown || "").trim();
+                  if (steps) {
+                    setPathText(steps);
+                    setPathOpen(true);
+                  }
+                })
+                .catch(function () {
+                  /* ignore */
+                });
+            }
           }
           if (!stop) window.setTimeout(tick, 500);
         })
@@ -169,18 +218,26 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
       stop = true;
       window.clearTimeout(delay);
     };
-  }, [sessionId, phase, writtenSheet]);
+  }, [sessionId, phase, writtenSheet, url]);
 
   useEffect(() => {
-    if (!menuOpen) {
+    if (!menuOpen && !pathOpen) {
       return undefined;
     }
     const onDoc = (ev: MouseEvent) => {
-      const el = comboRef.current;
-      if (el && !el.contains(ev.target as Node)) setMenuOpen(false);
+      const combo = comboRef.current;
+      const pathEl = pathRef.current;
+      const t = ev.target as Node;
+      if (combo && combo.contains(t)) return;
+      if (pathEl && pathEl.contains(t)) return;
+      setMenuOpen(false);
+      setPathOpen(false);
     };
     const onKey = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") setMenuOpen(false);
+      if (ev.key === "Escape") {
+        setMenuOpen(false);
+        setPathOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -188,7 +245,7 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [menuOpen]);
+  }, [menuOpen, pathOpen]);
 
   return (
     <div className={"fetch-bar" + (menuOpen ? " fetch-bar-menu-open" : "")}>
@@ -258,6 +315,24 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
           <button type="button" onClick={run} disabled={disabled || busy || !url.trim()}>
             {phase === "opening" ? "正在打开…" : "取数"}
           </button>
+        )}
+        {!picking && (
+          <div className="fetch-path-wrap" ref={pathRef}>
+            <button
+              type="button"
+              className="fetch-btn-ghost"
+              onClick={() => void loadFetchPath()}
+              disabled={disabled || busy || pathLoading}
+              aria-expanded={pathOpen}
+            >
+              {pathLoading ? "…" : "采集路径"}
+            </button>
+            {pathOpen && (
+              <div className="fetch-path-flyout" role="dialog" aria-label="采集路径">
+                <pre className="fetch-path-body">{pathText || pathErr || "加载中…"}</pre>
+              </div>
+            )}
+          </div>
         )}
         {picking && (
           <button type="button" className="fetch-btn-ghost" onClick={cancel} disabled={disabled}>
