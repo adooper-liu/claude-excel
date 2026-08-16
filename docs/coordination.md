@@ -18,6 +18,7 @@
 - **只读分析 worktree**：`d:\claude-excel.worktrees\project-issue-analysis`，只读分析、不改代码。
 - 本机多开 Claude Code 会话：可用 worktree 隔离。
 - 跨工具（Claude/Cursor）：**不用 worktree**（互相看不到），用「分支 + 完成即合并 + 合并即同步」。
+- **一个任务一条分支**：合入 master 后弃用/删除该分支；下一任务从最新 master 再开（不是每个工具长期占一条分支）。
 
 ## 3. 任务分工建议（避免重复劳动）
 
@@ -40,9 +41,30 @@ git branch -a                     # 有没有进行中的分支
 
 - 发现有进行中分支 / 未提交改动 → **先停下来对齐**，不另起炉灶。
 
+### 分支生命周期（一个任务一条）
+
+> 私有分支 → 完成 → 合并 → 同步 → 弃用/删除分支 → 下一任务从最新 master 再开
+
+**不是**「Claude 固定一条分支、Cursor 固定一条分支」并行长期占用；**是**每个任务一条分支，合完即结束。
+
+```bash
+# 新任务开工
+git fetch
+git checkout master && git pull
+git checkout -b feat/任务名
+
+# ... 改代码、测绿、commit；可选 push 分支到 origin ...
+
+# 合入 master
+git checkout master && git pull
+git merge --ff-only feat/任务名    # 有冲突则先 rebase/merge origin/master 再合
+git push origin master
+git branch -d feat/任务名          # 本地删除；远端分支按需 git push origin --delete
+```
+
 ### 工作时
 
-- 在**私有分支**上改（`feat/xxx` / `fix/xxx`），不在 master 直接改。
+- 在任务分支上改（`feat/xxx` / `fix/xxx`），不在 master 直接改。
 - 改完自行验证：`python -m pytest backend/tests`（Windows 上若遇 temp PermissionError，加 `--basetemp=...`）+ `npm run test:unit` + `npm run typecheck` 全绿。
 
 ### 收尾（提交 → 合并 → 推送）
@@ -55,7 +77,7 @@ git branch -a                     # 有没有进行中的分支
 
 > **同一时刻，只有一个工具在 master 上工作。**
 
-一个工具开始改代码前，先确认 master 上没有另一个工具的进行中工作。用「私有分支 → 完成 → 合并 → 同步」串行化，不靠记忆。
+一个工具开始改代码前，先确认 master 上没有另一个工具的进行中工作。用「私有分支 → 完成 → 合并 → 同步 → 弃用分支 → 下一任务从最新 master 再开」串行化，不靠记忆。
 
 ## 5. 一致性保证
 
