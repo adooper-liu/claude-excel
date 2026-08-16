@@ -1,17 +1,18 @@
 """gen_dirty_fixtures.py — 按已验证脏特征逐行构造 CSV fixture（Gate 1b 回归测试数据工厂）。
 
-用法：  python dev-tools/gen_dirty_fixtures.py
+用法：
+  python dev-tools/gen_dirty_fixtures.py              # 直接覆盖 orders.csv / ads.csv + 假设参数.csv
+
 输出：  samples/packs/cross-border-ecommerce-finance/connector/fixtures/*.csv
 验证：  pytest backend/tests/test_connector_load_feed.py -q
 
-每次改 connector/handler、reconcile_tables、SKILL.md 后重跑一次。
+`user.connector_load_feed` 读 orders.csv / ads.csv；脏数据即基准，录屏 / pytest 统一用这一套。
 """
 
 from __future__ import annotations
 
 import csv
 import io
-import os
 import sys
 from pathlib import Path
 
@@ -182,22 +183,25 @@ PARAMS_ROWS = [
 
 # ── entry point ───────────────────────────────────────────────────────
 
-def main() -> None:
+def generate_dirty() -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
 
-    _write_csv(FIXTURES / "orders_dirty.csv", ORDERS_HEADER, ORDERS_ROWS)
-    print(f"[OK] orders_dirty.csv — {len(ORDERS_ROWS)} rows")
+    _write_csv(FIXTURES / "orders.csv", ORDERS_HEADER, ORDERS_ROWS)
+    print(f"[OK] orders.csv — {len(ORDERS_ROWS)} rows")
 
-    _write_csv(FIXTURES / "ads_dirty.csv", ADS_HEADER, ADS_ROWS)
-    print(f"[OK] ads_dirty.csv — {len(ADS_ROWS)} rows")
+    _write_csv(FIXTURES / "ads.csv", ADS_HEADER, ADS_ROWS)
+    print(f"[OK] ads.csv — {len(ADS_ROWS)} rows")
 
     _write_csv(FIXTURES / "假设参数.csv", PARAMS_HEADER, PARAMS_ROWS)
     print(f"[OK] 假设参数.csv — {len(PARAMS_ROWS)} rows")
 
     print(f"\n  -> {FIXTURES}")
-    print("  -> Gate 1b 录屏前: cp orders_dirty.csv orders.csv && cp ads_dirty.csv ads.csv")
-    print("  -> 测完恢复: git checkout -- samples/packs/.../connector/fixtures/orders.csv ads.csv")
+    print("  -> pytest backend/tests/test_connector_load_feed.py -q")
     print(f"  generated at {_now()}")
+
+
+def main() -> None:
+    generate_dirty()
 
 
 if __name__ == "__main__":

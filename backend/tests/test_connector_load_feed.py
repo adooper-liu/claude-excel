@@ -91,5 +91,5 @@ async def test_connector_load_feed_normalizes_sku_and_dates(isolated_pack_env):
     sku_i = headers.index("platform_sku")
     date_i = headers.index("biz_date")
     first = ads["data"]["rows"][0]
-    assert first[sku_i] == "widget-a"
-    assert first[date_i] == "2026-08-01"
+    assert first[sku_i] == "abc-01"
+    assert first[date_i] == "2026-01-15"
