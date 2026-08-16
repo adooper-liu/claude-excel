@@ -50,7 +50,7 @@
 | 两边各自复述「当前状态」 | `git log` + `git status` + brief 内 **进度 log** |
 | 「按上次说的做」 | brief 里写清目标 / 边界 / 验收 / 当前 **状态** 字段 |
 
-**聊天只传三样：** 任务文件名（如 `docs/tasks/p1-user-runner.md`）、分支名、commit hash。
+**聊天只传三样：** 任务文件名（如 `docs/tasks/p1-user-runner.md`）、分支名、起点命令（`git checkout master && git pull && git checkout -b feat/<任务>`）。
 
 任务 brief 模板：[docs/tasks/_template.md](tasks/_template.md)
 

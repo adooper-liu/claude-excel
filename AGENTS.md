@@ -44,7 +44,7 @@ git branch -a             # 有没有进行中的分支
 | 评审（**只读**） | Claude Code | `Review notes` 或 PR 评论 |
 | 按评审修正 | Cursor | 同分支继续 commit，测绿后合 master |
 
-**交接**：用 `docs/tasks/<任务>.md` + Git；聊天只传任务文件名、分支名、commit hash。**禁止**互贴长方案/状态。
+**交接**：用 `docs/tasks/<任务>.md` + Git；聊天只传任务文件名、分支名、起点命令。**禁止**互贴长方案/状态。
 
 完整阶段表见 [docs/coordination.md](docs/coordination.md) §3。
 
