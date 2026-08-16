@@ -35,6 +35,19 @@ git branch -a             # 有没有进行中的分支
 
 - 在任务分支上改；改完自行验证：后端 `pytest backend/tests`、前端 `test:unit`、`typecheck` 全绿。
 
+## 阶段分工（方案 → 代码 → 评审 → 修正）
+
+| 阶段 | 主责 | 产出（落盘，不贴聊天） |
+|---|---|---|
+| 定方案 / 边界 | Claude Code | `docs/` 或 `docs/tasks/<任务>.md` |
+| 写代码 / 补测试 | Cursor | 任务分支上的代码 + commit |
+| 评审（**只读**） | Claude Code | `Review notes` 或 PR 评论 |
+| 按评审修正 | Cursor | 同分支继续 commit，测绿后合 master |
+
+**交接**：用 `docs/tasks/<任务>.md` + Git；聊天只传任务文件名、分支名、commit hash。**禁止**互贴长方案/状态。
+
+完整阶段表见 [docs/coordination.md](docs/coordination.md) §3。
+
 ## 收尾
 
 - **提交**：谁改谁提交，按仓库现有风格；多工具协作加 `Co-authored-by: <工具>`。

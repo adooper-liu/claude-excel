@@ -20,13 +20,39 @@
 - 跨工具（Claude/Cursor）：**不用 worktree**（互相看不到），用「分支 + 完成即合并 + 合并即同步」。
 - **一个任务一条分支**：合入 master 后弃用/删除该分支；下一任务从最新 master 再开（不是每个工具长期占一条分支）。
 
-## 3. 任务分工建议（避免重复劳动）
+## 3. 阶段分工（方案 → 代码 → 评审 → 修正）
+
+默认**串行**：定方案 → 写代码 → 评审（只读）→ 修正 → 合 master → 下一任务。
+
+| 阶段 | 主责 | 辅责 | 产出（落盘，不贴聊天） |
+|---|---|---|---|
+| **1. 定方案 / 边界** | Claude Code | 人类拍板 | `docs/*.md`、`CLAUDE.md` 补丁；[任务 brief 模板](tasks/_template.md)（目标、边界、验收） |
+| **2. 写代码 / 补测试** | Cursor | — | 任务分支上的代码 + 测试；commit message 对应 brief 条目 |
+| **3. 评审（只读）** | Claude Code | — | brief 内 **Review notes**，或 PR 评论；**不改代码** |
+| **4. 按评审修正** | Cursor | Claude 只读确认 | 同分支继续 commit；测绿后合 master |
+| **5. 合入 / push** | 完成阶段 4 的一方 | 另一方先 `git fetch` | merge 到 `master` |
+
+同一任务**不要** Claude 与 Cursor 同时在同一分支改代码。评审阶段 Claude **只读**。
+
+### 各工具默认擅长
 
 | 任务类型 | 建议工具 | 理由 |
 |---|---|---|
-| 纯代码重构 / 批量改 / 测试驱动 | Cursor | 多文件机械改动，Cursor 顺手 |
-| 架构设计 / 安全评审 / 跨模块边界 | Claude Code | 长上下文、多轮核对、要「拒绝 AI 虚幻」的判断 |
-| 测试验证 / 提交 / push | 任一，但**必须先同步** | 见 §4 |
+| 架构 / Pack 边界 / `user.*` 安全 / 写 docs | Claude Code | 长上下文、边界核对、拒绝 AI 虚幻 |
+| 多文件实现 / 重构 / 补单测 / 跑 CI | Cursor | 机械改动、测试驱动顺手 |
+| 口径拍板 / 是否合 master | 人类 | 最终决策 |
+
+### 交接规则（禁止聊天复制粘贴）
+
+| ❌ 不要 | ✅ 要 |
+|---|---|
+| 把 Claude 长回复贴给 Cursor | 方案写进 `docs/tasks/<任务>.md`，commit 后 `git pull` 读文件 |
+| 两边各自复述「当前状态」 | `git log` + `git status` + brief 内 **进度 log** |
+| 「按上次说的做」 | brief 里写清目标 / 边界 / 验收 / 当前 **状态** 字段 |
+
+**聊天只传三样：** 任务文件名（如 `docs/tasks/p1-user-runner.md`）、分支名、commit hash。
+
+任务 brief 模板：[docs/tasks/_template.md](tasks/_template.md)
 
 ## 4. 操作规范（强制，两边都遵守）
 
@@ -89,6 +115,7 @@ git branch -d feat/任务名          # 本地删除；远端分支按需 git pu
 
 ## 6. 落地
 
-- 摘要：根目录 `AGENTS.md`（主目录/串行化/测试门禁），两边启动可见。
+- 摘要：根目录 `AGENTS.md`（主目录/串行化/阶段分工/测试门禁），两边启动可见。
 - 完整版：本文 `docs/coordination.md`。
+- 任务 brief：`docs/tasks/_template.md`（每个任务复制一份，作交接唯一载体）。
 - 改架构：先改文档再改代码（`CLAUDE.md` 与 docs 是单一真相）。
