@@ -1,0 +1,8 @@
+{
+  "categories": [
+    { "id": "cross-border-ecommerce", "label": "跨境电商" },
+    { "id": "cross-border-logistics", "label": "跨境物流" },
+    { "id": "hr", "label": "人力资源" },
+    { "id": "finance", "label": "财务" }
+  ]
+}

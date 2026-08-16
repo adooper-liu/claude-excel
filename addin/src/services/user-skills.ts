@@ -12,6 +12,25 @@ export type SampleSkill = {
   path?: string;
 };
 
+export type PackSkill = {
+  id: string;
+  slash: string;
+  title: string;
+};
+
+export type Pack = {
+  id: string;
+  category: string;
+  categoryLabel: string;
+  title: string;
+  description: string;
+  version: string;
+  skills: PackSkill[];
+  knowledge: string[];
+  deps: Record<string, unknown>;
+  installed: boolean;
+};
+
 const API = "https://localhost:8765/api/user-skills";
 
 function asList(data: unknown): InstalledSkill[] {
@@ -90,6 +109,59 @@ export async function fetchSampleSkills(): Promise<SampleSkill[]> {
     if (id && slash && title) out.push({ id, slash, title, path: String((s as SampleSkill).path || "") });
   }
   return out;
+}
+
+export async function fetchPacks(): Promise<Pack[]> {
+  const r = await fetch(API + "/packs");
+  if (!r.ok) return [];
+  const data = await r.json().catch(() => ({}));
+  const packs = data && typeof data === "object" ? (data as { packs?: unknown }).packs : null;
+  if (!Array.isArray(packs)) return [];
+  const out: Pack[] = [];
+  for (const p of packs) {
+    if (!p || typeof p !== "object") continue;
+    const id = String((p as Pack).id || "").trim();
+    if (!id) continue;
+    out.push({
+      id,
+      category: String((p as Pack).category || ""),
+      categoryLabel: String((p as Pack).categoryLabel || ""),
+      title: String((p as Pack).title || id),
+      description: String((p as Pack).description || ""),
+      version: String((p as Pack).version || ""),
+      skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
+      knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
+      deps: (p as Pack).deps && typeof (p as Pack).deps === "object" ? ((p as Pack).deps as Record<string, unknown>) : {},
+      installed: Boolean((p as Pack).installed),
+    });
+  }
+  return out;
+}
+
+export async function installPack(packId: string): Promise<Pack> {
+  const r = await fetch(API + "/install-pack", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ packId }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "安装场景包失败";
+    throw new Error(detail);
+  }
+  const p = (data && typeof data === "object" ? (data as { pack?: unknown }).pack : null) || {};
+  return {
+    id: String((p as Pack).id || packId),
+    category: String((p as Pack).category || ""),
+    categoryLabel: String((p as Pack).categoryLabel || ""),
+    title: String((p as Pack).title || packId),
+    description: String((p as Pack).description || ""),
+    version: String((p as Pack).version || ""),
+    skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
+    knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
+    deps: {},
+    installed: true,
+  };
 }
 
 export async function deleteUserSkill(id: string): Promise<void> {

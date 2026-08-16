@@ -16,6 +16,7 @@ from ai_proxy import chat_complete, chat_stream, validate_key
 from config_store import save_config, get_config
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
+from user_packs_store import install_pack, list_packs
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
 from knowledge_store import delete_document, ingest_document, ingest_document_from_path, list_documents, search, status
@@ -378,6 +379,24 @@ async def api_install_sample_skill(req: dict, request: Request):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"skill": skill}
+
+
+@app.get("/api/user-skills/packs")
+async def api_list_packs():
+    return {"packs": list_packs()}
+
+
+@app.post("/api/user-skills/install-pack")
+async def api_install_pack(req: dict, request: Request):
+    require_loopback(request)
+    pack_id = str((req or {}).get("packId") or (req or {}).get("id") or "").strip()
+    if not pack_id:
+        raise HTTPException(400, "packId required")
+    try:
+        result = install_pack(pack_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"pack": result}
 
 
 @app.post("/api/user-skills")
