@@ -1,5 +1,14 @@
 # 任务：P1 用户本地函数（user.* runner + 注册表）
 
+## 交接指令（复制给 Cursor，不用手敲）
+
+> `docs/tasks/p1-user-runner.md` · `feat/p1-user-runner` · `d75f4f8`
+
+```bash
+git checkout master && git pull && git checkout -b feat/p1-user-runner
+```
+
+> hash 指向本 brief 落库 commit；后续改动用 `git log -1 --format=%h` 回填，或直接跑上面命令（`git pull` 已保证最新）。
 > Claude Code × Cursor 的唯一交接载体。禁止在聊天里互贴长方案；另一方 `git pull` 后读此文件。
 
 - **分支**：`feat/p1-user-runner`（本 brief 阶段先落 master，Cursor 开此分支写代码）

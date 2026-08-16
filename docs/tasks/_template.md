@@ -1,5 +1,14 @@
 # 任务：<简短标题>
 
+## 交接指令（复制给 Cursor，不用手敲）
+
+> `docs/tasks/<任务名>.md` · `feat/<任务名>` · `<commit>`
+
+```bash
+git checkout master && git pull && git checkout -b feat/<任务名>
+```
+
+> `<commit>` 用 `git log -1 --format=%h` 取（commit 后回填）；`git pull` 已保证最新。
 > 复制本文件为 `docs/tasks/<任务名>.md`，作为 Claude Code × Cursor 的**唯一交接载体**。
 > 禁止在聊天里互贴长方案/状态；另一方 `git pull` 后读此文件。
 
