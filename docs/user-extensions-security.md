@@ -1,6 +1,6 @@
 # user.* 本地函数安全边界（P1 设计）
 
-> 状态：**设计定稿，代码未动**。Pack 组织层（P0）见 [user-packs.md](user-packs.md)。
+> 状态：**已落地**（P1 合入 master，交付见 `docs/tasks/p1-user-runner.md`）。Pack 组织层（P0）见 [user-packs.md](user-packs.md)。
 > 范围：本机后端 `user.*` Python 插件。核心 Office JS 算子、`HANDLED_TOOLS`、`skill_registry` 三方锁步**不在此设计范围**，物理隔离。
 
 ---

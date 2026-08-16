@@ -144,6 +144,6 @@ samples/
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | **P0** | Pack + taxonomy + install-pack + UI 分组 | ✅ 已落地 |
-| **P1** | `user.*` + 信任门 + `extension-secrets.json` | 📄 见 [user-extensions-security.md](user-extensions-security.md) |
+| **P1** | `user.*` + 信任门 + `extension-secrets.json` | ✅ 已落地 |
 | **P2** | Pack 导出、category 过滤增强 | 待定 |
 | **P3** | minCoreVersion enforce、卸载 | 待定 |
