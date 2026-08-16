@@ -102,10 +102,15 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 ### 🔴 高
 
 - **consent 默认放行，信任门可被省略绕过** —— `backend/server.py` `api_install_pack`：`consent_extensions = True if consent is None else bool(consent)`；`backend/user_packs_store.py` `install_pack(..., consent_extensions: bool = True)`；前端 `addin/src/services/user-skills.ts`：`consentExtensions: opts?.consentExtensions !== false`。三处都把「缺省」当「同意」——任何省略 `consentExtensions` 的调用方（curl / 未来代码）都会在用户未确认时把含本机函数的 pack 装成已授权（落 `consentedAt`+`capabilityHash`）。违背安全文档 §5「装 Pack 时一次确认」的轴心。
-   **修**：三处改 deny-by-default——后端 `consent_extensions = bool(consent)`（缺省 False）、`install_pack` 默认 `consent_extensions=False`、前端 `consentExtensions: opts?.consentExtensions === true`。
+   **修（三处 + 1 测试 + 1 连带）**：
+  - `server.py`：`consent_extensions = consent is True`（缺省 False；别用 `bool(consent)`——字符串 `"false"` 会被误判成 True）。
+  - `user_packs_store.py`：`def install_pack(..., consent_extensions: bool = False)`。
+  - `user-skills.ts`：`consentExtensions: opts?.consentExtensions === true`。
+  - 补测试：`install_pack("cross-border-ecommerce")` 无 consent → `pytest.raises(ValueError)`；`install_pack(..., consent_extensions=True)` 成功。
+  - 连带：改完 `test_user_packs_store.py` 里对 `cross-border-ecommerce` 的旧 `install_pack(...)` 调用要补 `consent_extensions=True`，否则红。
 
 - **`ce_http` 助手不可导入，`network:true` 路径死路** —— `user_fn_runner.py:48` `env["PYTHONPATH"] = str(_RUNTIME_DIR.parent)` 指向 `backend/`，而 `ce_http.py` 在 `backend/user_fn_runtime/`（无 `__init__.py`）。handler 写 `import ce_http` 会 ModuleNotFoundError → `network` 函数非零退出。无测试覆盖（样例 `network:false`）。
-   **修**：`PYTHONPATH` 指向 `_RUNTIME_DIR`（`backend/user_fn_runtime/`），并补 `network:true` + `ce_http.get` 测试。
+   **修**：`user_fn_runner.py:48` 改为 `env["PYTHONPATH"] = str(_RUNTIME_DIR)`。补测试（不联网）：`network:true` 的 handler 写 `import ce_http; json.dumps({"imported": hasattr(ce_http, "get")})`，断言 `ok` 且 `imported` 为 True（当前该测试红，改完绿）。
 
 ### 🟠 中
 
@@ -133,4 +138,5 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 | 2026-08-16 | design | Claude Code | `—` | 初稿 brief（目标/边界/验收/方案 + 4 个设计待定点裁定） |
 | 2026-08-16 | design | Claude Code | `—` | review 收口：capabilityHash 定义、执行协议 envelope、缓存失效、重新授权联动 |
 | 2026-08-16 | coding | Cursor | `c177cad` | P1 落码：registry/runner/secrets、pack extensions、API、前端路由与同意 UI、测试 94 passed |
-| 2026-08-16 | review | Claude Code | `—` | 评审：后端 95 + 前端 212 + typecheck 绿；2 高（consent 默认放行、ce_http 不可达）+ 1 中（编码）+ 3 低 |
+| 2026-08-16 | review | Claude Code | `5d2a06f` | 2 高 + 1 中：consent deny-by-default、ce_http PYTHONPATH、子进程 UTF-8 |
+| 2026-08-16 | fix | Cursor | `—` | 按 Review notes 修复 + 补 consent/ce_http 测试 |

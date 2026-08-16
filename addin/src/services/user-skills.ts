@@ -204,7 +204,7 @@ export async function installPack(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       packId,
-      consentExtensions: opts?.consentExtensions !== false,
+      consentExtensions: opts?.consentExtensions === true,
     }),
   });
   const data = await r.json().catch(() => ({}));

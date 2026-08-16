@@ -101,7 +101,7 @@ def test_install_pack_rolls_back_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "read_text", broken_read_text)
 
     with pytest.raises(ValueError):
-        install_pack("cross-border-ecommerce")
+        install_pack("cross-border-ecommerce", consent_extensions=True)
 
     assert not (tmp_path / "skills" / "amazon-research").exists()
 
@@ -119,6 +119,12 @@ def test_install_pack_requires_consent_for_extensions(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="需要用户同意"):
         install_pack("cross-border-ecommerce", consent_extensions=False)
+
+    with pytest.raises(ValueError, match="需要用户同意"):
+        install_pack("cross-border-ecommerce")
+
+    result = install_pack("cross-border-ecommerce", consent_extensions=True)
+    assert result["extensions"]
 
 
 def test_install_pack_rejects_skills_manifest_mismatch(tmp_path, monkeypatch):

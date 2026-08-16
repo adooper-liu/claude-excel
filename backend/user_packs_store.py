@@ -187,7 +187,7 @@ def _load_runtime_manifests(pack_id: str) -> list[dict[str, Any]]:
     return manifests
 
 
-def install_pack(pack_id: str, *, consent_extensions: bool = True) -> dict:
+def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
     """Install a sample pack: validate schema, then reuse install_skill() for each SKILL.md."""
     from user_skills_store import delete_skill, install_skill, list_skills
 

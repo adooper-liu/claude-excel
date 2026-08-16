@@ -228,7 +228,33 @@ def test_extension_capability_hash_stable():
     assert h1 == h2
 
 
-def test_invalid_manifest_name_not_registered(isolated_user_fn_env):
+@pytest.mark.asyncio
+async def test_network_handler_can_import_ce_http(isolated_user_fn_env):
+    manifest = {
+        "name": "user.net_fn",
+        "description": "net import probe",
+        "entry": "handler.py",
+        "returns": "json",
+        "network": True,
+        "secrets": [],
+        "timeoutMs": 5000,
+    }
+    handler = '''
+import json, sys, ce_http
+ok = hasattr(ce_http, "get") and hasattr(ce_http, "post")
+sys.stdout.write(json.dumps({"imported": ok}))
+'''
+    _write_extension(isolated_user_fn_env, "demo", "net-ext", manifest, handler)
+    cap = pack_capability_hash([manifest])
+    _authorize_pack(isolated_user_fn_env, "demo", cap)
+
+    result = await run_user_fn("user.net_fn", {})
+    assert result["ok"] is True
+    assert result["data"]["imported"] is True
+
+
+@pytest.mark.asyncio
+async def test_invalid_manifest_name_not_registered(isolated_user_fn_env):
     manifest = {
         "name": "user.Invalid-Name",
         "description": "bad name",

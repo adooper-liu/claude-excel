@@ -398,7 +398,7 @@ async def api_install_pack(req: dict, request: Request):
     consent = (req or {}).get("consentExtensions")
     if consent is None:
         consent = (req or {}).get("consent_extensions")
-    consent_extensions = True if consent is None else bool(consent)
+    consent_extensions = consent is True
     try:
         result = install_pack(pack_id, consent_extensions=consent_extensions)
     except ValueError as exc:

@@ -37,15 +37,14 @@ def clean_env(extra: dict[str, str] | None = None) -> dict[str, str]:
         "HOMEDRIVE",
         "HOMEPATH",
         "COMSPEC",
-        "PYTHONIOENCODING",
-        "PYTHONUTF8",
     }
     env: dict[str, str] = {}
     for key in allow:
         val = os.environ.get(key)
         if val:
             env[key] = val
-    env["PYTHONPATH"] = str(_RUNTIME_DIR.parent)
+    env["PYTHONPATH"] = str(_RUNTIME_DIR)
+    env["PYTHONIOENCODING"] = "utf-8"
     env["CE_USER_FN"] = "1"
     if extra:
         for k, v in extra.items():
@@ -104,7 +103,8 @@ async def run_user_fn(name: str, params: dict[str, Any] | None = None) -> dict[s
                 cwd=str(ext.ext_dir),
                 input=stdin_payload,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_timeout_seconds(ext),
                 env=env,
             )
