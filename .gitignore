@@ -43,3 +43,7 @@ env/
 # Runtime logs
 *.log
 backend/debug_run.log
+
+# pytest basetemp (Windows tmpdir PermissionError workaround)
+.pytest-tmp/
+backend/.pytest-tmp/
