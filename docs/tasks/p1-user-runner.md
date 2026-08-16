@@ -52,6 +52,7 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
    - `capabilityHash = sha256(json.dumps({"network": manifest.network, "secrets": sorted(manifest.secrets or [])}, sort_keys=True))` —— 只哈希**能力声明**（能否联网、要哪些密钥），不含 `entry`/代码内容；代码变化由 `version` 管。
    - 「能力变化」= 安装时记录的 `capabilityHash` ≠ 当前扫描值（`network` false→true、`secrets` 增删都算）。
    - 旧记录缺 `capabilityHash` → **默认拒绝执行**，按「未授权本地函数」处理、提示重新授权（不自动补哈希）。
+   - **未授权不隐藏**：`GET /api/user-fn` 仍列出该函数，但带 `authorized:false`；仅**执行**时返回 `NOT_AUTHORIZED`（用户可见、可触发重新授权，避免函数「静默消失」）。
 4. **安装同意 UI + 重新授权**：任务窗格 pack 安装前，若含 `extensions`，弹「此 pack 含 N 个本机函数（可联网 / 会读取密钥）」确认；同意才写 `installed_packs.json` 的 `capabilityHash`（§5，P1 轴心）。
    - **重新授权复用安装流程**：执行时后端返回 `NOT_AUTHORIZED`（能力哈希变化）→ 前端弹同一确认文案、引导重装该 pack（`installPack` 重走同意并重写 `capabilityHash`），**不新增授权端点**。
 
