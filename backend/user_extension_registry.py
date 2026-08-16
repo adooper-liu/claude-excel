@@ -25,7 +25,6 @@ class UserExtension:
     pack_id: str
     ext_dir: Path
     manifest: dict[str, Any]
-    capability_hash: str
     authorized: bool
 
     @property
@@ -33,16 +32,8 @@ class UserExtension:
         return str(self.manifest.get("entry") or "handler.py")
 
 
-def extension_capability_hash(manifest: dict[str, Any]) -> str:
-    payload = {
-        "network": bool(manifest.get("network")),
-        "secrets": sorted(str(s) for s in (manifest.get("secrets") or []) if str(s).strip()),
-    }
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
 def pack_capability_hash(manifests: list[dict[str, Any]]) -> str:
+    """Hash per-pack name+network+secrets; name kept so renaming an extension also re-triggers consent."""
     items = []
     for m in sorted(manifests, key=lambda x: str(x.get("name") or "")):
         items.append(
@@ -131,7 +122,7 @@ def _scan_extension_dirs() -> list[tuple[str, Path]]:
     return out
 
 
-def list_extensions(*, include_invalid: bool = False) -> list[UserExtension]:
+def list_extensions() -> list[UserExtension]:
     """Return registered user.* extensions from runtime pack dir."""
     scanned: list[tuple[str, Path, dict[str, Any]]] = []
     for pack_id, ext_dir in _scan_extension_dirs():
@@ -142,8 +133,6 @@ def list_extensions(*, include_invalid: bool = False) -> list[UserExtension]:
                 raise ValueError("manifest 必须是对象")
             data = _validate_manifest(data, ext_dir)
         except (OSError, json.JSONDecodeError, ValueError):
-            if include_invalid:
-                continue
             continue
         scanned.append((pack_id, ext_dir, data))
 
@@ -167,7 +156,6 @@ def list_extensions(*, include_invalid: bool = False) -> list[UserExtension]:
             pack_id=pack_id,
             ext_dir=ext_dir,
             manifest=data,
-            capability_hash=extension_capability_hash(data),
             authorized=pack_auth.get(pack_id, False),
         )
         by_name[name] = ext
@@ -214,22 +202,3 @@ def list_catalog_extensions(pack_dir: Path) -> list[dict[str, Any]]:
             }
         )
     return out
-
-
-def compute_pack_capability_hash_for_pack(pack_id: str) -> str:
-    manifests: list[dict[str, Any]] = []
-    pack_dir = RUNTIME_PACKS_DIR / pack_id
-    ext_root = pack_dir / "extensions"
-    if not ext_root.is_dir():
-        return pack_capability_hash([])
-    for ext_dir in sorted(ext_root.iterdir()):
-        mf = ext_dir / "manifest.json"
-        if not mf.is_file():
-            continue
-        try:
-            data = json.loads(mf.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                manifests.append(_validate_manifest(data, ext_dir))
-        except (OSError, json.JSONDecodeError, ValueError):
-            continue
-    return pack_capability_hash(manifests)

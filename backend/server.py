@@ -439,6 +439,8 @@ async def api_run_user_fn(name: str, req: dict, request: Request):
 @app.post("/api/user-fn/{name}/secret")
 async def api_set_user_fn_secret(name: str, req: dict, request: Request):
     require_loopback(request)
+    if not name.startswith("user."):
+        raise HTTPException(400, "function name must start with user.")
     key = str((req or {}).get("key") or (req or {}).get("secretKey") or "").strip()
     value = str((req or {}).get("value") or (req or {}).get("secret") or "")
     if not key:

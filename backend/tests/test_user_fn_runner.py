@@ -14,7 +14,6 @@ from skill_registry import ADDIN_HANDLERS  # noqa: E402
 from user_extension_registry import (  # noqa: E402
     INSTALLED_PACKS_FILE,
     RUNTIME_PACKS_DIR,
-    extension_capability_hash,
     get_extension,
     list_extensions,
     pack_capability_hash,
@@ -219,13 +218,6 @@ def test_list_extensions_unauthorized_still_listed(isolated_user_fn_env):
     ext = get_extension("user.listed_fn")
     assert ext is not None
     assert ext.authorized is False
-
-
-def test_extension_capability_hash_stable():
-    m = {"network": False, "secrets": ["hs_key", "other"]}
-    h1 = extension_capability_hash(m)
-    h2 = extension_capability_hash({"network": False, "secrets": ["other", "hs_key"]})
-    assert h1 == h2
 
 
 @pytest.mark.asyncio

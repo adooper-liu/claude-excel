@@ -49,7 +49,7 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 1. **运行时扩展目录**：新增 `~/.claude-excel-web/packs/{pack-id}/extensions/{ext-name}/`（含 `manifest.json` + `handler.py`）。安装时 `install_pack` 把 `samples/packs/{pack-id}/extensions/*` 复制过去，与 `skills/` 并列、**不进 `skills/`**。注册表扫 `~/.claude-excel-web/packs/*/extensions/*/manifest.json`（§4 一致）。
 2. **`pack.json` 增 `extensions[]` 声明**，与 `skills[]` 同款「声明 vs 磁盘一致」校验（参考 `backend/user_packs_store.py:169-175`）。
 3. **`installed_packs.json` schema 扩展**：由 `[{"id","installedAt"}]` 扩为含 `version`、`capabilityHash`、`consentedAt`（§5 能力变化重同意）。
-   - `capabilityHash = sha256(json.dumps({"network": manifest.network, "secrets": sorted(manifest.secrets or [])}, sort_keys=True))` —— 只哈希**能力声明**（能否联网、要哪些密钥），不含 `entry`/代码内容；代码变化由 `version` 管。
+   - `capabilityHash = sha256(规范化 [{name, network, sorted(secrets)} ...])`（按 **pack** 聚合全部扩展）。`name` 保留（改名也触发重授权，更保守）；只哈希**能力声明**，不含 `entry`/代码内容；代码变化由 `version` 管。
    - 「能力变化」= 安装时记录的 `capabilityHash` ≠ 当前扫描值（`network` false→true、`secrets` 增删都算）。
    - 旧记录缺 `capabilityHash` → **默认拒绝执行**，按「未授权本地函数」处理、提示重新授权（不自动补哈希）。
    - **未授权不隐藏**：`GET /api/user-fn` 仍列出该函数，但带 `authorized:false`；仅**执行**时返回 `NOT_AUTHORIZED`（用户可见、可触发重新授权，避免函数「静默消失」）。
@@ -117,7 +117,7 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 - **子进程 stdout 编码未固定 UTF-8** —— `user_fn_runner.py:101` `subprocess.run(..., text=True)` 用父进程 locale（中文 Windows = cp936）解码；`clean_env` 又透传 `PYTHONIOENCODING`/`PYTHONUTF8`。用户设 `PYTHONUTF8=1` 时子进程写 UTF-8、父进程按 cp936 解码 → `UnicodeDecodeError`（未捕获 → 端点 500）。样例 `handler.py` 用 `ensure_ascii=False` 会输出非 ASCII。
    **修**：`subprocess.run` 显式 `encoding="utf-8", errors="replace"`，`clean_env` 固定 `PYTHONIOENCODING=utf-8`。
 
-### 🟡 低
+### 🟡 低（已清 · `fix/p1-cleanup`）
 
 - **`capabilityHash` 含 `name`，与 brief 公式不符 + 死代码** —— `user_extension_registry.py:45` `pack_capability_hash` 哈希了 `name`（brief 待定点 #3 定「只哈希 `network`+`secrets`」），改名会过度触发重授权（非漏洞）。`extension_capability_hash` 与 `UserExtension.capability_hash` 从未用于鉴权，是死代码。**修**：按 brief 去掉 `name`，或删掉 `extension_capability_hash`/`capability_hash`。
 
@@ -140,3 +140,4 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 | 2026-08-16 | coding | Cursor | `c177cad` | P1 落码：registry/runner/secrets、pack extensions、API、前端路由与同意 UI、测试 94 passed |
 | 2026-08-16 | review | Claude Code | `5d2a06f` | 2 高 + 1 中：consent deny-by-default、ce_http PYTHONPATH、子进程 UTF-8 |
 | 2026-08-16 | fix | Cursor | `—` | 按 Review notes 修复 + 补 consent/ce_http 测试 |
+| 2026-08-16 | fix | Claude Code | `—` | 清 3 低：删 extension_capability_hash / include_invalid / compute_pack_capability_hash_for_pack 死代码、set_secret 加 user.* 校验；brief 公式对齐（name 保留） |
