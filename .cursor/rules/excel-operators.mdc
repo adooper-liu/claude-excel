@@ -43,4 +43,4 @@ alwaysApply: true
 - 对账/整形不能用手写格子伪造结果表
 - **取数与调研分列**：表行进簿走取数栏/`/取数`；查资料/口径走 `/调研`，禁止合成一个功能或 UI
 
-不是每种中文说法都要本地匹配。行业口径不进核心（禁止 `industry-workflows.ts` 一类回核心），走 `/拆解` + 用户技能；onboarding 用 `samples/`、可选 `samples/skills/`、知识库补，不把 SOP 写进 `builtin-skills.ts`。用户 SKILL.md 只能编排已有 Office JS 算子（见 `skill-create-guide.ts`），禁止发明工具名、禁止把表体读进模型。
+不是每种中文说法都要本地匹配。行业口径不进核心（禁止 `industry-workflows.ts` 回核心）。用户扩展走 **Pack**（`samples/packs/`、`install-pack`）+ 知识库 + `/skill-creator`；**P1** `user.*` 独立命名空间，不进 `HANDLED_TOOLS`。写格只有核心算子一条路。详见 `docs/user-packs.md`。用户 SKILL 只能编排已有 Office JS 算子（见 `skill-create-guide.ts`），禁止发明工具名、禁止把表体读进模型。

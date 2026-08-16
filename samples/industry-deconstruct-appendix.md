@@ -2,7 +2,7 @@
 
 本文件供用户自行上传到 **知识库（知栏）** 或改写成 **用户技能**。核心 `/拆解` 不包含以下内容。
 
-可选示例技能包：`samples/skills/amazon-research/` 或场景包 `samples/packs/cross-border-ecommerce/`（任务窗格空状态可一键安装，或复制到 `~/.claude-excel-web/skills/`）。
+可选示例：场景包 `samples/packs/cross-border-ecommerce/`（`POST /api/user-skills/install-pack`）；知识见 pack 内 `knowledge/serp-appendix.md`。完整附录仍保留于本文件。
 
 ---
 

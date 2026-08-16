@@ -2,9 +2,21 @@
 
 本文件给在本仓库里改代码的人看。产品目标：**独立的 AI Excel 插件**，不绑 Claude 付费账号。
 
-## 定位：三层
+## 定位：三层 + 底层/用户侧边界（已定）
 
-先做稳 **Excel 底座**。跨境物流清关、跨境电商运营等是底座上的行业包：建模 + 分析 + 决策支持。行业口径不写进核心工具。
+先做稳 **Excel 底座**。跨境物流、跨境电商、HR、财务等是底座上的**用户场景包**，不进核心代码。
+
+### 三层 vs 写格权
+
+| 层 | 是什么 | 位置 | 写 Excel |
+|---|---|---|---|
+| **A. 核心算力** | 通用 Office JS 算子 | `addin/skills/core` + `skill-handlers.ts` | ✅ **唯一写格通道** |
+| **B. 核心数据** | 站点 DOM / project 列映射 | `backend/site_recipes/`、`recipe/hosts/` | ❌ 配置 |
+| **C. 用户扩展** | Pack：Skill + 知识 + recipe 声明 +（P1）`user.*` | `samples/packs/` → `~/.claude-excel-web/` | ❌ **全部不写格** |
+
+**写格路径（强制）：** 用户 / Skill 编排 → 核心算子 → Office JS → Excel。禁止 Skill、`user.*`、Python openpyxl 直接写格；禁止把用户函数注册进 `HANDLED_TOOLS` / `addin/skills/core`。
+
+详细 Pack 规则见 **`docs/user-packs.md`**；`user.*` 安全见 **`docs/user-extensions-security.md`**（P1 设计定稿，代码未动）。
 
 工作流先拆再自动化（`/拆解` → `/skill-creator`）。拆解规则：命名 → 动作流 → 判断点 → 边界 → 验证；🟢 全自动 / 🟡 要人判断 / 🔴 必须人做。口径只列选项，不替用户拍板。不编基准数字。
 
@@ -32,27 +44,39 @@
 
 `/拆解` 把「清关对账」「广告 ROI」还原成可执行步骤，并标哪些能用现有工具做。拆完的 🟢 步骤再 `/skill-creator` 装进 `~/.claude-excel-web/skills/`。
 
-### 第三层：行业包（已定，不进核心）
+### 第三层：用户场景包 Pack（已定，不进核心）
 
-**行业口径、方法论、阈值只进用户侧**（`~/.claude-excel-web/skills/`、知识库、用户上传文档）。**禁止**写回 `addin/src/services/` 核心 TS（含 `industry-workflows.ts` 一类预置）。**禁止**以 onboarding 为由把行业流程塞回核心——此边界已定，不再讨论。
+**行业口径、方法论、阈值只进用户侧**。**禁止**写回 `addin/src/services/` 核心 TS（含 `industry-workflows.ts` 一类）。**禁止**以 onboarding 为由把行业流程塞回核心——此边界已定，不再讨论。
 
-与**站点取数模板**分层（二者不混）：
+**Pack = 装箱，不是新机制**（P0 已落地）：把 Skill、knowledge、recipe 依赖声明按 **category** 分组；`install_pack` 复用 `install_skill`，不新增执行器。
 
-| 进核心（数据/引擎） | 不进核心（用户侧） |
+```
+samples/taxonomy.json              # category 单一真相（跨境电商 / 跨境物流 / HR / 财务 …）
+samples/packs/{pack-id}/
+  pack.json                        # skills[] / knowledge[] / deps.recipes[]
+  skills/*/SKILL.md                # 只编排核心算子
+  knowledge/*.md                   # 方法论附录 → 知栏 / search_knowledge
+~/.claude-excel-web/
+  skills/                          # 已装 Skill
+  knowledge/                       # RAG
+  installed_packs.json             # 已装 pack 记录
+```
+
+| 进核心（A+B） | 不进核心（C） |
 |---|---|
-| `backend/site_recipes/` — DOM 提取默认（`fields[].query`） | 选品/SERP/利润/VOC/清关归类等**怎么判** |
-| `recipe/hosts/` — 进簿后 `project` 列映射 | 公司阈值、排除规则、GMV 口径 |
-| 通用算子 + `/取数` recipe | 行业 SOP 正文、基准数字 |
+| `site_recipes/` — DOM 提取默认 | 选品/SERP/利润/VOC/清关**怎么判** |
+| `recipe/hosts/` — 进簿后 project 列映射 | 公司阈值、GMV 口径、SOP 正文 |
+| 通用算子 + `/取数` | **P1** `user.*` 本机函数（独立命名空间，见安全文档） |
 
-**onboarding 与示例稳定性**不靠核心预置行业 TS，靠三条线补（开发时维护 samples，不编译进 builtin）：
+**onboarding**（不编译进 builtin）：
 
-1. **`samples/`** — 参考附录（如 `industry-deconstruct-appendix.md`）；用户自行阅读，或整份上传知识库
-2. **可选技能包** — 仓库 `samples/skills/`（如 `amazon-research/`）；任务窗格空状态可一键安装，或复制到 `~/.claude-excel-web/skills/`
-3. **知识库** — `~/.claude-excel-web/knowledge/` + `/知识` / `search_knowledge`；无命中不编造
+1. **`samples/packs/`** — 官方场景包；`GET/POST /api/user-skills/packs` · `install-pack`
+2. **`samples/` 附录** — 如 `industry-deconstruct-appendix.md`（可迁入 pack/knowledge）
+3. **知识库** — `~/.claude-excel-web/knowledge/` + `/知识`
 
-`/拆解` 只映射现有算子，需要行业细节时**指向上述三条线**，不把附录正文写进核心 prompt。拆完的 🟢 步骤走 `/skill-creator` 装进用户技能目录。
+`/拆解` 指向上述三条线，不把附录写进核心 prompt。🟢 步骤走 `/skill-creator` 或 Pack 内 SKILL。
 
-可选参考见 `samples/industry-deconstruct-appendix.md`。
+可选参考见 `samples/packs/cross-border-ecommerce/`（`/亚马逊选品`）。
 
 | 场景 | 建模 | 分析 | 决策（列选项，不替拍板） |
 |---|---|---|---|
@@ -96,11 +120,13 @@
 
 ```
 Excel 任务窗格 (React + Office JS)
-  → 工具声明  addin/skills/core/*/manifest.json
-  → 执行器    addin/src/services/skill-handlers.ts
-  → 登记      HANDLED_TOOLS 与 ADDIN_HANDLERS（缺一则启动失败）
+  → 核心工具   addin/skills/core/*/manifest.json
+  → 核心执行器 addin/src/services/skill-handlers.ts
+  → 登记       HANDLED_TOOLS 与 ADDIN_HANDLERS（缺一则启动失败）
 本机后端 :8765（只绑 127.0.0.1）
-  → LLM 代理、web-fetch（凭据只走本机）、用户技能 ~/.claude-excel-web/skills/
+  → LLM 代理、取数、知识 RAG、用户 Skill、Pack 安装
+  → 用户目录   ~/.claude-excel-web/{skills,knowledge,fetch-recipes,installed_packs.json}
+  → P1 规划    user.* 独立注册表（不进 HANDLED_TOOLS，见 docs/user-extensions-security.md）
 ```
 
 开发期 `npm start` 用 `manifest.xml` 指向 `https://localhost:3000`。`npm run build` 后清单改指向 `https://localhost:8765`，由后端托管 `addin/dist`。不要绑 `0.0.0.0`。
@@ -158,6 +184,8 @@ Excel 格子、公式、格式、图表、透视、分块洗表全部在加载�
 
 - **新工具**: `addin/skills/core/<name>/manifest.json` → `executeHandler` case → `HANDLED_TOOLS` 与 `ADDIN_HANDLERS` → `skill-loader.ts` import → 重启后端
 - **算子 vs 口令**: 先扩工具参数，再考虑短路。禁止为新说法堆 `isXxxRequest` / `mergeXxxFollowup`。见上文「算子要通用，口令不要堆」
-- **行业包**: 不要为清关/电商新增无执行器的工具名；用 `/拆解` + 现有工具 + 用户技能。用户 SKILL.md 必须编排 `skill-create-guide.ts` 里的算子，禁止发明工具。**禁止**恢复 `industry-workflows.ts` 或把行业 SOP 写进 `builtin-skills.ts` / `prompt-templates.ts`；onboarding 只维护 `samples/`、可选 `samples/skills/`、知识库文档。
+- **行业包 / Pack**: 不要为清关/电商新增无执行器的**核心**工具名。用户 SKILL 只编排 `skill-create-guide.ts` 算子。**禁止**恢复 `industry-workflows.ts` 或把 SOP 写进 `builtin-skills.ts`。**禁止**把 `user.*` 注册进 `addin/skills/core`。新增官方示例 → `samples/packs/` + `docs/user-packs.md` checklist。
+- **Pack API**: `user_packs_store.install_pack`；测试 `test_user_packs_store.py`。
+- **user.*（P1）**: 动代码前必读 `docs/user-extensions-security.md` 并完成 review。
 - **配置**: `C:\Users\<User>\.claude-excel-web\config.json` 或设置面板
 - 公司站点账号只在任务窗格本机填写，不要发给 LLM
