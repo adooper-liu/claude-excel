@@ -48,7 +48,7 @@
 | 2026-08-16 | design | — | — | brief + connector schema 落盘 |
 | 2026-08-16 | implement | Cursor | — | csv_local user.* + fixtures + runFinanceIntent + _pack_audit |
 | 2026-08-16 | fix | Cursor | — | ① write_inputs；② calculate_table sumifs；Pack 拆分；SUMIFS 工作表引用 |
-| 2026-08-16 | verify | 用户 | — | 录屏 + 5 行抽查通过 → 合 master |
+| 2026-08-16 | verify | 用户 | 0310f2c | 录屏 + 5 行抽查通过 → 合 master |
 
 ## Review notes（Claude Code 填，review 阶段，只读不改代码）
 
