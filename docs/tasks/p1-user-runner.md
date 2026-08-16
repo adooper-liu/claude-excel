@@ -38,6 +38,7 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
   - [ ] 能力声明哈希变化 → 拒绝执行 + 提示重新授权（测试断言）
   - [ ] 非法函数名（不匹配 `^user\.[a-z][a-z0-9_]*$`）不进注册表 / 拒绝执行
   - [ ] 示例 `user.profit_assumptions`（纯计算、`network:false`、无 secrets）跑通并返回合法 JSON
+  - [ ] 执行协议收口：stdout 非 JSON / 超时 / 非零退出 → 返回对应错误 `code`（`test_user_fn_runner.py` 断言）
 
 ## 方案（Claude Code 填，design 阶段）
 
@@ -47,8 +48,12 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 
 1. **运行时扩展目录**：新增 `~/.claude-excel-web/packs/{pack-id}/extensions/{ext-name}/`（含 `manifest.json` + `handler.py`）。安装时 `install_pack` 把 `samples/packs/{pack-id}/extensions/*` 复制过去，与 `skills/` 并列、**不进 `skills/`**。注册表扫 `~/.claude-excel-web/packs/*/extensions/*/manifest.json`（§4 一致）。
 2. **`pack.json` 增 `extensions[]` 声明**，与 `skills[]` 同款「声明 vs 磁盘一致」校验（参考 `backend/user_packs_store.py:169-175`）。
-3. **`installed_packs.json` schema 扩展**：由 `[{"id","installedAt"}]` 扩为含 `version`、`capabilityHash`、`consentedAt`（§5 能力变化重同意）。向后兼容旧记录：缺 `capabilityHash` 按「未授权本地函数」处理、不执行。
-4. **安装同意 UI**：任务窗格 pack 安装前，若含 `extensions`，弹「此 pack 含 N 个本机函数（可联网 / 会读取密钥）」确认；同意才写 `installed_packs.json` 的 `capabilityHash`（§5，P1 轴心）。
+3. **`installed_packs.json` schema 扩展**：由 `[{"id","installedAt"}]` 扩为含 `version`、`capabilityHash`、`consentedAt`（§5 能力变化重同意）。
+   - `capabilityHash = sha256(json.dumps({"network": manifest.network, "secrets": sorted(manifest.secrets or [])}, sort_keys=True))` —— 只哈希**能力声明**（能否联网、要哪些密钥），不含 `entry`/代码内容；代码变化由 `version` 管。
+   - 「能力变化」= 安装时记录的 `capabilityHash` ≠ 当前扫描值（`network` false→true、`secrets` 增删都算）。
+   - 旧记录缺 `capabilityHash` → **默认拒绝执行**，按「未授权本地函数」处理、提示重新授权（不自动补哈希）。
+4. **安装同意 UI + 重新授权**：任务窗格 pack 安装前，若含 `extensions`，弹「此 pack 含 N 个本机函数（可联网 / 会读取密钥）」确认；同意才写 `installed_packs.json` 的 `capabilityHash`（§5，P1 轴心）。
+   - **重新授权复用安装流程**：执行时后端返回 `NOT_AUTHORIZED`（能力哈希变化）→ 前端弹同一确认文案、引导重装该 pack（`installPack` 重走同意并重写 `capabilityHash`），**不新增授权端点**。
 
 ### 新增后端文件
 
@@ -65,9 +70,17 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 
 ### 改前端 addin
 
-- `addin/src/services/skill-loader.ts` `getAllTools()`：核心 tools 之后**追加** `user.*`（从 `GET /api/user-fn` 拉取，前缀 + 描述「本机函数」）。注意 `getAllTools()` 有 `cachedTools` 缓存，追加逻辑要落在缓存之后。
+- `addin/src/services/skill-loader.ts` `getAllTools()`：`cachedTools` 改为**核心 tools + `user.*` 一起缓存**（首载 = `[...localTools(), ...await fetchUserTools()]`），避免 `user.*` 只在首载后丢失。安装 / 卸载 pack 后调新增的 `invalidateToolsCache()` 刷新（v1 可简化为启动时加载一次）。
 - `addin/src/taskpane/components/App.tsx` `onToolUse`（现 `App.tsx:313`）：先 `startsWith("user.")` → `fetch POST /api/user-fn/{name}`，否则走 `executeHandler`。参考现有 `web_fetch`/`search_knowledge` 的 fetch 模式（`skill-handlers.ts:263-287`）。
 - 安装同意 UI：`addin/src/taskpane/components/App.tsx:581` `onInstallPack` → `installPack`（`addin/src/services/user-skills.ts:141`）。
+
+### 执行协议（统一 JSON envelope，`user_fn_runner` 收口）
+
+- **成功**：`{"ok": true, "data": <handler 往 stdout 打印的单个 JSON 对象>}`
+- **错误**：`{"ok": false, "error": {"code": "<枚举>", "message": "<人类可读>"}}`，`code` 枚举：
+  - `TIMEOUT`（超时）、`INVALID_JSON`（stdout 非 JSON 或 >64KB 截断）、`NONZERO_EXIT`（非零退出码）、`NOT_AUTHORIZED`（能力哈希变化 / 未授权）、`INVALID_NAME`（非法名）、`NETWORK_DENIED`（`ce_http` 被 `safe_http_url` 拒绝）
+- **stdout 必须是单个 JSON，不允许纯文本**；`stderr` 仅作日志，超长截取前 N 字节进 `message`。
+- 前端 `onToolUse` 对 `user.*` 只认这个 envelope，不做二次解析。
 
 ### 示例与测试
 
@@ -90,3 +103,4 @@ git checkout master && git pull && git checkout -b feat/p1-user-runner
 | 日期 | 阶段 | 负责 | commit | 说明 |
 |---|---|---|---|---|
 | 2026-08-16 | design | Claude Code | `—` | 初稿 brief（目标/边界/验收/方案 + 4 个设计待定点裁定） |
+| 2026-08-16 | design | Claude Code | `—` | review 收口：capabilityHash 定义、执行协议 envelope、缓存失效、重新授权联动 |
