@@ -41,13 +41,9 @@ samples/
   taxonomy.json                          # category 单一真相
   industry-deconstruct-appendix.md       # 跨场景附录（可迁入 pack/knowledge）
   packs/
-    cross-border-ecommerce/
-      pack.json
-      skills/amazon-research/SKILL.md
-      knowledge/serp-appendix.md
-      connector/                           # L3：feeds schema + csv_local / erp_* 实现
-        feeds/*.schema.json
-        implementations/
+  packs/
+    cross-border-ecommerce-research/   # Gate 1a：选品
+    cross-border-ecommerce-finance/    # Gate 1b：业财 + connector
   skills/                                # 遗留：单 skill 安装（install-sample），新包请放 packs/
 ```
 
@@ -88,13 +84,14 @@ samples/
 | `id` | ✅ | 与目录名一致 |
 | `category` | ✅ | 须在 `taxonomy.json` 的 `categories[].id` 中 |
 | `title` | ✅ | UI 展示名 |
-| `version` | 推荐 |  semver 字符串；P0 不 enforce |
+| `version` | 推荐 | semver；写入 `installed_packs.json` 与 `_pack_audit` |
+| `gate` | 可选 | 场景代号，如 `1a` / `1b`；UI 与文档用，不 enforce |
 | `description` | 可选 | 一句话 |
 | `skills` | ✅ | 技能 id 列表，对应 `skills/{id}/SKILL.md` |
 | `knowledge` | 可选 | 文件名列表，对应 `knowledge/` |
 | `deps.recipes` | 可选 | 依赖的核心 host key，如 `["amazon.com"]` — **声明用**，引擎仍读仓库 `site_recipes` / `recipe/hosts` |
 
-示例见 `samples/packs/cross-border-ecommerce/pack.json`。
+示例见 `samples/packs/cross-border-ecommerce-research/pack.json` 与 `cross-border-ecommerce-finance/pack.json`。
 
 **Skill 依赖核心数据的既有模式**：样例 SKILL 可写「列映射对齐 `recipe/hosts/amazon.com.yml`」— 这是**引用仓库核心数据**，不是把口径写进 Skill 可执行层。
 
@@ -105,7 +102,7 @@ samples/
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/user-skills/packs` | 列 `samples/packs/*` + category + 是否已装 |
-| POST | `/api/user-skills/install-pack` | `{"packId":"cross-border-ecommerce"}` |
+| POST | `/api/user-skills/install-pack` | `{"packId":"cross-border-ecommerce-research"}` 或 `cross-border-ecommerce-finance` |
 | POST | `/api/user-skills/install-sample` | 遗留：装 `samples/skills/{id}` 单 skill |
 
 实现：`backend/user_packs_store.py`（`install_pack` 循环 `install_skill`；失败 rollback）。
@@ -153,3 +150,34 @@ samples/
 | **P1b** | Gate 1b 业财闭环（CSV connector + 对账 Skill + 审计） | 📄 见 [gate-1b-finance-closed-loop.md](tasks/gate-1b-finance-closed-loop.md) |
 | **P2** | Pack v1.1 ERP connector（积加/领星二选一）+ 导出 + category 增强 | 待定 |
 | **P3** | minCoreVersion enforce、卸载、ERP 伙伴 Pack 市场 | 待定 |
+
+---
+
+## 10. Pack 划分与安装规范（已定）
+
+**原则：一 pack = 一可独立安装的场景（Gate/demo），不是「一个大行业包装所有 skill」。**
+
+| 维度 | 规范 |
+|---|---|
+| **category** | 行业分组（`taxonomy.json`），UI 下同 category 可列多个 pack 卡片 |
+| **pack id** | `{category}-{scenario}`，与目录名、`pack.json.id` 一致，kebab-case |
+| **skills** | 每 pack **一个主 skill**（一个主斜杠）；多 skill 仅在有强耦合时 |
+| **extensions** | 只放本 pack 需要的 `user.*`；无本机代码的 pack **不得**含 `extensions/` |
+| **connector** | 仅数据进簿类 pack（业财/ERP）；选品类 pack 不含 `connector/` |
+| **knowledge** | 只放本 pack 口径；共享附录可复制，但不合并 pack |
+| **安装** | `install-pack` 一次装 **一个** packId；`installed_packs.json` 每 id 一条 |
+| **卸载** | `DELETE /packs/{id}` 只卸该 pack 的 skill + runtime + 扩展授权 |
+| **扩展同意** | 仅当 `extensions.length > 0` 时 UI 二次确认；选品包无需同意 |
+| **LLM 工具** | 未安装的 pack 其 `user.*` 不进工具列表；按 pack 分装避免 tools 膨胀 |
+
+**迁移**：旧合一 id `cross-border-ecommerce` 已废弃 → 请卸旧包后分别装 `cross-border-ecommerce-research` 与 `cross-border-ecommerce-finance`。
+
+**新增 pack checklist**（取代 §8 单列）：
+
+1. 确认 category 已在 `taxonomy.json`
+2. 新建 `samples/packs/{category}-{scenario}/`，**不要**往已有 pack 堆 unrelated skill
+3. `pack.json` 填 `gate` / `title` / `skills` / 按需 `extensions` / `connector`
+4. SKILL 只编排核心算子；有 connector 则补 `pytest test_connector_load_feed.py` 或 pack 专项测试
+5. `pytest backend/tests/test_user_packs_store.py` + 任务窗格可见两张卡片（同 category）
+
+---

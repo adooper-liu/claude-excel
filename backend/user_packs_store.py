@@ -84,6 +84,7 @@ def list_packs() -> list[dict]:
                 "title": str(pack.get("title") or pid),
                 "description": str(pack.get("description") or ""),
                 "version": str(pack.get("version") or ""),
+                "gate": str(pack.get("gate") or ""),
                 "skills": skills,
                 "knowledge": knowledge,
                 "extensions": extensions,
@@ -167,6 +168,18 @@ def _copy_pack_extensions(pack_dir: Path, pack_id: str) -> list[dict[str, Any]]:
         dst = ext_root / ext["id"]
         shutil.copytree(src, dst)
     return extensions
+
+
+def _copy_pack_connector(pack_dir: Path, pack_id: str) -> None:
+    """Copy connector/ (schemas + fixtures + implementations) into runtime pack dir."""
+    src = pack_dir / "connector"
+    if not src.is_dir():
+        return
+    runtime_pack = RUNTIME_PACKS_DIR / pack_id
+    dst = runtime_pack / "connector"
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
 
 
 def _load_runtime_manifests(pack_id: str) -> list[dict[str, Any]]:
@@ -264,6 +277,7 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
 
     try:
         _copy_pack_extensions(pack_dir, pid)
+        _copy_pack_connector(pack_dir, pid)
     except OSError as exc:
         for done in result_skills:
             try:

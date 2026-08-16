@@ -35,6 +35,7 @@ export type Pack = {
   title: string;
   description: string;
   version: string;
+  gate?: string;
   skills: PackSkill[];
   knowledge: string[];
   extensions: PackExtension[];
@@ -141,6 +142,7 @@ export async function fetchPacks(): Promise<Pack[]> {
       title: String((p as Pack).title || id),
       description: String((p as Pack).description || ""),
       version: String((p as Pack).version || ""),
+      gate: String((p as Pack).gate || ""),
       skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
       knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
       extensions: Array.isArray((p as Pack).extensions) ? ((p as Pack).extensions as PackExtension[]) : [],

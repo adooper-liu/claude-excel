@@ -12,11 +12,12 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, formatExtensionConsent, type InstalledSkill, type Pack } from '../../services/user-skills';
+import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, type InstalledSkill, type Pack } from '../../services/user-skills';
 import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
 import SessionList from './SessionList';
+import PackMenu from './PackMenu';
 import TokenBadge from './TokenBadge';
 import {
   bootChat,
@@ -144,6 +145,7 @@ export default function App(): JSX.Element {
   const [sessionId, setSessionId] = useState(boot.id);
   const [sessions, setSessions] = useState(() => loadSessions());
   const [showSessions, setShowSessions] = useState(false);
+  const [showPacks, setShowPacks] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('unconfigured');
   const [showSettings, setShowSettings] = useState(false);
@@ -241,7 +243,17 @@ export default function App(): JSX.Element {
         setIf(prev => prev.map(m => m.id === aid ? { ...m, content: SKIP_SAMPLE_REPLY } : m));
         return;
       }
+      if (slash?.id === "finance-reconciliation") {
+        const final = await Excel.runFinanceIntent(workText, ctx.showMessage);
+        setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
+        return;
+      }
       if (!slash) {
+        if (Excel.isFinanceRequest(workText)) {
+          const final = await Excel.runFinanceIntent(workText, ctx.showMessage);
+          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
+          return;
+        }
         if (Excel.isReconcileRequest(workText)) {
           const final = await Excel.runReconcileIntent(workText, ctx.showMessage);
           setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
@@ -518,6 +530,24 @@ export default function App(): JSX.Element {
       alert(err instanceof Error ? err.message : String(err));
     }
   }, []);
+
+  const handleInstallPack = useCallback(async (packId: string) => {
+    const pack = await installPack(packId, { consentExtensions: true });
+    invalidateToolsCache();
+    setPacks((prev) => prev.map((p) => (p.id === pack.id ? { ...p, installed: true } : p)));
+    const fresh = await fetchUserSkills();
+    setInstalled(fresh);
+    const first = pack.skills[0];
+    if (first) handleSend('/' + first.slash);
+  }, [handleSend]);
+
+  const handleUninstallPack = useCallback(async (packId: string) => {
+    await uninstallPack(packId);
+    invalidateToolsCache();
+    setPacks((prev) => prev.map((p) => (p.id === packId ? { ...p, installed: false } : p)));
+    const fresh = await fetchUserSkills();
+    setInstalled(fresh);
+  }, []);
   useEffect(() => {
     if (history.length === 0) setShowHistory(false);
   }, [history.length]);
@@ -552,7 +582,7 @@ export default function App(): JSX.Element {
         <div className="header-flyout">
           <button
             className="icon-btn"
-            onClick={() => { setShowHistory(false); setShowSessions((v) => !v); }}
+            onClick={() => { setShowHistory(false); setShowPacks(false); setShowSessions((v) => !v); }}
             title="历史会话"
             aria-label="历史会话"
           >☰</button>
@@ -569,7 +599,7 @@ export default function App(): JSX.Element {
         <div className="header-flyout">
           <button
             className="icon-btn"
-            onClick={() => { setShowSessions(false); setShowHistory((v) => !v); }}
+            onClick={() => { setShowSessions(false); setShowPacks(false); setShowHistory((v) => !v); }}
             disabled={history.length === 0}
             title={history.length ? '操作历史（撤销结果表）' : '没有可撤销的结果表'}
             aria-label="操作历史"
@@ -582,36 +612,47 @@ export default function App(): JSX.Element {
             />
           )}
         </div>
+        <div className="header-flyout">
+          <button
+            type="button"
+            className={
+              "icon-btn pack-btn"
+              + (showPacks ? " on" : "")
+              + (packs.some((p) => !p.installed) ? " has-available" : "")
+            }
+            onClick={() => {
+              setShowSessions(false);
+              setShowHistory(false);
+              setShowPacks((v) => !v);
+            }}
+            title="场景包"
+            aria-label="场景包"
+          >
+            <svg className="pack-btn-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M8 1.2 1.5 4.6v6.8L8 15l6.5-3.6V4.6L8 1.2zm0 1.3 4.8 2.7L8 7.9 3.2 5.2 8 2.5zM3 6.1l4.5 2.5v5.1L3 11.2V6.1zm5.5 7.6V8.6L13 6.1v5.1L8.5 13.7z"
+              />
+            </svg>
+          </button>
+          {showPacks && (
+            <PackMenu
+              packs={packs}
+              onInstallPack={handleInstallPack}
+              onUninstallPack={handleUninstallPack}
+              onClose={() => setShowPacks(false)}
+            />
+          )}
+        </div>
         <button className="icon-btn" onClick={() => setShowSettings(true)} title="设置" aria-label="设置">⚙</button>
       </div>
     </div>
     <ChatPanel
       messages={messages}
       skills={mergeSlashSkills(installed)}
-      packs={packs}
+      anyPackInstalled={packs.some((p) => p.installed)}
       onPickSkill={handleSend}
       isStreaming={isStreaming}
-      onInstallPack={async (packId) => {
-        const catalog = packs.find((p) => p.id === packId);
-        if (catalog?.extensions?.length) {
-          const msg = formatExtensionConsent(catalog);
-          if (!window.confirm(msg)) return;
-        }
-        const pack = await installPack(packId, { consentExtensions: true });
-        invalidateToolsCache();
-        setPacks((prev) => prev.map((p) => (p.id === pack.id ? { ...p, installed: true } : p)));
-        const fresh = await fetchUserSkills();
-        setInstalled(fresh);
-        const first = pack.skills[0];
-        if (first) handleSend('/' + first.slash);
-      }}
-      onUninstallPack={async (packId) => {
-        await uninstallPack(packId);
-        invalidateToolsCache();
-        setPacks((prev) => prev.map((p) => (p.id === packId ? { ...p, installed: false } : p)));
-        const fresh = await fetchUserSkills();
-        setInstalled(fresh);
-      }}
     />
     <ChatInput
       onSend={handleSend}

@@ -1,0 +1,12 @@
+{
+  "id": "cross-border-ecommerce-finance",
+  "category": "cross-border-ecommerce",
+  "title": "跨境电商业财包",
+  "version": "0.1.0",
+  "gate": "1b",
+  "description": "Gate 1b：CSV/fixture → 对账 → 假设 → 透视 → 审计。含 connector 与本机扩展。",
+  "skills": ["finance-reconciliation"],
+  "extensions": ["profit-assumptions", "connector-csv-local"],
+  "knowledge": ["platform_fields.md", "profit_formula.md"],
+  "deps": {}
+}

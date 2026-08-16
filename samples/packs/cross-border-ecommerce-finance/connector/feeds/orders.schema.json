@@ -2,7 +2,7 @@
   "feedId": "orders",
   "sheetName": "Pack_订单",
   "description": "Canonical order lines for reconcile / profit recipe (ERP or CSV source)",
-  "primaryKeys": ["platform_sku", "order_date"],
+  "primaryKeys": ["platform_sku", "biz_date"],
   "columns": [
     { "name": "order_id", "type": "string", "required": true },
     { "name": "order_date", "type": "date", "required": true, "note": "ISO date, local biz timezone" },
@@ -12,6 +12,7 @@
     { "name": "item_price", "type": "number", "required": true },
     { "name": "currency", "type": "string", "required": true },
     { "name": "order_status", "type": "string", "required": false },
-    { "name": "is_refund", "type": "boolean", "required": false }
+    { "name": "is_refund", "type": "boolean", "required": false },
+    { "name": "biz_date", "type": "date", "required": true, "note": "对账 join 键；orders 取自 order_date" }
   ]
 }

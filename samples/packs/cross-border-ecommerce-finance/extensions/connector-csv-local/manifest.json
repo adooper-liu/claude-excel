@@ -1,0 +1,25 @@
+{
+  "name": "user.connector_load_feed",
+  "description": "从 Pack connector fixtures 读取 CSV，映射为 canonical 列（Phase 1 csv_local）",
+  "entry": "handler.py",
+  "params": {
+    "type": "object",
+    "properties": {
+      "feed": {
+        "type": "string",
+        "enum": ["orders", "ads", "inventory"],
+        "description": "feed id，见 connector/feeds/*.schema.json"
+      },
+      "packId": {
+        "type": "string",
+        "description": "已安装 pack id，默认 cross-border-ecommerce-finance"
+      }
+    },
+    "required": ["feed"]
+  },
+  "returns": "json",
+  "network": false,
+  "secrets": [],
+  "timeoutMs": 8000,
+  "category": "跨境电商"
+}

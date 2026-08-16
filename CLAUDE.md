@@ -80,7 +80,7 @@ samples/packs/{pack-id}/
 
 `/拆解` 指向上述三条线，不把附录写进核心 prompt。🟢 步骤走 `/skill-creator` 或 Pack 内 SKILL。
 
-可选参考见 `samples/packs/cross-border-ecommerce/`（`/亚马逊选品`）。
+可选参考见 `samples/packs/cross-border-ecommerce-research/`（`/亚马逊选品`）与 `cross-border-ecommerce-finance/`（`/跨境业财`）。
 
 | 场景 | 建模 | 分析 | 决策（列选项，不替拍板） |
 |---|---|---|---|

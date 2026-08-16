@@ -32,24 +32,42 @@ def test_category_label_known_and_unknown():
     assert category_label("no-such-cat") == "no-such-cat"
 
 
-def test_list_packs_lists_cross_border_ecommerce():
+def test_list_packs_lists_split_cross_border_packs():
     packs = list_packs()
     assert packs, "samples/packs/ 下应有 pack"
-    p = next((x for x in packs if x["id"] == "cross-border-ecommerce"), None)
-    assert p is not None
-    assert p["category"] == "cross-border-ecommerce"
-    assert p["categoryLabel"] == "跨境电商"
-    assert any(s["id"] == "amazon-research" for s in p["skills"]), "pack.skills 应含 amazon-research"
-    assert p["knowledge"] == ["serp-appendix.md"], "pack.knowledge 应含 serp-appendix.md"
-    assert p["deps"].get("recipes") == ["amazon.com"], "pack.deps.recipes 应声明 amazon.com"
-    assert any(e["name"] == "user.profit_assumptions" for e in p.get("extensions") or []), (
-        "pack.extensions 应含 user.profit_assumptions"
+    research = next((x for x in packs if x["id"] == "cross-border-ecommerce-research"), None)
+    finance = next((x for x in packs if x["id"] == "cross-border-ecommerce-finance"), None)
+    assert research is not None
+    assert finance is not None
+    assert research["category"] == "cross-border-ecommerce"
+    assert finance["category"] == "cross-border-ecommerce"
+    assert any(s["id"] == "amazon-research" for s in research["skills"])
+    assert not research.get("extensions"), "选品包不应含 user.*"
+    assert research["deps"].get("recipes") == ["amazon.com"]
+    assert any(s["id"] == "finance-reconciliation" for s in finance["skills"])
+    assert any(e["name"] == "user.connector_load_feed" for e in finance.get("extensions") or [])
+    assert "platform_fields.md" in finance["knowledge"]
+    assert next((x for x in packs if x["id"] == "cross-border-ecommerce"), None) is None, (
+        "旧合一 pack id 应已移除"
     )
 
 
-def test_install_pack_installs_skill(tmp_path, monkeypatch):
-    # Redirect user skill dir (install_skill's module global) + installed_packs file
-    # to tmp so we don't touch real config.
+def test_install_research_pack_no_consent_required(tmp_path, monkeypatch):
+    import user_skills_store
+    import user_packs_store
+
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+
+    result = install_pack("cross-border-ecommerce-research")
+    assert result["packId"] == "cross-border-ecommerce-research"
+    assert any(s["id"] == "amazon-research" for s in result["skills"])
+    assert not result.get("extensions")
+    assert (tmp_path / "skills" / "amazon-research" / "SKILL.md").is_file()
+
+
+def test_install_finance_pack_installs_skill(tmp_path, monkeypatch):
     import user_skills_store
     import user_packs_store
     import user_extension_registry
@@ -60,19 +78,17 @@ def test_install_pack_installs_skill(tmp_path, monkeypatch):
     monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
     monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
 
-    result = install_pack("cross-border-ecommerce", consent_extensions=True)
-    assert result["packId"] == "cross-border-ecommerce"
-    assert result["skills"], "应安装至少一个技能"
-    assert any(s["id"] == "amazon-research" for s in result["skills"])
+    result = install_pack("cross-border-ecommerce-finance", consent_extensions=True)
+    assert result["packId"] == "cross-border-ecommerce-finance"
+    assert any(s["id"] == "finance-reconciliation" for s in result["skills"])
     assert any(e["name"] == "user.profit_assumptions" for e in result.get("extensions") or [])
+    assert any(e["name"] == "user.connector_load_feed" for e in result.get("extensions") or [])
 
-    # Skill actually landed on disk via install_skill.
-    md = tmp_path / "skills" / "amazon-research" / "SKILL.md"
-    assert md.is_file(), "SKILL.md 应被 install_skill 写入"
-    ext_manifest = tmp_path / "packs" / "cross-border-ecommerce" / "extensions" / "profit-assumptions" / "manifest.json"
-    assert ext_manifest.is_file(), "扩展 manifest 应复制到 runtime packs"
-    # Installed pack recorded in tmp, not real config.
-    assert (tmp_path / "installed_packs.json").is_file()
+    assert (tmp_path / "skills" / "finance-reconciliation" / "SKILL.md").is_file()
+    connector_fixture = (
+        tmp_path / "packs" / "cross-border-ecommerce-finance" / "connector" / "fixtures" / "orders.csv"
+    )
+    assert connector_fixture.is_file(), "connector/fixtures 应复制到 runtime packs"
     rec = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
     assert rec[0].get("capabilityHash"), "含 extensions 的 pack 应记录 capabilityHash"
 
@@ -102,12 +118,12 @@ def test_install_pack_rolls_back_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "read_text", broken_read_text)
 
     with pytest.raises(ValueError):
-        install_pack("cross-border-ecommerce", consent_extensions=True)
+        install_pack("cross-border-ecommerce-research")
 
     assert not (tmp_path / "skills" / "amazon-research").exists()
 
 
-def test_install_pack_requires_consent_for_extensions(tmp_path, monkeypatch):
+def test_install_finance_pack_requires_consent_for_extensions(tmp_path, monkeypatch):
     import user_skills_store
     import user_packs_store
     import user_extension_registry
@@ -119,12 +135,12 @@ def test_install_pack_requires_consent_for_extensions(tmp_path, monkeypatch):
     monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
 
     with pytest.raises(ValueError, match="需要用户同意"):
-        install_pack("cross-border-ecommerce", consent_extensions=False)
+        install_pack("cross-border-ecommerce-finance", consent_extensions=False)
 
     with pytest.raises(ValueError, match="需要用户同意"):
-        install_pack("cross-border-ecommerce")
+        install_pack("cross-border-ecommerce-finance")
 
-    result = install_pack("cross-border-ecommerce", consent_extensions=True)
+    result = install_pack("cross-border-ecommerce-finance", consent_extensions=True)
     assert result["extensions"]
 
 
@@ -172,12 +188,12 @@ def test_uninstall_pack_removes_skill_extensions_record(tmp_path, monkeypatch):
     monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
     monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
 
-    install_pack("cross-border-ecommerce", consent_extensions=True)
-    result = uninstall_pack("cross-border-ecommerce")
-    assert result["packId"] == "cross-border-ecommerce"
+    install_pack("cross-border-ecommerce-finance", consent_extensions=True)
+    result = uninstall_pack("cross-border-ecommerce-finance")
+    assert result["packId"] == "cross-border-ecommerce-finance"
 
-    assert not (tmp_path / "skills" / "amazon-research").exists()
-    assert not (tmp_path / "packs" / "cross-border-ecommerce").exists()
+    assert not (tmp_path / "skills" / "finance-reconciliation").exists()
+    assert not (tmp_path / "packs" / "cross-border-ecommerce-finance").exists()
     rec = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
     assert rec == []
 

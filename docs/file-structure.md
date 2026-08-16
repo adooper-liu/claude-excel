@@ -117,12 +117,13 @@
 ## `samples/` — 官方场景包（L3，不进核心）
 
 - `taxonomy.json` — **category 单一真相**（跨境电商/物流/HR/财务）
-- `packs/cross-border-ecommerce/` — 跨境电商包
-  - `pack.json` — 声明 skills / extensions / knowledge
-  - `skills/{amazon-research,finance-reconciliation}/SKILL.md` — 两个 Skill（选品 + 业财对账）
-  - `knowledge/{serp-appendix,platform_fields,profit_formula}.md` — 方法论（外置知识）
-  - `extensions/{profit-assumptions,connector-csv-local}/` — 两个 `user.*` 扩展
-  - `connector/` — feeds schema + fixtures + csv_local/erp 实现（**ERP 接缝**）
+- `packs/` — **一 pack 一 Gate/场景**，分别安装（见 [user-packs.md](user-packs.md) §10）
+  - `cross-border-ecommerce-research/` — Gate 1a 选品（无 extensions）
+    - `pack.json` · `skills/amazon-research/SKILL.md` · `knowledge/`
+  - `cross-border-ecommerce-finance/` — Gate 1b 业财闭环
+    - `pack.json` · `skills/finance-reconciliation/SKILL.md` · `knowledge/`
+    - `extensions/{profit-assumptions,connector-csv-local}/` — `user.*` 扩展
+    - `connector/` — feeds schema + fixtures（**ERP 接缝**）
 - `skills/` — 遗留单技能安装（`install-sample`）
 
 ---

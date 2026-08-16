@@ -63,7 +63,7 @@ export async function runReconcileIntent(
 
   return [
     "已用 reconcile_tables 按「" + keys.join("、") + "」对账。",
-    "结果表：" + r.outputSheet,
+    "结果表：" + r.outputSheet + "（表 " + r.outputTable + "）",
     "matched " +
       r.counts.matched +
       " / left_only " +

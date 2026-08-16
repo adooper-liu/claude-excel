@@ -10,7 +10,7 @@ slash: 跨境业财
 
 ## 前置
 
-- 订单表、广告表已进簿：Phase 1 = 用户用 Excel「数据 → 从文本/CSV」导入（`connector/csv_local` 约定），表名建议 `Pack_订单` / `Pack_广告`。
+- 订单表、广告表已进簿：Phase 1 = `/跨境业财` 预编排调用 `user.connector_load_feed` 读 fixture，表名 `Pack_订单` / `Pack_广告`。
 - 参数 sheet（`假设参数`）就位：汇率、广告占比、退款率（默认值见知识库，用户可改）。
 
 ## 步骤（🟢）
@@ -19,7 +19,7 @@ slash: 跨境业财
 
 2. **reshape_table** `op=project`：列映射到内部标准列名（SKU 归一 trim+lower、日期 coerce、金额 coerce number）— 映射表见 `knowledge/platform_fields.md`。
 
-3. **reconcile_tables**：`leftTable=Pack_订单` `rightTable=Pack_广告` `keys=[sku,date]` `compareColumns=[cost]`，输出差异到新表（默认 `对账结果`）。**精确键匹配，不做模糊窗口。**
+3. **reconcile_tables**：`leftTable=Pack_订单` `rightTable=Pack_广告` `keys=[platform_sku,biz_date]`，输出差异到新表（默认 `业财对账结果`）。**精确键匹配，不做模糊窗口。**
 
 4. **write_inputs**：把汇率 / 广告占比 / 退款率写入 `假设参数` sheet。
 

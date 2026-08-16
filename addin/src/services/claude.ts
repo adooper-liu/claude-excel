@@ -9,6 +9,7 @@
  */
 
 import { appendSummaryNudge, compactToolDigest, parseAssistantContent } from './agent-finish';
+import { fromApiToolName, mapToolsForApi } from './tool-name-api';
 
 export type ApiMode = 'direct' | 'proxy';
 
@@ -308,7 +309,7 @@ async function completeOnce(
 ): Promise<Record<string, unknown>> {
   const body: Record<string, unknown> = { model: providerConfig.model, max_tokens: 4096, messages, stream: false };
   if (systemPrompt) body.system = systemPrompt;
-  if (tools && tools.length) body.tools = tools;
+  if (tools && tools.length) body.tools = mapToolsForApi(tools);
   if (apiMode === 'direct') {
     if (!directApiKey) throw new Error('No API key');
     const r = await fetch(providerConfig.baseUrl + '/v1/messages', {
@@ -351,7 +352,8 @@ export async function chatWithTools(
     if (parsed.toolUses.length === 0) break;
     messages.push({ role: 'assistant', content: data.content });
     const results: Array<{ type: string; tool_use_id: string; content: string }> = [];
-    for (const tc of parsed.toolUses) {
+    for (const raw of parsed.toolUses) {
+      const tc = { ...raw, name: fromApiToolName(raw.name) };
       const t0 = Date.now();
       cb.onToolStep?.({ phase: 'start', name: tc.name, input: tc.input });
       if (!cb.onToolStep) cb.onThinking?.(toolPreview(tc.name, tc.input));

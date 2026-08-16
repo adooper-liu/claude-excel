@@ -1,0 +1,11 @@
+{
+  "id": "cross-border-ecommerce-research",
+  "category": "cross-border-ecommerce",
+  "title": "跨境电商选品包",
+  "version": "0.1.0",
+  "gate": "1a",
+  "description": "Gate 1a：Amazon 取数 + 规整列。只编排核心算子，不含业财 connector。",
+  "skills": ["amazon-research"],
+  "knowledge": ["serp-appendix.md", "dirty_patterns.md"],
+  "deps": { "recipes": ["amazon.com"] }
+}

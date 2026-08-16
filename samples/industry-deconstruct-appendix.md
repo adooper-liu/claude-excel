@@ -2,7 +2,7 @@
 
 本文件供用户自行上传到 **知识库（知栏）** 或改写成 **用户技能**。核心 `/拆解` 不包含以下内容。
 
-可选示例：场景包 `samples/packs/cross-border-ecommerce/`（`POST /api/user-skills/install-pack`）；知识见 pack 内 `knowledge/serp-appendix.md`。完整附录仍保留于本文件。
+可选示例：场景包 `samples/packs/cross-border-ecommerce-research/` 与 `cross-border-ecommerce-finance/`（分别 install-pack）；知识见各 pack 内 `knowledge/`。
 
 ---
 

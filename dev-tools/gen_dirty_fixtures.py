@@ -1,7 +1,7 @@
 """gen_dirty_fixtures.py — 按已验证脏特征逐行构造 CSV fixture（Gate 1b 回归测试数据工厂）。
 
 用法：  python dev-tools/gen_dirty_fixtures.py
-输出：  samples/packs/cross-border-ecommerce/connector/fixtures/*.csv
+输出：  samples/packs/cross-border-ecommerce-finance/connector/fixtures/*.csv
 验证：  pytest backend/tests/test_connector_load_feed.py -q
 
 每次改 connector/handler、reconcile_tables、SKILL.md 后重跑一次。
@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "samples" / "packs" / "cross-border-ecommerce" / "connector" / "fixtures"
+FIXTURES = ROOT / "samples" / "packs" / "cross-border-ecommerce-finance" / "connector" / "fixtures"
 
 
 # ── helpers ──────────────────────────────────────────────────────────

@@ -21,7 +21,7 @@ describe("calculate-core", function () {
     assert.strictEqual(result.rows[0][0], "A");
     assert.strictEqual(
       result.rows[0][2],
-      '=IFERROR(INDEX(T_流水[[金额]],MATCH([@[订单号]],T_流水[[订单号]],0)),"")'
+      "=IFERROR(INDEX('T_流水'[[金额]],MATCH([@[订单号]],'T_流水'[[订单号]],0)),\"\")"
     );
     assert.ok(String(result.rows[0][2]).startsWith("="));
     assert.ok(!/XLOOKUP|VLOOKUP/i.test(String(result.rows[0][2])));
@@ -48,8 +48,31 @@ describe("calculate-core", function () {
       }),
       ["食品", "饮料"]
     );
-    assert.strictEqual(result.rows[0][1], "=SUMIFS(T_订单[[金额]],T_订单[[类别]],[@[类别]])");
+    assert.strictEqual(result.rows[0][1], "=SUMIFS('T_订单'[[金额]],'T_订单'[[类别]],[@[类别]])");
     assert.ok(result.rows[0][1] !== 15);
+  });
+
+  it("writes sheet-based SUMIFS when sourceSheet is set", function () {
+    const result = calculate({
+      op: "sumifs",
+      tableName: "T_finance_recon",
+      sourceSheet: "业财对账结果",
+      headers: ["left_platform_sku", "left_item_price"],
+      rows: [
+        ["widget-a", 19.99],
+        ["widget-b", 15],
+      ],
+      groupBy: "left_platform_sku",
+      valueColumn: "left_item_price",
+    });
+    assert.strictEqual(
+      result.rows[0][1],
+      "=SUMIFS('业财对账结果'!B:B,'业财对账结果'!A:A,A2)"
+    );
+    assert.strictEqual(
+      result.rows[1][1],
+      "=SUMIFS('业财对账结果'!B:B,'业财对账结果'!A:A,A3)"
+    );
   });
 
   it("throws when lookup key is missing", function () {
@@ -69,16 +92,25 @@ describe("calculate-core", function () {
 });
 
 describe("structured references", function () {
-  const { structCol, thisRowCol } = require("../../src/excel/calculate-core");
+  const { structCol, thisRowCol, tableRefName } = require("../../src/excel/calculate-core");
 
   it("quotes CJK column names", function () {
-    assert.strictEqual(structCol("T_流水", "金额"), "T_流水[[金额]]");
+    assert.strictEqual(structCol("T_流水", "金额"), "'T_流水'[[金额]]");
     assert.strictEqual(thisRowCol("订单号"), "[@[订单号]]");
   });
 
   it("leaves ASCII column names unquoted", function () {
     assert.strictEqual(structCol("Orders", "Amount"), "Orders[Amount]");
     assert.strictEqual(thisRowCol("Amount"), "[@Amount]");
+  });
+
+  it("quotes CJK table names in structured refs", function () {
+    assert.strictEqual(tableRefName("T_finance_recon"), "T_finance_recon");
+    assert.strictEqual(tableRefName("T_业财对账结果"), "'T_业财对账结果'");
+    assert.strictEqual(
+      structCol("T_业财对账结果", "left_item_price"),
+      "'T_业财对账结果'[left_item_price]"
+    );
   });
 });
 

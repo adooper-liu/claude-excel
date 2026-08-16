@@ -17,6 +17,8 @@ export interface CalculateInput {
   rows?: Cell[][];
   groupBy?: string;
   valueColumn?: string;
+  /** When set, SUMIFS uses sheet!col refs (Office.js-safe) instead of cross-table structured refs. */
+  sourceSheet?: string;
 }
 
 export interface CalculateResult {
@@ -40,12 +42,22 @@ function isSimpleColumn(column: string): boolean {
   return /^[A-Za-z][A-Za-z0-9_]*$/.test(column);
 }
 
+function isSimpleTableName(table: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(table);
+}
+
+export function tableRefName(table: string): string {
+  const name = String(table || "").trim();
+  if (!name) return "Table";
+  return isSimpleTableName(name) ? name : "'" + name.replace(/'/g, "''") + "'";
+}
+
 export function quoteColumn(column: string): string {
   return isSimpleColumn(column) ? column : "[" + column + "]";
 }
 
 export function structCol(table: string, column: string): string {
-  return table + "[" + quoteColumn(column) + "]";
+  return tableRefName(table) + "[" + quoteColumn(column) + "]";
 }
 
 export function thisRowCol(column: string): string {
@@ -74,6 +86,37 @@ export function sumifsFormula(table: string, valueCol: string, groupCol: string)
     thisRowCol(groupCol) +
     ")"
   );
+}
+
+export function colIndexToLetter(index: number): string {
+  let n = Math.max(0, Number(index) || 0) + 1;
+  let out = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    out = String.fromCharCode(65 + rem) + out;
+    n = Math.floor((n - 1) / 26);
+  }
+  return out || "A";
+}
+
+export function quoteSheetName(sheet: string): string {
+  const name = String(sheet || "").trim();
+  if (!name) return "''";
+  if (/^[A-Za-z_][A-Za-z0-9_.]*$/.test(name)) return name;
+  return "'" + name.replace(/'/g, "''") + "'";
+}
+
+/** Per-row A1 criteria (A2, A3, …) — avoids Office.js failures on cross-table structured refs. */
+export function sumifsFormulaSheet(
+  sourceSheet: string,
+  valueColLetter: string,
+  groupColLetter: string,
+  criteriaA1: string
+): string {
+  const sheetRef = quoteSheetName(sourceSheet);
+  const valueRange = sheetRef + "!" + valueColLetter + ":" + valueColLetter;
+  const groupRange = sheetRef + "!" + groupColLetter + ":" + groupColLetter;
+  return "=SUMIFS(" + valueRange + "," + groupRange + "," + criteriaA1 + ")";
 }
 
 export function fixRefFormula(formula: string): string {
@@ -120,12 +163,14 @@ function sumifs(input: CalculateInput): CalculateResult {
   const tableName = input.tableName || "";
   const groupBy = input.groupBy || "";
   const valueColumn = input.valueColumn || "";
+  const sourceSheet = String(input.sourceSheet || "").trim();
   if (!tableName || !groupBy || !valueColumn) {
     throw new Error("sumifs 需要 tableName、groupBy、valueColumn");
   }
   requireColumn(headersIn, groupBy, "表");
   requireColumn(headersIn, valueColumn, "表");
   const gIdx = headersIn.indexOf(groupBy);
+  const vIdx = headersIn.indexOf(valueColumn);
   const seen = new Set<string>();
   const groups: Cell[] = [];
   (input.rows || []).forEach(function (row) {
@@ -135,8 +180,19 @@ function sumifs(input: CalculateInput): CalculateResult {
     seen.add(key);
     groups.push(g);
   });
-  const formula = sumifsFormula(tableName, valueColumn, groupBy);
-  const rows = groups.map(function (g) {
+  const rows = groups.map(function (g, i) {
+    let formula: string;
+    if (sourceSheet) {
+      const rowNum = i + 2;
+      formula = sumifsFormulaSheet(
+        sourceSheet,
+        colIndexToLetter(vIdx),
+        colIndexToLetter(gIdx),
+        "A" + rowNum
+      );
+    } else {
+      formula = sumifsFormula(tableName, valueColumn, groupBy);
+    }
     return [g, formula];
   });
   return pack([groupBy, "合计"], rows);

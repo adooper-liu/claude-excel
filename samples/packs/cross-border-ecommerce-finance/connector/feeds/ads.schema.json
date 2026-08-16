@@ -2,7 +2,7 @@
   "feedId": "ads",
   "sheetName": "Pack_广告",
   "description": "Canonical ad spend lines for reconcile (daily grain)",
-  "primaryKeys": ["platform_sku", "ad_date"],
+  "primaryKeys": ["platform_sku", "biz_date"],
   "columns": [
     { "name": "ad_date", "type": "date", "required": true },
     { "name": "platform_sku", "type": "string", "required": true },
@@ -10,6 +10,7 @@
     { "name": "spend", "type": "number", "required": true },
     { "name": "currency", "type": "string", "required": true },
     { "name": "impressions", "type": "number", "required": false },
-    { "name": "clicks", "type": "number", "required": false }
+    { "name": "clicks", "type": "number", "required": false },
+    { "name": "biz_date", "type": "date", "required": true, "note": "对账 join 键；ads 取自 ad_date" }
   ]
 }

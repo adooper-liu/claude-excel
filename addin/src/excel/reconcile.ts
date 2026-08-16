@@ -1,7 +1,7 @@
 /// <reference types="@types/office-js" />
 
 import { reconcile as reconcileCore, type Cell } from "./reconcile-core";
-import { readTable } from "./table";
+import { ensureTable, readTable } from "./table";
 import { writeToNewSheet } from "./write";
 import { uniqueWorkbookSheetName } from "./sheet-name";
 
@@ -11,10 +11,13 @@ export interface ReconcileTablesInput {
   keys: string[];
   compareColumns?: string[];
   outputSheet?: string;
+  /** Excel ListObject name; use ASCII to keep SUMIFS structured refs stable. */
+  outputTable?: string;
 }
 
 export async function reconcileTables(input: ReconcileTablesInput): Promise<{
   outputSheet: string;
+  outputTable: string;
   counts: { matched: number; left_only: number; right_only: number; conflict: number };
   keys: string[];
 }> {
@@ -35,13 +38,13 @@ export async function reconcileTables(input: ReconcileTablesInput): Promise<{
   ) as (string | number)[][];
   await writeToNewSheet(outputSheet, grid);
 
+  const tableBase = input.outputTable || input.outputSheet || "对账结果";
+  const ensured = await ensureTable(outputSheet, undefined, tableBase);
+
   await Excel.run(async (context) => {
-    const sheet = context.workbook.worksheets.getItem(outputSheet);
-    const used = sheet.getUsedRange();
-    sheet.tables.add(used, true);
-    sheet.activate();
+    context.workbook.worksheets.getItem(outputSheet).activate();
     await context.sync();
   });
 
-  return { outputSheet, counts: result.counts, keys: input.keys };
+  return { outputSheet, outputTable: ensured.name, counts: result.counts, keys: input.keys };
 }

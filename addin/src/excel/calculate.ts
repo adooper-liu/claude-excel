@@ -7,7 +7,7 @@ import {
   type Cell,
 } from "./calculate-core";
 import { formulaColumnRuns, valuesWithoutFormulas, CHUNK_ROWS, chunkRanges } from "./range-chunk";
-import { readTable } from "./table";
+import { readTable, ensureTable } from "./table";
 import { writeFormulaRuns, writeToNewSheet } from "./write";
 import { deleteSheetIfExists } from "./sheet";
 import { sheetHistory } from "./sheet-history";
@@ -24,6 +24,8 @@ export interface CalculateTableInput {
   valueColumn?: string;
   sheetName?: string;
   outputSheet?: string;
+  /** Excel ListObject name for the formula result sheet. */
+  outputTable?: string;
 }
 
 const DEFAULT_SHEET: Record<CalculateOp, string> = {
@@ -32,24 +34,29 @@ const DEFAULT_SHEET: Record<CalculateOp, string> = {
   fix_ref: "公式修复",
 };
 
-async function writeFormulaGrid(sheetName: string, grid: Cell[][]): Promise<void> {
-  await writeToNewSheet(sheetName, valuesWithoutFormulas(grid));
+async function writeFormulaGrid(
+  requestedSheet: string,
+  grid: Cell[][],
+  opts?: { tableBase?: string; tableBeforeFormulas?: boolean }
+): Promise<string> {
+  const written = await writeToNewSheet(requestedSheet, valuesWithoutFormulas(grid));
+  const tableBase = opts?.tableBase || requestedSheet;
+  const tableBefore = opts?.tableBeforeFormulas !== false;
   try {
+    if (tableBefore) {
+      await ensureTable(written, undefined, tableBase);
+    }
+    await writeFormulaRuns(written, formulaColumnRuns(grid));
     await Excel.run(async (context) => {
-      const sheet = context.workbook.worksheets.getItem(sheetName);
-      const used = sheet.getUsedRange();
-      sheet.tables.add(used, true);
+      context.workbook.worksheets.getItem(written).activate();
       await context.sync();
     });
-    await writeFormulaRuns(sheetName, formulaColumnRuns(grid));
-    await Excel.run(async (context) => {
-      context.workbook.worksheets.getItem(sheetName).activate();
-      await context.sync();
-    });
+    return written;
   } catch (err) {
-    await deleteSheetIfExists(sheetName);
-    sheetHistory.popIfTop(sheetName);
-    throw err;
+    await deleteSheetIfExists(written);
+    sheetHistory.popIfTop(written);
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error("写公式表「" + written + "」失败：" + detail);
   }
 }
 
@@ -98,12 +105,12 @@ export async function calculateTable(input: CalculateTableInput): Promise<{
   rows: number;
   formulaCells?: number;
 }> {
-  const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);
+  const requestedSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);
 
   if (input.op === "fix_ref") {
     if (!input.sheetName) throw new Error("fix_ref 需要 sheetName");
-    const r = await fixRefSheet(input.sheetName, outputSheet);
-    return { outputSheet, op: input.op, rows: 0, formulaCells: r.cells };
+    const r = await fixRefSheet(input.sheetName, requestedSheet);
+    return { outputSheet: requestedSheet, op: input.op, rows: 0, formulaCells: r.cells };
   }
 
   if (input.op === "lookup") {
@@ -124,7 +131,9 @@ export async function calculateTable(input: CalculateTableInput): Promise<{
       key: input.key,
       bringColumns: bring,
     });
-    await writeFormulaGrid(outputSheet, result.outputRows);
+    const outputSheet = await writeFormulaGrid(requestedSheet, result.outputRows, {
+      tableBase: input.outputTable || requestedSheet,
+    });
     return { outputSheet, op: "lookup", rows: result.rows.length };
   }
 
@@ -136,12 +145,16 @@ export async function calculateTable(input: CalculateTableInput): Promise<{
     const result = calculateCore({
       op: "sumifs",
       tableName: table.name,
+      sourceSheet: table.sheet,
       headers: table.headers,
       rows: table.rows as Cell[][],
       groupBy: input.groupBy,
       valueColumn: input.valueColumn,
     });
-    await writeFormulaGrid(outputSheet, result.outputRows);
+    const outputSheet = await writeFormulaGrid(requestedSheet, result.outputRows, {
+      tableBase: input.outputTable || requestedSheet,
+      tableBeforeFormulas: false,
+    });
     return { outputSheet, op: "sumifs", rows: result.rows.length };
   }
 
