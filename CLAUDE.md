@@ -18,7 +18,9 @@
 
 **写格路径（强制）：** 用户 / Skill 编排 → 核心算子 → Office JS → Excel。禁止 Skill、`user.*`、Python openpyxl 直接写格；禁止把用户函数注册进 `HANDLED_TOOLS` / `addin/skills/core`。
 
-详细 Pack 规则见 **`docs/user-packs.md`**；`user.*` 安全见 **`docs/user-extensions-security.md`**（P1 设计定稿，代码未动）。
+详细 Pack 规则见 **`docs/user-packs.md`**；`user.*` 安全见 **`docs/user-extensions-security.md`**（P1 已落地）。
+
+**ERP 定位（已定）：** 店小秘 / 马帮 / 积加 / 领星等是**上游数据伙伴（水厂）**，不是竞品。平台 raw 数据经 ERP 鉴权与清洗后，Pack 内 **connector（L3）** 拉取同构表进 Excel；核心底座**不出现**任何 ERP 品牌与字段映射。Claude Excel 做入户管道 + 分户计量 + 阀门，做 ERP 不做的本机假设/对账/透视最后一公里。
 
 工作流先拆再自动化（`/拆解` → `/skill-creator`）。拆解规则：命名 → 动作流 → 判断点 → 边界 → 验证；🟢 全自动 / 🟡 要人判断 / 🔴 必须人做。口径只列选项，不替用户拍板。不编基准数字。
 

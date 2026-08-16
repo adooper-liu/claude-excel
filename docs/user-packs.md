@@ -19,7 +19,8 @@ Pack 是**组织层**，不是新机制：把已有的 Skill、知识、recipe �
 | **Skill**（`SKILL.md`） | 编排步骤、口径选项；**只调用** `skill-create-guide.ts` 里的核心算子 | ✅ |
 | **Knowledge**（`.md`） | 方法论附录；知栏索引 / `search_knowledge` | ✅（安装后提示用户知栏上传或后续自动 ingest） |
 | **Recipe deps** | 声明依赖 `amazon.com` 等**核心数据**，不复制 SOP | ✅ `pack.json` 的 `deps.recipes` |
-| **Extensions**（`user.*`） | 本机 Python 计算，返回小 JSON | ❌ **P1**，见 [user-extensions-security.md](user-extensions-security.md) |
+| **Extensions**（`user.*`） | 本机 Python 计算，返回小 JSON | ✅ P1，见 [user-extensions-security.md](user-extensions-security.md) |
+| **Connector**（Pack 内） | 从 CSV fixture 或 ERP OpenAPI 拉同构表进临时 sheet | 📄 Phase 1 CSV / Phase 2 ERP，见 pack 内 `connector/` |
 
 **写格路径（强制）：**
 
@@ -44,6 +45,9 @@ samples/
       pack.json
       skills/amazon-research/SKILL.md
       knowledge/serp-appendix.md
+      connector/                           # L3：feeds schema + csv_local / erp_* 实现
+        feeds/*.schema.json
+        implementations/
   skills/                                # 遗留：单 skill 安装（install-sample），新包请放 packs/
 ```
 
@@ -115,7 +119,8 @@ samples/
 | 在 `pack/skills` 里发明工具名 | Skill 只能编排已有算子 |
 | 把 SERP/利润/VOC **阈值**写进 `site_recipes` | 那是 B 层 DOM/列映射，不是 SOP |
 | 把 Pack 内容编译进 `builtin-skills.ts` | 行业不进核心 |
-| Pack 内放 `.py` handler（P0） | 可执行代码走 P1 + 信任门 |
+| Pack 内 ERP auth/字段映射写进 `addin/skills/core` 或 `backend/` 核心 | 只许在 `pack/connector/` |
+| Pack 内放 `.py` handler 不经 `user.*` 信任门 | 可执行代码走 P1 + 信任门 |
 
 ---
 
@@ -145,5 +150,6 @@ samples/
 |---|---|---|
 | **P0** | Pack + taxonomy + install-pack + UI 分组 | ✅ 已落地 |
 | **P1** | `user.*` + 信任门 + `extension-secrets.json` | ✅ 已落地 |
-| **P2** | Pack 导出、category 过滤增强 | 待定 |
-| **P3** | minCoreVersion enforce、卸载 | 待定 |
+| **P1b** | Gate 1b 业财闭环（CSV connector + 对账 Skill + 审计） | 📄 见 [gate-1b-finance-closed-loop.md](tasks/gate-1b-finance-closed-loop.md) |
+| **P2** | Pack v1.1 ERP connector（积加/领星二选一）+ 导出 + category 增强 | 待定 |
+| **P3** | minCoreVersion enforce、卸载、ERP 伙伴 Pack 市场 | 待定 |
