@@ -3,8 +3,8 @@
   "category": "cross-border-ecommerce",
   "title": "跨境电商业财包",
   "version": "0.1.0",
-  "description": "Amazon 选品：取数表 project 规整 + 透视 + SERP 方法论知识。只编排核心算子，不进核心。",
-  "skills": ["amazon-research"],
+  "description": "跨境电商业财：选品取数规整 + 订单×广告对账 + 利润假设。只编排核心算子，不进核心。",
+  "skills": ["amazon-research", "finance-reconciliation"],
   "extensions": ["profit-assumptions"],
   "knowledge": ["serp-appendix.md"],
   "deps": { "recipes": ["amazon.com"] }

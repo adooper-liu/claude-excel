@@ -1,0 +1,12 @@
+{
+  "feedId": "inventory",
+  "sheetName": "Pack_库存",
+  "description": "Optional inventory snapshot for reconcile",
+  "primaryKeys": ["platform_sku", "snapshot_date"],
+  "columns": [
+    { "name": "snapshot_date", "type": "date", "required": true },
+    { "name": "platform_sku", "type": "string", "required": true },
+    { "name": "quantity_on_hand", "type": "number", "required": true },
+    { "name": "warehouse", "type": "string", "required": false }
+  ]
+}
