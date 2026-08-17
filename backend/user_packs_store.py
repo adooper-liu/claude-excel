@@ -337,10 +337,16 @@ def uninstall_pack(pack_id: str) -> dict:
     if not pid:
         raise ValueError("packId required")
     records = _read_installed_records()
-    if not any(str(r.get("id") or "").strip() == pid for r in records):
+    rec = next((r for r in records if str(r.get("id") or "").strip() == pid), None)
+    if rec is None:
         raise ValueError("示例包未安装: " + pid)
 
-    skill_ids = [s["id"] for s in _list_skills(PACKS_DIR / pid)]
+    skill_ids = list(rec.get("skills") or [])
+    if not skill_ids:
+        try:
+            skill_ids = [s["id"] for s in _list_skills(_resolve_pack_dir(pid)[0])]
+        except ValueError:
+            pass
     for sid in skill_ids:
         try:
             delete_skill(None, sid)

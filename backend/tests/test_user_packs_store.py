@@ -198,6 +198,38 @@ def test_uninstall_pack_removes_skill_extensions_record(tmp_path, monkeypatch):
     assert rec == []
 
 
+def test_uninstall_uses_record_skills_when_source_removed(tmp_path, monkeypatch):
+    import shutil
+    import user_skills_store
+    import user_packs_store
+    import user_extension_registry
+
+    src = tmp_path / "packs-imported" / "vendor-logistics"
+    (src / "skills" / "logistics-check").mkdir(parents=True)
+    (src / "skills" / "logistics-check" / "SKILL.md").write_text(
+        "---\nname: logistics-check\ndescription: 物流检查\nslash: 物流检查\n---\n# check\n",
+        encoding="utf-8",
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-logistics", "category": "物流", "title": "物流", "skills": ["logistics-check"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    install_pack("vendor-logistics")
+    shutil.rmtree(src)  # 源目录被删
+
+    result = uninstall_pack("vendor-logistics")
+    assert result["packId"] == "vendor-logistics"
+    assert not (tmp_path / "skills" / "logistics-check").exists()
+    assert json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8")) == []
+
+
 def test_uninstall_pack_unknown_id_raises(tmp_path, monkeypatch):
     import user_packs_store
 
