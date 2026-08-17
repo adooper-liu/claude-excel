@@ -11,6 +11,10 @@
     { "name": "currency", "type": "string", "required": true },
     { "name": "impressions", "type": "number", "required": false },
     { "name": "clicks", "type": "number", "required": false },
-    { "name": "biz_date", "type": "date", "required": true, "note": "对账 join 键；ads 取自 ad_date" }
+    { "name": "biz_date", "type": "date", "required": true, "note": "对账 join 键；ads 取自 ad_date" },
+    { "name": "parent_sku", "type": "string", "required": false, "note": "Phase 2 预留：Brand Halo 父体归集" },
+    { "name": "shop_id", "type": "string", "required": false, "note": "Phase 2 预留：TikTok Shop ID 归因" },
+    { "name": "attribution_model", "type": "string", "required": false, "note": "Phase 2/3 预留：click/view（DSP 浏览归因）" },
+    { "name": "raw_erp_status", "type": "string", "required": false, "note": "审计列：ERP 原始状态，recipe 不读" }
   ]
 }

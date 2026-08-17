@@ -3,6 +3,13 @@
 > Phase 1：`user.connector_load_feed` 读 `connector/fixtures/*.csv`，输出列见 `connector/feeds/*.schema.json`。  
 > ERP 原始列名差异在 connector 内映射，**recipe 只认 canonical 列**。
 
+## canonical 列名（唯一契约，以 feeds/*.schema.json 为准）
+
+- **订单**：`order_id` · `order_date` · `platform_sku` · `asin` · `quantity` · `item_price` · `currency` · `order_status` · `is_refund` · `biz_date`
+- **广告**：`ad_date` · `platform_sku` · `campaign_id` · `spend` · `currency` · `impressions` · `clicks` · `biz_date`
+
+> 任何平台映射 / SKILL / recipe 一律用这些列名，**不得另起别名**（`sku` / `gross_amount` / `platform_status` 这些名字不存在）。新增列先加 `feeds/*.schema.json`，再改 connector 映射。
+
 ## 对账 join 键
 
 | 列名 | 订单表 | 广告表 | 规则 |

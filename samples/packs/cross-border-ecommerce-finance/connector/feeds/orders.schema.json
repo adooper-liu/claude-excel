@@ -13,6 +13,10 @@
     { "name": "currency", "type": "string", "required": true },
     { "name": "order_status", "type": "string", "required": false },
     { "name": "is_refund", "type": "boolean", "required": false },
-    { "name": "biz_date", "type": "date", "required": true, "note": "对账 join 键；orders 取自 order_date" }
+    { "name": "biz_date", "type": "date", "required": true, "note": "对账 join 键；orders 取自 order_date" },
+    { "name": "marketplace_id", "type": "string", "required": false, "note": "Phase 2 预留：多站点标识" },
+    { "name": "traffic_source_tag", "type": "string", "required": false, "note": "Phase 2 预留：Lazada 订单级流量标记" },
+    { "name": "rate_lock_type", "type": "string", "required": false, "note": "Phase 2 预留：锁价/浮价" },
+    { "name": "raw_erp_status", "type": "string", "required": false, "note": "审计列：ERP 原始状态，recipe 不读" }
   ]
 }
