@@ -128,3 +128,4 @@ export function dayToIso(day: number): string
 | 2026-08-17 | coding | Codex CLI | `efa049e` | Pack §B1.4：reconcile 暴露 reviewPending + finance-run 用 date_window(7)/biz_date + pack-audit 加 review_pending 列 + SKILL.md 同步；前端 241 / 后端 121 / typecheck 全绿，dirty fixture 集成核验 date_window reviewPending=10、SKU-016/17/18 收回 |
 | 2026-08-17 | design | Claude Code | `—` | 补第 0 步日期规整：Excel 序列号/yyyymmdd/ISO 混存 → 共享 parseDateCell 统一三处（coerceDate/datetime/dateToDay） |
 | 2026-08-17 | review | Claude Code | `—` | 只读 review：efa049e 核心正确无阻塞；日期规整（第 0 步）未做，需补完再合入 |
+| 2026-08-17 | coding | Codex CLI | `8cb6555` | 第 0 步日期规整：新增 date-cell.ts（parseDateCell/dayToIso），三处接入 coerceDate/datetime/dateToDay；date-cell 基准 45296/45297/46027/20240105 全对，前端 246 / 后端 121 / typecheck 全绿 |
