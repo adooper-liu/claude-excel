@@ -83,3 +83,4 @@ git checkout master && git pull && git checkout -b feat/finance-profit-formula
 | 日期 | 阶段 | 负责 | commit | 说明 |
 |---|---|---|---|---|
 | 2026-08-17 | design | Claude Code | `—` | 记录问题：利润公式=销售额；定方向：write_formula 净利活公式 + 接 user.profit_assumptions 11 项费率 |
+| 2026-08-17 | coding | Codex CLI | `f2411b5` | 利润公式改造：profit-formula-core 净利公式 + finance-run 调 user.profit_assumptions 写 11 项费率 + write_formula 写净利活公式 + SKILL 第 4/5 步同步；前端 248 / 后端 121 / typecheck 全绿 |
