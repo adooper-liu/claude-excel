@@ -228,3 +228,28 @@ def test_list_packs_merges_imported_with_source(tmp_path, monkeypatch):
     assert third["source"] == "third-party"
     assert third["categoryLabel"] == "跨境物流"
     assert official["categoryLabel"] == "跨境电商"
+
+
+def test_install_third_party_pack_allows_free_category(tmp_path, monkeypatch):
+    import user_skills_store
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-logistics"
+    (src / "skills" / "logistics-check").mkdir(parents=True)
+    (src / "skills" / "logistics-check" / "SKILL.md").write_text(
+        "---\nname: logistics-check\ndescription: 物流检查\nslash: 物流检查\n---\n# check\n",
+        encoding="utf-8",
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-logistics", "category": "自定义物流分类", "title": "物流", "skills": ["logistics-check"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    result = install_pack("vendor-logistics")
+    assert result["packId"] == "vendor-logistics"
+    rec = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
+    assert rec[0]["source"] == "third-party"
+    assert rec[0]["skills"] == ["logistics-check"]

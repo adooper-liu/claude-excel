@@ -225,17 +225,14 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
     pid = str(pack_id or "").strip()
     if not pid:
         raise ValueError("packId required")
-    pack_dir = PACKS_DIR / pid
+    pack_dir, source = _resolve_pack_dir(pid)
     pf = pack_dir / "pack.json"
-    if not pf.is_file():
-        raise ValueError("示例包不存在: " + pid)
-
     pack = _read_json(pf)
     if str(pack.get("id") or "").strip() != pid:
         raise ValueError("pack.json 的 id 与目录名不一致")
 
     category = str(pack.get("category") or "").strip()
-    if category and not any(c.get("id") == category for c in load_taxonomy()):
+    if source == "official" and category and not any(c.get("id") == category for c in load_taxonomy()):
         raise ValueError(f"category 不在 taxonomy 里: {category}")
 
     skills = _list_skills(pack_dir)
@@ -311,6 +308,8 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
     records.append(
         {
             "id": pid,
+            "source": source,
+            "skills": [s["id"] for s in result_skills],
             "installedAt": now,
             "version": str(pack.get("version") or ""),
             "capabilityHash": cap_hash if extensions else "",
