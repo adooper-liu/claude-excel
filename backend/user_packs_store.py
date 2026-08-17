@@ -107,6 +107,19 @@ def import_pack_zip(zip_bytes: bytes) -> dict:
         raise
 
 
+def remove_imported_pack(pack_id: str) -> dict:
+    pid = str(pack_id or "").strip()
+    if not pid:
+        raise ValueError("packId required")
+    if pid in _installed_ids():
+        raise ValueError("请先卸载: " + pid)
+    dest = IMPORTED_PACKS_DIR / pid
+    if not (dest / "pack.json").is_file():
+        raise ValueError("第三方包不存在: " + pid)
+    shutil.rmtree(dest)
+    return {"packId": pid}
+
+
 def load_taxonomy() -> list[dict]:
     if not TAXONOMY_FILE.is_file():
         return []

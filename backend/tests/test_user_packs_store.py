@@ -328,3 +328,23 @@ def test_import_pack_zip_rejects_id_collision(tmp_path, monkeypatch):
     z = _make_zip({"pack.json": json.dumps({"id": "cross-border-ecommerce-research", "skills": []})})
     with pytest.raises(ValueError, match="已存在同名包"):
         user_packs_store.import_pack_zip(z)
+
+
+def test_remove_imported_pack(tmp_path, monkeypatch):
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-x"
+    src.mkdir(parents=True)
+    (src / "pack.json").write_text(json.dumps({"id": "vendor-x", "skills": []}), encoding="utf-8")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    user_packs_store.remove_imported_pack("vendor-x")
+    assert not src.exists()
+
+    installed = tmp_path / "packs-imported" / "vendor-y"
+    installed.mkdir(parents=True)
+    (installed / "pack.json").write_text(json.dumps({"id": "vendor-y", "skills": []}), encoding="utf-8")
+    (tmp_path / "installed_packs.json").write_text(json.dumps([{"id": "vendor-y"}]), encoding="utf-8")
+    with pytest.raises(ValueError, match="请先卸载"):
+        user_packs_store.remove_imported_pack("vendor-y")
