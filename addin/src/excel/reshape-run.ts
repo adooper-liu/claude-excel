@@ -2,7 +2,7 @@ import { askGenerateSample } from "./intent-guard";
 import { inspectWorkbook, inspectTable } from "./inspect";
 import { inferProjectColumns, parseProjectTargets } from "./project-infer-core";
 import { fetchRecipeProject, fetchRecipeTargets } from "./recipe-project";
-import { parseReshapeIntent, pickSourceSheet } from "./reshape-intent";
+import { parseReshapeIntent, pickSourceSheet, type SourceSheet } from "./reshape-intent";
 import { reshapeTable } from "./reshape";
 import { ensureTable } from "./table";
 
@@ -12,6 +12,7 @@ const OP_LABEL: Record<string, string> = {
   split: "拆列",
   coerce: "类型强制",
   project: "列映射",
+  flatten_header: "拍平表头",
 };
 
 function pickFetchSheet(
@@ -106,6 +107,55 @@ export async function runProjectReshapeIntent(
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function headerRowsFromText(userText: string): number {
+  const m = String(userText || "").match(/(\d+)\s*行表头/);
+  if (m) return Math.max(1, parseInt(m[1], 10));
+  return 2;
+}
+
+/** 双层/合并表头 → 一行表头：inspect → reshape_table op=flatten_header */
+export async function runFlattenHeaderIntent(
+  userText: string,
+  onStep?: (msg: string) => void
+): Promise<string> {
+  if (onStep) onStep("🔧 inspect_workbook({})");
+  const wb = await inspectWorkbook();
+  const sheets: SourceSheet[] = wb.sheets.map(function (s) {
+    return {
+      name: s.name,
+      range: s.range,
+      rows: s.rows,
+      headers: s.headers,
+      tableNames: s.tableNames,
+    };
+  });
+  const picked = pickSourceSheet(sheets, { op: "flatten_header" });
+  if (!picked || !picked.range) return askGenerateSample("拍平表头");
+  const headerRows = headerRowsFromText(userText);
+  if (onStep) {
+    onStep(
+      '🔧 reshape_table({op:"flatten_header",sheetName:"' +
+        picked.name +
+        '",range:"' +
+        picked.range +
+        '",headerRows:' +
+        headerRows +
+        "})"
+    );
+  }
+  const r = await reshapeTable({
+    op: "flatten_header",
+    sheetName: picked.name,
+    range: picked.range,
+    headerRows: headerRows,
+  });
+  return [
+    "已用 reshape_table 拍平表头（" + headerRows + " 行→1 行，时间值原样保留）。",
+    "结果表：" + r.outputSheet + "（" + r.rows + " 行）",
+    "源表 " + picked.name + " 未改。",
+  ].join("\n");
 }
 
 /** Run inspect → ensure_table → reshape_table without asking the model. */

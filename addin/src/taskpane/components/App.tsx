@@ -274,6 +274,11 @@ export default function App(): JSX.Element {
           setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
+        if (Excel.isFlattenHeaderRequest(workText)) {
+          const final = await Excel.runFlattenHeaderIntent(workText, ctx.showMessage);
+          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
+          return;
+        }
         if (Excel.isReshapeRequest(workText)) {
           const final = await Excel.runReshapeIntent(workText, ctx.showMessage);
           setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));

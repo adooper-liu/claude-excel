@@ -36,8 +36,9 @@ export const reshapeSkill = [
   "| `split` | 把标签按逗号拆开 | 一列拆成 `列_1` `列_2` … |",
   "| `coerce` | 把金额转成数字 | 非法值变空 |",
   "| `project` | 按位置映射/合并列 | 选列或 merge 多列，赋新列名；`headerless:true` 时首行也是数据 |",
+  "| `flatten_header` | 双层/合并表头拍平 | 大类+子列→一行表头（如 首次扫描时间_文本）；`sheetName`+`range`+`headerRows:2`；不需 ensure_table |",
   "",
-  "必须先是 Excel Table（`ensure_table`）。空工作簿或没有带表头的表时，只回短句让界面出勾选框，不要报错结束。不跨文件合并。从网址/ERP 取数走 /取数。",
+  "除 `flatten_header` 外必须先是 Excel Table（`ensure_table`）。双层表头禁止 read_range 后 write_to_sheet。空工作簿或没有带表头的表时，只回短句让界面出勾选框，不要报错结束。不跨文件合并。从网址/ERP 取数走 /取数。",
 ].join("\n");
 
 export const calculateSkill = [

@@ -1,7 +1,7 @@
 import type { ToolDef } from "./claude";
 import { isSetupRequest } from "../excel/intent-guard";
 
-const NATIVE_HINT = /对账|reconcile|比对|核对|对上|去重|反透视|拆列|转成数字|转数字|reshape|unpivot|dedupe|求和|匹配过来|XLOOKUP|SUMIFS|#REF|查找填充|透视|pivot|提取选中|提取.{0,12}列|大小写统一|统一大小写|规范大小写|extract_selection|规整|整理.{0,8}列|映射|投影|整形|取数_/;
+const NATIVE_HINT = /对账|reconcile|比对|核对|对上|去重|反透视|拆列|转成数字|转数字|reshape|unpivot|dedupe|求和|匹配过来|XLOOKUP|SUMIFS|#REF|查找填充|透视|pivot|提取选中|提取.{0,12}列|大小写统一|统一大小写|规范大小写|extract_selection|规整|整理.{0,8}列|映射|投影|整形|拍平|双层表头|合并表头|flatten_header|取数_/;
 const NATIVE_BLOCKED = new Set(["write_to_sheet", "write_to_range", "write_formula", "write_inputs", "web_fetch", "fill_range", "find_replace"]);
 
 /** For 对账/整形/活公式/透视, drop sheet-writing primitives so the model must call native tools. */

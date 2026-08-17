@@ -49,7 +49,7 @@ const OPERATOR_HINTS: Record<string, string> = {
   write_inputs: "只改假设/输入格。公式格会拒绝。",
   get_sheet_names: "列出工作表名。",
   find_replace: "查找替换。lookIn=values 时不碰公式格。",
-  reshape_table: "dedupe|unpivot|split|coerce|project，只写新表。",
+  reshape_table: "dedupe|unpivot|split|coerce|project|flatten_header，只写新表。",
   reconcile_tables: "两表精确对账，只写新表。",
   calculate_table: "lookup=INDEX/MATCH；sumifs=活汇总；fix_ref 修 #REF!。禁止写死合计。",
   create_pivot: "透视表。字段名必须来自 inspect 的真实表头。",

@@ -8,7 +8,7 @@ export interface SourceSheet {
   tableNames: string[];
 }
 
-export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project";
+export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project" | "flatten_header";
 export type CoerceType = "number" | "text" | "date";
 
 export interface ReshapeIntent {
@@ -26,7 +26,18 @@ export function isProjectReshapeRequest(text: string): boolean {
   return /规整|整理.{0,12}列|列映射|投影|\bproject\b/i.test(t);
 }
 
+export function isFlattenHeaderRequest(text: string): boolean {
+  const t = String(text || "").trim();
+  if (isSetupRequest(t)) return false;
+  if (/对账|reconcile/i.test(t)) return false;
+  return (
+    /拍平.{0,8}表头|双层表头|合并表头|多行表头|一行表头|flatten_header/i.test(t) ||
+    (/表头/.test(t) && /拍平|合并|双层|一行/.test(t))
+  );
+}
+
 export function isReshapeRequest(text: string): boolean {
+  if (isFlattenHeaderRequest(text)) return false;
   if (isProjectReshapeRequest(text)) return false;
   const t = String(text || "").trim();
   if (isSetupRequest(t)) return false;
@@ -83,7 +94,7 @@ export function parseReshapeIntent(text: string): ReshapeIntent {
   throw new Error("请说明要去重、反透视、拆列、转数字还是规整列（project）");
 }
 
-const RESULT_SHEET = /对账|去重结果|反透视|拆列|类型结果|映射结果|reshape|reconcile|_规范|提取结果/i;
+const RESULT_SHEET = /对账|去重结果|反透视|拆列|类型结果|映射结果|拍平结果|reshape|reconcile|_规范|提取结果/i;
 
 export function pickSourceSheet(sheets: SourceSheet[], intent: ReshapeIntent): SourceSheet | null {
   const candidates = sheets.filter(function (s) {

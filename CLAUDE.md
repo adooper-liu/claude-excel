@@ -2,7 +2,20 @@
 
 本文件给在本仓库里改代码的人看。产品目标：**独立的 AI Excel 插件**，不绑 Claude 付费账号。
 
-多工具协同（Claude Code × Cursor）见 **`docs/coordination.md`**（摘要 **`AGENTS.md`**）。
+多工具协同（Claude Code × Cursor）见 **`docs/coordination.md`**（摘要 **`AGENTS.md`**）。复杂任务分两段（Claude 出 plan → Codex 执行）见下方「分两段工作流」。
+
+## 分两段工作流（Claude 出 plan → Codex CLI 执行）
+
+复杂任务（业务逻辑重、出错成本高，或用户点名「分两段」）默认走两段：**Claude 侧锁死只出 plan、禁止实现**；实现交给 Codex CLI。Git 当桥、不贴聊天（方案二）。
+
+| 步骤 | 谁 | 动作 |
+|---|---|---|
+| 1. 出 plan | Claude | 只跑 `superpowers:brainstorming` → `superpowers:writing-plans`，产出 `docs/superpowers/plans/<日期>-<任务>.md` 后**停**。禁止 TDD / 写实现代码 / 跑实现验证 |
+| 2. 交接 | 用户 | commit plan；任务分支上跑 `./scripts/codex-execute-latest-plan.sh`（或双击 `scripts/codex-execute-latest-plan.bat`；脚本先做分支自检，再注入最新 plan 给 `codex exec --sandbox workspace-write`，运行即授权提交） |
+| 3. 执行 | Codex | 逐粒实现，照 plan 跑测试/构建并贴真实输出，按 plan 的 commit 步骤提交 |
+| 4. 审 diff | Claude | `code-review` 对照 plan 逐粒核对，只读不改代码 |
+
+**判断标准**：写 plan 的时间 > 写代码的时间才值得分两段；小改动 / 快速原型 / 边写边验证的探索直接一次做完。串行化仍遵守 `AGENTS.md`（同一时刻只有一个工具在 master 上工作）。
 
 ## 定位：三层 + 底层/用户侧边界（已定）
 

@@ -4,7 +4,7 @@ import { columnKeyToIndex } from "./filter-core";
 import { indexToCol } from "./formula-inspect-core";
 
 export type Cell = string | number | boolean | null;
-export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project";
+export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project" | "flatten_header";
 export type CoerceType = "number" | "text" | "date";
 
 export interface ProjectColumnSpec {
