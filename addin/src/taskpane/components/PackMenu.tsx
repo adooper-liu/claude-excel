@@ -1,22 +1,31 @@
 import React, { useMemo, useRef, useState } from "react";
-import type { Pack } from "../../services/user-skills";
+import type { Pack, SampleSkill } from "../../services/user-skills";
 import { formatExtensionConsent } from "../../services/user-skills";
 import { FINANCE_PACK_ID, importFinanceCsvFiles } from "../../services/finance-csv-import";
 
 interface Props {
   packs: Pack[];
+  samples: SampleSkill[];
+  installedIds: Set<string>;
   onInstallPack?: (packId: string) => Promise<void>;
   onUninstallPack?: (packId: string) => Promise<void>;
+  onInstallSample?: (sampleId: string) => Promise<void>;
+  onUninstallSample?: (sampleId: string) => Promise<void>;
   onClose: () => void;
 }
 
 export default function PackMenu({
   packs,
+  samples,
+  installedIds,
   onInstallPack,
   onUninstallPack,
+  onInstallSample,
+  onUninstallSample,
   onClose,
 }: Props): JSX.Element {
   const [packBusy, setPackBusy] = useState<string | null>(null);
+  const [sampleBusy, setSampleBusy] = useState<string | null>(null);
   const [packErr, setPackErr] = useState("");
   const [consentFor, setConsentFor] = useState<string | null>(null);
   const [ordersFile, setOrdersFile] = useState<File | null>(null);
@@ -91,15 +100,15 @@ export default function PackMenu({
   }
 
   return (
-    <div className="flyout pack-flyout" role="dialog" aria-label="场景包">
+    <div className="flyout pack-flyout" role="dialog" aria-label="安装">
       <div className="flyout-head">
-        <span>场景包</span>
+        <span>安装</span>
         <button className="icon-btn" onClick={onClose} title="关闭" aria-label="关闭">
           ✕
         </button>
       </div>
-      {packs.length === 0 ? (
-        <p className="flyout-empty">暂无可用场景包。</p>
+      {packs.length === 0 && samples.length === 0 ? (
+        <p className="flyout-empty">暂无可用示例。</p>
       ) : (
         <div className="pack-menu-groups">
           {packGroups.map((g) => (
@@ -224,6 +233,59 @@ export default function PackMenu({
               ))}
             </div>
           ))}
+          {samples.length > 0 && (
+            <div className="pack-menu-group">
+              <div className="pack-group-label">单个示例</div>
+              {samples.map((s) => {
+                const isInstalled = installedIds.has(s.id);
+                return (
+                  <div key={s.id} className="pack-menu-item">
+                    <div className="pack-card-title">{s.title}</div>
+                    <div className="pack-card-meta">
+                      /{s.slash}
+                      {isInstalled ? " · 已安装" : ""}
+                    </div>
+                    {!isInstalled && onInstallSample && (
+                      <button
+                        type="button"
+                        className="pack-install-btn"
+                        disabled={sampleBusy === s.id}
+                        onClick={() => {
+                          setPackErr("");
+                          setSampleBusy(s.id);
+                          void onInstallSample(s.id)
+                            .catch((err) => {
+                              setPackErr(err instanceof Error ? err.message : String(err));
+                            })
+                            .finally(() => setSampleBusy(null));
+                        }}
+                      >
+                        {sampleBusy === s.id ? "安装中…" : "安装"}
+                      </button>
+                    )}
+                    {isInstalled && onUninstallSample && (
+                      <button
+                        type="button"
+                        className="pack-install-btn pack-uninstall-btn"
+                        disabled={sampleBusy === s.id}
+                        onClick={() => {
+                          setPackErr("");
+                          setSampleBusy(s.id);
+                          void onUninstallSample(s.id)
+                            .catch((err) => {
+                              setPackErr(err instanceof Error ? err.message : String(err));
+                            })
+                            .finally(() => setSampleBusy(null));
+                        }}
+                      >
+                        {sampleBusy === s.id ? "卸载中…" : "卸载"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
       {packErr && <p className="pack-menu-err">{packErr}</p>}

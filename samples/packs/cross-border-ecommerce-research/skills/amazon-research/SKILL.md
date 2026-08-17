@@ -6,7 +6,7 @@ slash: 亚马逊选品
 
 # Amazon 选品（示例）
 
-方法论（SERP 格局、利润 11 项、VOC 六维）见仓库 `samples/industry-deconstruct-appendix.md` — 请上传**知识库**或 `/调研` 对照，**本技能只编排已有算子**。
+方法论（SERP 格局、利润 11 项、VOC 六维）与**字段口径**见仓库 `samples/industry-deconstruct-appendix.md`（「统一字段口径」节）— 请上传**知识库**或 `/调研` 对照，**本技能只编排已有算子**。
 
 ## 前置
 
@@ -17,7 +17,7 @@ slash: 亚马逊选品
 
 1. **inspect_workbook** → **inspect_table**：确认 `取数_*` 表头与 `columns[].index` / `sampleRows`（表体不进对话）。
 
-2. **reshape_table** `op=project`，`headerless:true`，写出新表（默认 `*_规范`）— 列映射对齐 `recipe/hosts/amazon.com.yml`：
+2. **reshape_table** `op=project`，`headerless:true`，写出新表（默认 `*_规范`）— 列映射对齐 `recipe/hosts/amazon.com.yml`（字段名见附录「统一字段口径」）：
    - 排名 ← 0；标题 ← 1；尺码数 ← 3；评分 ← 5（coerce number）；评论数 ← 7；月购买 ← 8
    - 售价 ← merge [11,12,13] separator "" coerce number；市场价 ← 21；配送费 ← 24
 

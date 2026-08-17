@@ -124,7 +124,7 @@
     - `pack.json` · `skills/finance-reconciliation/SKILL.md` · `knowledge/`
     - `extensions/{profit-assumptions,connector-csv-local}/` — `user.*` 扩展
     - `connector/` — feeds schema + fixtures（**ERP 接缝**）
-- `skills/` — 遗留单技能安装（`install-sample`）
+- `skills/` — 遗留单技能安装（`install-sample`，仅剩 `product-info-search`；`amazon-research` 回退 pack）
 
 ---
 

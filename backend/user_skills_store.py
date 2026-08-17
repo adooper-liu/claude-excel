@@ -9,7 +9,8 @@ from pathlib import Path
 from config_store import CONFIG_DIR
 
 SKILLS_DIR = CONFIG_DIR / "skills"
-SAMPLE_SKILLS_DIR = Path(__file__).resolve().parents[1] / "samples" / "skills"
+SAMPLES_DIR = Path(__file__).resolve().parents[1] / "samples"
+SAMPLE_SKILLS_DIR = SAMPLES_DIR / "skills"
 MAX_SKILLS = 40
 MAX_BYTES = 64 * 1024
 
@@ -140,10 +141,20 @@ def list_sample_skills() -> list[dict]:
     return out
 
 
+def _sample_skill_md_path(sid: str) -> Path | None:
+    """解析示例 skill 的 SKILL.md：legacy samples/skills 优先，其次回退 pack 内副本。"""
+    legacy = SAMPLE_SKILLS_DIR / sid / "SKILL.md"
+    if legacy.is_file():
+        return legacy
+    for md in sorted((SAMPLES_DIR / "packs").glob(f"*/skills/{sid}/SKILL.md")):
+        return md
+    return None
+
+
 def install_sample_skill(sample_id: str, root: Path | None = None) -> dict:
     sid = _safe_id(sample_id)
-    md_path = SAMPLE_SKILLS_DIR / sid / "SKILL.md"
-    if not md_path.is_file():
+    md_path = _sample_skill_md_path(sid)
+    if md_path is None:
         raise ValueError("示例技能不存在: " + sid)
     return install_skill(root, md_path.read_text(encoding="utf-8"))
 

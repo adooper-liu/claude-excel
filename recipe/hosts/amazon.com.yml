@@ -1,5 +1,5 @@
 host: amazon.com
-notes: Amazon 搜索结果 DOM 抓取常见 25 列布局；售价 K/M/N/O 四段合并。
+notes: Amazon 搜索结果 DOM 抓取常见 25 列布局；售价为 merge [11,12,13] 三段拼接合并。
 iterate:
   site: amazon.com
   sort: relevanceblender

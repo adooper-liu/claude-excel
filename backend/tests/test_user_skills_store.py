@@ -37,9 +37,17 @@ def test_install_roundtrip(tmp_path: Path):
     assert list_skills(tmp_path) == []
 
 
-def test_list_and_install_sample_skill(tmp_path: Path):
+def test_list_and_install_product_info_search_sample_skill(tmp_path: Path):
     samples = list_sample_skills()
-    assert any(s["id"] == "amazon-research" for s in samples)
+    assert any(s["id"] == "product-info-search" for s in samples)
+    skill = install_sample_skill("product-info-search", tmp_path)
+    assert skill["slash"] == "product-info-search"
+    assert "web_fetch" in skill["body"]
+    assert "write_to_sheet" in skill["body"]
+    assert list_skills(tmp_path)[0]["id"] == "product-info-search"
+
+
+def test_install_sample_skill_falls_back_to_pack(tmp_path: Path):
     skill = install_sample_skill("amazon-research", tmp_path)
     assert skill["slash"] == "亚马逊选品"
     assert "reshape_table" in skill["body"]
