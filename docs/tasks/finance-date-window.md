@@ -11,8 +11,8 @@ git checkout master && git pull && git checkout -b feat/finance-date-window
 > 上游：`docs/tasks/post-gate-1b-capability-backlog.md` §B1.5/§B1.6/§B1.7（B1 核心已合 master，本任务做 Pack 层收尾）。
 
 - **分支**：`feat/finance-date-window`
-- **状态**：`design`
-- **主责（当前阶段）**：Claude Code（design）→ Cursor（coding）
+- **状态**：`review`
+- **主责（当前阶段）**：Claude Code（review，只读）
 
 ## 目标
 
@@ -110,15 +110,17 @@ export function dayToIso(day: number): string
 
 ## Review notes
 
-**结论：efa049e（Pack §B1.4 核心）正确、无阻塞；但日期规整（第 0 步）未做，date_window 对混存日期仍会错，需补完再合入。**
+**结论：efa049e（Pack §B1.4）+ 8cb6555（日期规整）均正确、可合入；1 条非阻塞 note（datetime 列丢时间）。**
 
 已确认正确：
-- `reviewPending` 统计 = `review === "需复核"` 行数（reconcile-core.ts），语义正确
-- date_window 参数正确（dateWindowDays=7、leftDateKey/rightDateKey 同名 biz_date，满足实现约束）
-- `__` 审计列不影响下游 calculate_table / pivot（只取 left_platform_sku / item_price / spend）
-- 测试断言正确（exact=0、date_window 配对=3、tie conflict=1）
+- `reviewPending` 统计 = `review === "需复核"` 行数，语义正确
+- date_window 参数正确（dateWindowDays=7、leftDateKey/rightDateKey 同名 biz_date）
+- 日期规整 `parseDateCell`：数字优先判 yyyymmdd（19000101–20991231）再判 Excel 序列号（1–60000），`ymdToDay` 带回校验防无效日期，Excel epoch `Date.UTC(1899,11,30)` 正确
+- 三处接入统一（coerceDate / datetime / dateToDay 走 parseDateCell），删除旧重复实现
+- 测试覆盖完整（date-cell 三格式一致 + dayToIso 回写 + 非日期拒绝；reconcile 混存配对；reshape 混存→ISO）
 
-待办（非缺陷）：**日期规整（第 0 步）未做**——efa049e 无 `date-cell.ts`。当前 date_window 对 ISO 日期正确（dirty fixture 核验通过），但混存日期（Excel 序列号 `45296` / yyyymmdd `20240105`）会被 dateToDay 解析错（`20240105` 当序列号 → 巨大天数）。需按 brief 第 0 步补 `parseDateCell` + 三处接入后再合入。
+非阻塞 note（1 条）：
+- `column-format-core.ts` datetime 分支从「原样保留」改「统一 ISO」，会**丢时间部分**（`2024-01-05T14:30:00Z` → `2024-01-05`），且 `kindHint` 文案「日期时间 → 原样保留，不统一时区」未同步。对 biz_date 纯日期正确，但对含时间的 datetime 列（timestamp）有影响。建议同步 kindHint 文案，或对含时间的列单独处理（不阻塞合入）。
 
 ## 进度 log
 
@@ -129,3 +131,4 @@ export function dayToIso(day: number): string
 | 2026-08-17 | design | Claude Code | `—` | 补第 0 步日期规整：Excel 序列号/yyyymmdd/ISO 混存 → 共享 parseDateCell 统一三处（coerceDate/datetime/dateToDay） |
 | 2026-08-17 | review | Claude Code | `—` | 只读 review：efa049e 核心正确无阻塞；日期规整（第 0 步）未做，需补完再合入 |
 | 2026-08-17 | coding | Codex CLI | `8cb6555` | 第 0 步日期规整：新增 date-cell.ts（parseDateCell/dayToIso），三处接入 coerceDate/datetime/dateToDay；date-cell 基准 45296/45297/46027/20240105 全对，前端 246 / 后端 121 / typecheck 全绿 |
+| 2026-08-17 | review | Claude Code | `—` | 只读 review：日期规整（8cb6555）实现正确可合入；1 条非阻塞 note（datetime 列丢时间 + kindHint 未同步） |
