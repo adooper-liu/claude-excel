@@ -25,6 +25,8 @@ git branch -a             # 有没有进行中的分支
 
 发现有进行中分支 / 未提交改动 → **先停下来对齐**，不另起炉灶。
 
+> 上面这套已封装成 [`scripts/git-flow.sh`](scripts/git-flow.sh)：`check`（开工检查）/ `start`（开分支）/ `update` / `push-branch` / `finish`（合入+推送+删分支）/ `sync`（同步 master）。Windows 双击 [`scripts/git-flow.bat`](scripts/git-flow.bat) 默认跑 `check`。
+
 ## 分支（一个任务一条）
 
 - 每个任务从最新 `master` 开 `feat/xxx` 或 `fix/xxx`；不在 master 上改代码（docs 单行链接除外）。

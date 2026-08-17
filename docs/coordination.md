@@ -120,4 +120,5 @@ git branch -d feat/任务名          # 本地删除；远端分支按需 git pu
 - 摘要：根目录 `AGENTS.md`（主目录/串行化/阶段分工/测试门禁），两边启动可见。
 - 完整版：本文 `docs/coordination.md`。
 - 任务 brief：`docs/tasks/_template.md`（每个任务复制一份，作交接唯一载体）。
+- git 操作脚本：`scripts/git-flow.sh`（`check`/`start`/`sync`/`update`/`push-branch`/`finish`），封装 §4 的流程，避免手敲命令出错。
 - 改架构：先改文档再改代码（`CLAUDE.md` 与 docs 是单一真相）。
