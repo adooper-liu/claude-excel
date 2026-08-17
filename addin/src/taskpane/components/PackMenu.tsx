@@ -233,7 +233,12 @@ export default function PackMenu({
                   <button
                     type="button"
                     className="sample-btn ghost"
-                    onClick={() => void exportPack(p.id)}
+                    onClick={() => {
+                      setPackErr("");
+                      void exportPack(p.id).catch((err) =>
+                        setPackErr(err instanceof Error ? err.message : String(err))
+                      );
+                    }}
                   >
                     导出
                   </button>

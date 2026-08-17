@@ -284,7 +284,7 @@ export async function removeImportedPack(id: string): Promise<void> {
 
 export async function exportPack(id: string): Promise<void> {
   const r = await fetch(API + "/packs/" + encodeURIComponent(id) + "/export");
-  if (!r.ok) return;
+  if (!r.ok) throw new Error("导出失败");
   const blob = await r.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
