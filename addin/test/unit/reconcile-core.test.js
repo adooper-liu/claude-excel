@@ -117,6 +117,7 @@ describe("reconcile-core", function () {
       right_only: 0,
       conflict: 0,
     });
+    assert.strictEqual(result.reviewPending, 0);
   });
 
   it("normalize mode matches after trim_lower (trailing space + case)", function () {
@@ -181,6 +182,7 @@ describe("reconcile-core", function () {
     assert.strictEqual(result.counts.matched, 3);
     assert.strictEqual(result.counts.left_only, 0);
     assert.strictEqual(result.counts.right_only, 0);
+    assert.strictEqual(result.reviewPending, 3);
     result.rows.forEach(function (r) {
       assert.strictEqual(r.status, "matched");
       assert.strictEqual(r.matchMode, "date_window");
@@ -234,6 +236,7 @@ describe("reconcile-core", function () {
     assert.strictEqual(result.counts.matched, 0);
     assert.strictEqual(result.counts.conflict, 1);
     assert.strictEqual(result.counts.right_only, 1);
+    assert.strictEqual(result.reviewPending, 1);
     const row = result.rows[0];
     assert.strictEqual(row.status, "conflict");
     assert.strictEqual(row.matchMode, "conflict");

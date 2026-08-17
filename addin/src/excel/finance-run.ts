@@ -120,13 +120,17 @@ export async function runFinanceIntent(
         left.name +
         '",rightTable:"' +
         right.name +
-        '",keys:["platform_sku","biz_date"]})'
+        '",keys:["platform_sku","biz_date"],matchMode:"date_window",dateWindowDays:7,leftDateKey:"biz_date",rightDateKey:"biz_date"})'
     );
   }
   const recon = await reconcileTables({
     leftTable: left.name,
     rightTable: right.name,
     keys: RECONCILE_KEYS,
+    matchMode: "date_window",
+    dateWindowDays: 7,
+    leftDateKey: "biz_date",
+    rightDateKey: "biz_date",
     outputSheet: RECONCILE_SHEET,
     outputTable: RECONCILE_TABLE,
   });
@@ -169,13 +173,17 @@ export async function runFinanceIntent(
 
   const ordersHashFinal = ordersHash;
   const adsHashFinal = adsHash;
-  const attrNote = "广告点击日 vs 订单成交日存在 0–7 天偏移；精确键匹配，毛利为近似口径";
+  const attrNote = "广告点击日 vs 订单成交日 0–7 天偏移；date_window 归因，__review=需复核 行待人工确认";
   const total =
     recon.counts.matched +
     recon.counts.left_only +
     recon.counts.right_only +
     recon.counts.conflict;
-  const auditNote = [attrNote, "matched=" + recon.counts.matched + "/" + total]
+  const auditNote = [
+    attrNote,
+    "matched=" + recon.counts.matched + "/" + total,
+    "review_pending=" + recon.reviewPending,
+  ]
     .filter(Boolean)
     .join("；");
 
@@ -188,6 +196,7 @@ export async function runFinanceIntent(
     leftOnly: recon.counts.left_only,
     rightOnly: recon.counts.right_only,
     conflict: recon.counts.conflict,
+    reviewPending: recon.reviewPending,
     sourceHashOrders: ordersHashFinal,
     sourceHashAds: adsHashFinal,
     note: auditNote,

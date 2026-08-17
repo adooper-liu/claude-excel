@@ -42,6 +42,7 @@ export interface ReconcileRow {
 export interface ReconcileResult {
   rows: ReconcileRow[];
   counts: Record<ReconcileStatus, number>;
+  reviewPending: number;
   outputHeaders: string[];
   outputRows: Cell[][];
 }
@@ -502,6 +503,11 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
   };
   for (const r of rows) counts[r.status] += 1;
 
+  let reviewPending = 0;
+  for (const r of rows) {
+    if (r.review === "需复核") reviewPending += 1;
+  }
+
   const leftOut = leftHeaders.map((h) => `left_${h}`);
   const rightOut = rightHeaders.map((h) => `right_${h}`);
   const outputHeaders = ["status", "key", ...leftOut, ...rightOut, "conflict_columns"];
@@ -521,5 +527,5 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
     }),
   ];
 
-  return { rows, counts, outputHeaders, outputRows };
+  return { rows, counts, reviewPending, outputHeaders, outputRows };
 }

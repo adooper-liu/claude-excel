@@ -10,6 +10,7 @@ export type PackAuditEntry = {
   leftOnly?: number;
   rightOnly?: number;
   conflict?: number;
+  reviewPending?: number;
   sourceHashOrders?: string;
   sourceHashAds?: string;
   note?: string;
@@ -25,6 +26,7 @@ function auditHeaders(): string[] {
     "left_only",
     "right_only",
     "conflict",
+    "review_pending",
     "sourceHash_orders",
     "sourceHash_ads",
     "note",
@@ -42,6 +44,7 @@ function entryToRow(entry: PackAuditEntry): (string | number)[] {
     entry.leftOnly ?? "",
     entry.rightOnly ?? "",
     entry.conflict ?? "",
+    entry.reviewPending ?? "",
     entry.sourceHashOrders ?? "",
     entry.sourceHashAds ?? "",
     entry.note ?? "",

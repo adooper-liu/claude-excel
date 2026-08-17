@@ -36,6 +36,7 @@ export async function reconcileTables(input: ReconcileTablesInput): Promise<{
   outputSheet: string;
   outputTable: string;
   counts: { matched: number; left_only: number; right_only: number; conflict: number };
+  reviewPending: number;
   keys: string[];
 }> {
   const left = await readTable(input.leftTable);
@@ -69,5 +70,11 @@ export async function reconcileTables(input: ReconcileTablesInput): Promise<{
     await context.sync();
   });
 
-  return { outputSheet, outputTable: ensured.name, counts: result.counts, keys: input.keys };
+  return {
+    outputSheet,
+    outputTable: ensured.name,
+    counts: result.counts,
+    reviewPending: result.reviewPending,
+    keys: input.keys,
+  };
 }
