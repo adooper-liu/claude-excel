@@ -34,13 +34,14 @@ MAX_PACK_EXTENSIONS = 20
 
 
 def _resolve_pack_dir(pack_id: str) -> tuple[Path, str]:
-    official = PACKS_DIR / pack_id
+    pid = _safe_pack_id(pack_id)
+    official = PACKS_DIR / pid
     if (official / "pack.json").is_file():
         return official, "official"
-    imported = IMPORTED_PACKS_DIR / pack_id
+    imported = IMPORTED_PACKS_DIR / pid
     if (imported / "pack.json").is_file():
         return imported, "third-party"
-    raise ValueError("示例包不存在: " + pack_id)
+    raise ValueError("示例包不存在: " + pid)
 
 
 def _read_json(path: Path) -> dict:
@@ -51,6 +52,31 @@ def _read_json(path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"{path.name} 需要是 JSON 对象")
     return data
+
+
+_WINDOWS_INVALID_CHARS = set(':*?"<>|')
+
+
+def _safe_pack_id(pid: str) -> str:
+    """Validate a pack id used to build filesystem paths.
+
+    Pack ids come from untrusted pack.json or user input and are used as a
+    single path segment under IMPORTED_PACKS_DIR / PACKS_DIR. Reject anything
+    that could escape the pack directory (traversal) or is not a portable
+    single-segment name (Windows-invalid chars).
+    """
+    pid = str(pid or "").strip()
+    if not pid:
+        raise ValueError("pack id 无效: " + pid)
+    if pid in (".", ".."):
+        raise ValueError("pack id 无效: " + pid)
+    if "/" in pid or "\\" in pid:
+        raise ValueError("pack id 无效: " + pid)
+    if any(seg == ".." for seg in pid.split("/")):
+        raise ValueError("pack id 无效: " + pid)
+    if any(ch in _WINDOWS_INVALID_CHARS for ch in pid):
+        raise ValueError("pack id 无效: " + pid)
+    return pid
 
 
 MAX_IMPORT_BYTES = 5 * 1024 * 1024
@@ -73,6 +99,8 @@ def _extract_import_zip(zip_bytes: bytes, dest: Path) -> None:
     infos = zf.infolist()
     if len(infos) > MAX_IMPORT_ENTRIES:
         raise ValueError(f"zip 条目超过 {MAX_IMPORT_ENTRIES} 上限")
+    if sum(i.file_size for i in infos) > MAX_IMPORT_BYTES:
+        raise ValueError("zip 解压超过 5MB 上限")
     for info in infos:
         if not _safe_zip_name(info.filename):
             raise ValueError("zip 含非法路径: " + info.filename)
@@ -91,9 +119,7 @@ def import_pack_zip(zip_bytes: bytes) -> dict:
     try:
         _extract_import_zip(zip_bytes, staging)
         pack = _read_json(staging / "pack.json")
-        pid = str(pack.get("id") or "").strip()
-        if not pid:
-            raise ValueError("pack.json 需要 id")
+        pid = _safe_pack_id(str(pack.get("id") or ""))
         if (PACKS_DIR / pid / "pack.json").is_file() or (IMPORTED_PACKS_DIR / pid / "pack.json").is_file():
             raise ValueError(f"已存在同名包: {pid}，请改用 {{vendor}}-{{pack}} 命名")
         dest = IMPORTED_PACKS_DIR / pid
@@ -108,9 +134,7 @@ def import_pack_zip(zip_bytes: bytes) -> dict:
 
 
 def remove_imported_pack(pack_id: str) -> dict:
-    pid = str(pack_id or "").strip()
-    if not pid:
-        raise ValueError("packId required")
+    pid = _safe_pack_id(pack_id)
     if pid in _installed_ids():
         raise ValueError("请先卸载: " + pid)
     dest = IMPORTED_PACKS_DIR / pid
@@ -121,7 +145,7 @@ def remove_imported_pack(pack_id: str) -> dict:
 
 
 def export_pack_zip(pack_id: str) -> bytes:
-    pid = str(pack_id or "").strip()
+    pid = _safe_pack_id(pack_id)
     pack_dir, _ = _resolve_pack_dir(pid)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -182,11 +206,15 @@ def list_packs() -> list[dict]:
     out: list[dict] = []
     if PACKS_DIR.is_dir():
         for pack_dir in sorted(PACKS_DIR.iterdir()):
+            if pack_dir.name.startswith("."):
+                continue
             e = _catalog_entry(pack_dir, "official")
             if e:
                 out.append(e)
     if IMPORTED_PACKS_DIR.is_dir():
         for pack_dir in sorted(IMPORTED_PACKS_DIR.iterdir()):
+            if pack_dir.name.startswith("."):
+                continue
             e = _catalog_entry(pack_dir, "third-party")
             if e:
                 out.append(e)
@@ -400,6 +428,8 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
 
     return {
         "packId": pid,
+        "id": pid,
+        "source": source,
         "category": category,
         "categoryLabel": category_label(category),
         "title": str(pack.get("title") or pid),

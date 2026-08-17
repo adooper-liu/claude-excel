@@ -17,6 +17,7 @@ from config_store import save_config, get_config
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
 from user_packs_store import (
+    MAX_IMPORT_BYTES,
     export_pack_zip,
     import_pack_zip,
     install_pack,
@@ -420,7 +421,9 @@ async def api_list_packs():
 @app.post("/api/user-skills/packs/import")
 async def api_import_pack(request: Request, file: UploadFile = File(...)):
     require_loopback(request)
-    data = await file.read()
+    data = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(data) > MAX_IMPORT_BYTES:
+        raise ValueError("zip 超过 5MB 上限")
     try:
         entry = import_pack_zip(data)
     except ValueError as exc:
