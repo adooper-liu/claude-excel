@@ -5,9 +5,9 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.routing import APIRouter
 import uvicorn
@@ -16,7 +16,14 @@ from ai_proxy import chat_complete, chat_stream, validate_key
 from config_store import save_config, get_config
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
-from user_packs_store import install_pack, list_packs, uninstall_pack
+from user_packs_store import (
+    export_pack_zip,
+    import_pack_zip,
+    install_pack,
+    list_packs,
+    remove_imported_pack,
+    uninstall_pack,
+)
 from extension_secrets import set_secret
 from user_extension_registry import list_extensions
 from user_fn_runner import run_user_fn
@@ -408,6 +415,41 @@ async def api_install_sample_skill(req: dict, request: Request):
 @app.get("/api/user-skills/packs")
 async def api_list_packs():
     return {"packs": list_packs()}
+
+
+@app.post("/api/user-skills/packs/import")
+async def api_import_pack(request: Request, file: UploadFile = File(...)):
+    require_loopback(request)
+    data = await file.read()
+    try:
+        entry = import_pack_zip(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"pack": entry}
+
+
+@app.delete("/api/user-skills/packs/imported/{pack_id}")
+async def api_remove_imported_pack(pack_id: str, request: Request):
+    require_loopback(request)
+    try:
+        result = remove_imported_pack(pack_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"pack": result}
+
+
+@app.get("/api/user-skills/packs/{pack_id}/export")
+async def api_export_pack(pack_id: str, request: Request):
+    require_loopback(request)
+    try:
+        data = export_pack_zip(pack_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{pack_id}.zip"'},
+    )
 
 
 @app.post("/api/user-skills/install-pack")
