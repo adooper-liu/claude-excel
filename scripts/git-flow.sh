@@ -170,11 +170,11 @@ finish() {
     exit 1
   fi
   git push origin master
-  git branch -d "$branch"
-  echo "✅ 已合入并推送 master，本地分支 $branch 已删除。"
-  if git rev-parse --verify --quiet "origin/$branch" >/dev/null 2>&1; then
-    echo "ℹ️ 远端仍有 origin/$branch，需手动删：git push origin --delete $branch"
-  fi
+  # ff-only 合并成功 = 分支 commit 全在 master；用 -D 强删，避免 -d 因「本地领先远端分支」误拒
+  git branch -D "$branch"
+  # 项目约定「合并即删」，同步删远端；远端已不存在时忽略报错
+  git push origin --delete "$branch" 2>/dev/null || true
+  echo "✅ 已合入并推送 master，本地 + 远端分支 $branch 已清理。"
 }
 
 cmd="${1:-}"
