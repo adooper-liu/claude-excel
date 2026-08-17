@@ -12,7 +12,7 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, fetchSampleSkills, installSampleSkill, deleteUserSkill, type InstalledSkill, type Pack, type SampleSkill } from '../../services/user-skills';
+import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, fetchSampleSkills, installSampleSkill, deleteUserSkill, importPackZip, removeImportedPack, type InstalledSkill, type Pack, type SampleSkill } from '../../services/user-skills';
 import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
@@ -567,6 +567,18 @@ export default function App(): JSX.Element {
     const fresh = await fetchUserSkills();
     setInstalled(fresh);
   }, []);
+
+  const handleImportPack = useCallback(async (file: File) => {
+    await importPackZip(file);
+    const fresh = await fetchPacks();
+    setPacks(fresh);
+  }, []);
+
+  const handleRemoveImportedPack = useCallback(async (id: string) => {
+    await removeImportedPack(id);
+    const fresh = await fetchPacks();
+    setPacks(fresh);
+  }, []);
   useEffect(() => {
     if (history.length === 0) setShowHistory(false);
   }, [history.length]);
@@ -663,6 +675,8 @@ export default function App(): JSX.Element {
               onUninstallPack={handleUninstallPack}
               onInstallSample={handleInstallSample}
               onUninstallSample={handleUninstallSample}
+              onImportPack={handleImportPack}
+              onRemoveImportedPack={handleRemoveImportedPack}
               onClose={() => setShowPacks(false)}
             />
           )}
