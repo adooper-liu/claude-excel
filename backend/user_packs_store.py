@@ -23,11 +23,22 @@ from user_extension_registry import (
 SAMPLES_DIR = Path(__file__).resolve().parents[1] / "samples"
 PACKS_DIR = SAMPLES_DIR / "packs"
 TAXONOMY_FILE = SAMPLES_DIR / "taxonomy.json"
+IMPORTED_PACKS_DIR = CONFIG_DIR / "packs-imported"
 
 # Cap so a malformed pack can't dump a huge number of skills.
 MAX_PACK_SKILLS = 20
 MAX_PACK_KNOWLEDGE = 20
 MAX_PACK_EXTENSIONS = 20
+
+
+def _resolve_pack_dir(pack_id: str) -> tuple[Path, str]:
+    official = PACKS_DIR / pack_id
+    if (official / "pack.json").is_file():
+        return official, "official"
+    imported = IMPORTED_PACKS_DIR / pack_id
+    if (imported / "pack.json").is_file():
+        return imported, "third-party"
+    raise ValueError("示例包不存在: " + pack_id)
 
 
 def _read_json(path: Path) -> dict:
@@ -57,41 +68,48 @@ def category_label(category_id: str) -> str:
     return category_id or "未分类"
 
 
+def _catalog_entry(pack_dir: Path, source: str) -> dict | None:
+    pf = pack_dir / "pack.json"
+    if not pf.is_file():
+        return None
+    try:
+        pack = _read_json(pf)
+    except ValueError:
+        return None
+    pid = str(pack.get("id") or "").strip()
+    if not pid:
+        return None
+    category = str(pack.get("category") or "").strip()
+    cat_label = category_label(category) if source == "official" else (category or "第三方")
+    return {
+        "id": pid,
+        "source": source,
+        "category": category,
+        "categoryLabel": cat_label,
+        "title": str(pack.get("title") or pid),
+        "description": str(pack.get("description") or ""),
+        "version": str(pack.get("version") or ""),
+        "gate": str(pack.get("gate") or ""),
+        "skills": _list_skills(pack_dir),
+        "knowledge": _list_knowledge(pack_dir),
+        "extensions": list_catalog_extensions(pack_dir),
+        "deps": pack.get("deps") or {},
+        "installed": pid in _installed_ids(),
+    }
+
+
 def list_packs() -> list[dict]:
-    """Scan samples/packs/*/pack.json and return catalog entries."""
-    if not PACKS_DIR.is_dir():
-        return []
     out: list[dict] = []
-    for pack_dir in sorted(PACKS_DIR.iterdir()):
-        pf = pack_dir / "pack.json"
-        if not pf.is_file():
-            continue
-        try:
-            pack = _read_json(pf)
-        except ValueError:
-            continue
-        pid = str(pack.get("id") or "").strip()
-        if not pid:
-            continue
-        skills = _list_skills(pack_dir)
-        knowledge = _list_knowledge(pack_dir)
-        extensions = list_catalog_extensions(pack_dir)
-        out.append(
-            {
-                "id": pid,
-                "category": str(pack.get("category") or ""),
-                "categoryLabel": category_label(str(pack.get("category") or "")),
-                "title": str(pack.get("title") or pid),
-                "description": str(pack.get("description") or ""),
-                "version": str(pack.get("version") or ""),
-                "gate": str(pack.get("gate") or ""),
-                "skills": skills,
-                "knowledge": knowledge,
-                "extensions": extensions,
-                "deps": pack.get("deps") or {},
-                "installed": pid in _installed_ids(),
-            }
-        )
+    if PACKS_DIR.is_dir():
+        for pack_dir in sorted(PACKS_DIR.iterdir()):
+            e = _catalog_entry(pack_dir, "official")
+            if e:
+                out.append(e)
+    if IMPORTED_PACKS_DIR.is_dir():
+        for pack_dir in sorted(IMPORTED_PACKS_DIR.iterdir()):
+            e = _catalog_entry(pack_dir, "third-party")
+            if e:
+                out.append(e)
     return out
 
 
