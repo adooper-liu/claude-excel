@@ -109,4 +109,5 @@ git checkout master && git pull && git checkout -b feat/reconcile-normalize
 
 | 日期 | 阶段 | 负责 | commit | 说明 |
 |---|---|---|---|---|
-| 2026-08-17 | design | Claude Code | `—` | 从 backlog §B1 摘出 + 补现状锚点（reconcile-core.ts L31/L62、reconcile.ts L8/L18、handler L184、manifest、recipe-project L20） |
+| 2026-08-17 | design | Claude Code | `—` |
+| 2026-08-17 | coding | Codex CLI | `dfdeb18` | B1 核心：matchMode 决策树（exact/normalize/date_window）+ `__match_mode/__match_score/__review` 审计列 + manifest/handler 透传 + recipe-project 跳过 `__` 列；单测 15 项全绿（前端 241 / 后端 121 / typecheck），dirty fixture 集成核验 SKU-016/17/18 收回（matched +10） | 从 backlog §B1 摘出 + 补现状锚点（reconcile-core.ts L31/L62、reconcile.ts L8/L18、handler L184、manifest、recipe-project L20） |
