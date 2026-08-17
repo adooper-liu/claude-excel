@@ -11,8 +11,8 @@ git checkout master && git pull && git checkout -b feat/reconcile-normalize
 > 本 brief 是 Claude Code × Cursor 的**唯一交接载体**。上游方案见 [`docs/tasks/post-gate-1b-capability-backlog.md`](post-gate-1b-capability-backlog.md) §B1；本文件从 §B1 摘出并补现状锚点（文件/行号/函数）。禁止在聊天里互贴长方案/状态。
 
 - **分支**：`feat/reconcile-normalize`
-- **状态**：`design`
-- **主责（当前阶段）**：Claude Code（design）→ Cursor（coding）
+- **状态**：`review`
+- **主责（当前阶段）**：Claude Code（review，只读）
 
 ## 目标
 
@@ -103,11 +103,24 @@ git checkout master && git pull && git checkout -b feat/reconcile-normalize
 
 ## Review notes
 
-（待 coding 后填，只读不改代码）
+**结论：核心逻辑正确，无阻塞缺陷，可合入。** 以下按严重程度排序，均为非阻塞项。
+
+1. **[中] `leftDateKey ≠ rightDateKey` 异名日期列不可用** — `reconcile-core.ts` L368 通用 key 校验要求所有 `keys` 在两表都存在，跨表异名日期列（订单 `order_date` vs 广告 `ad_date`）会在此抛错。实际业务由 connector 归一为同名 `biz_date`（`connector/feeds/orders.schema.json` / `ads.schema.json` 均产出 `biz_date` join 键），故不阻塞；但 manifest/backlog 写「leftDateKey + rightDateKey」暗示可异名，与实现不符。建议：文档明确「日期列须同名（connector 已归一为 biz_date）」，或后续放宽 L368 校验。
+
+2. **[低] normalize 匹配的 `__match_mode` 标 `exact`** — `reconcile-core.ts` L186 `matchMode: "exact"` 覆盖了 Stage B（trim_lower/trim_collapse_ws）匹配行；因 `MatchLabel` 枚举无 `normalize`（backlog §B1.3 亦无），属有意取舍（测试 L136 断言）。语义上「归一后匹配」标 exact 略误导，建议未来加 `normalize` 标签。
+
+3. **[低] date_window 配对 + compareColumns 冲突 → `__match_mode="conflict"`** — `reconcile-core.ts` L351，date_window 配对成功但值冲突时 matchMode 标 `conflict`（非 `date_window`），丢失「经日期窗口配上」的信息。非静默择优（status 仍 conflict），正确性无影响。
+
+4. **[低] recipe-project 对 `__` 列是「无条件跳过」** — `recipe-project.ts` `isReservedAuditColumn` 对 `as`/`from` 均跳过，用户无法用显式 `columns[].from` 带走审计列；backlog §0 写「默认不映射，显式 from 可带走」。当前实现更严格（完全禁止），比 backlog 更安全，但偏离原意。可接受，或后续补显式覆盖通道。
+
+5. **[极低] `dateToDay` 非标准日期字符串走 `Date.parse`（本地时区）** — `reconcile-core.ts` L103；标准 `YYYY-MM-DD`/`YYYY/M/D` 走 `Date.UTC`（L95-101）无时区问题，业务由 connector 归一 ISO date，基本不触发。
+
+**已确认正确（抽查）：** exact 向后兼容（输出 headers 无审计列、行序不变，测试 L96 回归）；Stage A(trim)→B(keyNormalize)→C(date_window) 决策树顺序符合 backlog §B1.3；tie 最小差 → conflict 不静默择优（测试 L218）；auditColumns 默认 `matchMode !== "exact"`（L377）；handler/manifest 参数解析与 core 一致；recipe-project LF 归一（185 行换行，真实改动 8+/3-，已用 `--ignore-space-at-eol` 核对）。
 
 ## 进度 log
 
 | 日期 | 阶段 | 负责 | commit | 说明 |
 |---|---|---|---|---|
-| 2026-08-17 | design | Claude Code | `—` |
-| 2026-08-17 | coding | Codex CLI | `dfdeb18` | B1 核心：matchMode 决策树（exact/normalize/date_window）+ `__match_mode/__match_score/__review` 审计列 + manifest/handler 透传 + recipe-project 跳过 `__` 列；单测 15 项全绿（前端 241 / 后端 121 / typecheck），dirty fixture 集成核验 SKU-016/17/18 收回（matched +10） | 从 backlog §B1 摘出 + 补现状锚点（reconcile-core.ts L31/L62、reconcile.ts L8/L18、handler L184、manifest、recipe-project L20） |
+| 2026-08-17 | design | Claude Code | `—` | 从 backlog §B1 摘出 + 补现状锚点（reconcile-core.ts L31/L62、reconcile.ts L8/L18、handler L184、manifest、recipe-project L20） |
+| 2026-08-17 | coding | Codex CLI | `dfdeb18` | B1 核心：matchMode 决策树（exact/normalize/date_window）+ `__match_mode/__match_score/__review` 审计列 + manifest/handler 透传 + recipe-project 跳过 `__` 列；单测 15 项全绿（前端 241 / 后端 121 / typecheck），dirty fixture 集成核验 SKU-016/17/18 收回（matched +10） |
+| 2026-08-17 | review | Claude Code | `—` | 只读 review：无阻塞缺陷；5 条非阻塞 note（异名日期列不支持 / normalize 标 exact / date_window 冲突标 conflict / project 无条件跳过 __ / dateToDay 时区） |
