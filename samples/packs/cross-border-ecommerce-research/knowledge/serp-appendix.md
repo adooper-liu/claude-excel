@@ -2,7 +2,7 @@
 
 本文件供用户自行上传到 **知识库（知栏）** 或改写成 **用户技能**。核心 `/拆解` 不包含以下内容。
 
-可选示例技能包：`samples/skills/amazon-research/`（任务窗格空状态可一键安装，或复制到 `~/.claude-excel-web/skills/`）。
+可选示例：`install-pack {"packId":"cross-border-ecommerce-research"}`（Gate 1a 选品，含 `amazon-research` 技能）。
 
 ---
 

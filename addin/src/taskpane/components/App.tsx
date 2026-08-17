@@ -12,7 +12,7 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, type InstalledSkill, type Pack } from '../../services/user-skills';
+import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, fetchSampleSkills, installSampleSkill, deleteUserSkill, importPackZip, removeImportedPack, type InstalledSkill, type Pack, type SampleSkill } from '../../services/user-skills';
 import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
@@ -161,6 +161,7 @@ export default function App(): JSX.Element {
   const installedRef = useRef<InstalledSkill[]>([]);
   installedRef.current = installed;
   const [packs, setPacks] = useState<Pack[]>([]);
+  const [samples, setSamples] = useState<SampleSkill[]>([]);
   const messagesRef = useRef<Message[]>([]);
   messagesRef.current = messages;
   const nextMsgId = () => {
@@ -211,6 +212,10 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     fetchPacks().then(setPacks).catch(() => { /* backend down */ });
+  }, []);
+
+  useEffect(() => {
+    fetchSampleSkills().then(setSamples).catch(() => { /* backend down */ });
   }, []);
 
   // Agentic chat
@@ -548,6 +553,32 @@ export default function App(): JSX.Element {
     const fresh = await fetchUserSkills();
     setInstalled(fresh);
   }, []);
+
+  const handleInstallSample = useCallback(async (sampleId: string) => {
+    await installSampleSkill(sampleId);
+    invalidateToolsCache();
+    const fresh = await fetchUserSkills();
+    setInstalled(fresh);
+  }, []);
+
+  const handleUninstallSample = useCallback(async (sampleId: string) => {
+    await deleteUserSkill(sampleId);
+    invalidateToolsCache();
+    const fresh = await fetchUserSkills();
+    setInstalled(fresh);
+  }, []);
+
+  const handleImportPack = useCallback(async (file: File) => {
+    await importPackZip(file);
+    const fresh = await fetchPacks();
+    setPacks(fresh);
+  }, []);
+
+  const handleRemoveImportedPack = useCallback(async (id: string) => {
+    await removeImportedPack(id);
+    const fresh = await fetchPacks();
+    setPacks(fresh);
+  }, []);
   useEffect(() => {
     if (history.length === 0) setShowHistory(false);
   }, [history.length]);
@@ -618,15 +649,15 @@ export default function App(): JSX.Element {
             className={
               "icon-btn pack-btn"
               + (showPacks ? " on" : "")
-              + (packs.some((p) => !p.installed) ? " has-available" : "")
+              + (packs.some((p) => !p.installed) || samples.some((s) => !installed.some((i) => i.id === s.id)) ? " has-available" : "")
             }
             onClick={() => {
               setShowSessions(false);
               setShowHistory(false);
               setShowPacks((v) => !v);
             }}
-            title="场景包"
-            aria-label="场景包"
+            title="安装"
+            aria-label="安装"
           >
             <svg className="pack-btn-icon" viewBox="0 0 16 16" aria-hidden="true">
               <path
@@ -638,8 +669,14 @@ export default function App(): JSX.Element {
           {showPacks && (
             <PackMenu
               packs={packs}
+              samples={samples}
+              installedIds={new Set(installed.map((s) => s.id))}
               onInstallPack={handleInstallPack}
               onUninstallPack={handleUninstallPack}
+              onInstallSample={handleInstallSample}
+              onUninstallSample={handleUninstallSample}
+              onImportPack={handleImportPack}
+              onRemoveImportedPack={handleRemoveImportedPack}
               onClose={() => setShowPacks(false)}
             />
           )}

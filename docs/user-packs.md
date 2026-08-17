@@ -44,7 +44,7 @@ samples/
   packs/
     cross-border-ecommerce-research/   # Gate 1a：选品
     cross-border-ecommerce-finance/    # Gate 1b：业财 + connector
-  skills/                                # 遗留：单 skill 安装（install-sample），新包请放 packs/
+  skills/                                # 遗留：单 skill 安装（install-sample，仅剩 product-info-search），新包请放 packs/
 ```
 
 ### 本机（用户安装后）
@@ -103,7 +103,7 @@ samples/
 |---|---|---|
 | GET | `/api/user-skills/packs` | 列 `samples/packs/*` + category + 是否已装 |
 | POST | `/api/user-skills/install-pack` | `{"packId":"cross-border-ecommerce-research"}` 或 `cross-border-ecommerce-finance` |
-| POST | `/api/user-skills/install-sample` | 遗留：装 `samples/skills/{id}` 单 skill |
+| POST | `/api/user-skills/install-sample` | 遗留：装 `samples/skills/{id}` 单 skill；`amazon-research` 等找不到时回退 pack 副本 |
 
 实现：`backend/user_packs_store.py`（`install_pack` 循环 `install_skill`；失败 rollback）。
 

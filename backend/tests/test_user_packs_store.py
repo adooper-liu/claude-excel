@@ -198,9 +198,231 @@ def test_uninstall_pack_removes_skill_extensions_record(tmp_path, monkeypatch):
     assert rec == []
 
 
+def test_uninstall_uses_record_skills_when_source_removed(tmp_path, monkeypatch):
+    import shutil
+    import user_skills_store
+    import user_packs_store
+    import user_extension_registry
+
+    src = tmp_path / "packs-imported" / "vendor-logistics"
+    (src / "skills" / "logistics-check").mkdir(parents=True)
+    (src / "skills" / "logistics-check" / "SKILL.md").write_text(
+        "---\nname: logistics-check\ndescription: 物流检查\nslash: 物流检查\n---\n# check\n",
+        encoding="utf-8",
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-logistics", "category": "物流", "title": "物流", "skills": ["logistics-check"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    install_pack("vendor-logistics")
+    shutil.rmtree(src)  # 源目录被删
+
+    result = uninstall_pack("vendor-logistics")
+    assert result["packId"] == "vendor-logistics"
+    assert not (tmp_path / "skills" / "logistics-check").exists()
+    assert json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8")) == []
+
+
 def test_uninstall_pack_unknown_id_raises(tmp_path, monkeypatch):
     import user_packs_store
 
     monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
     with pytest.raises(ValueError, match="未安装"):
         uninstall_pack("no-such-pack")
+
+
+def test_list_packs_merges_imported_with_source(tmp_path, monkeypatch):
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-shipping"
+    (src / "skills" / "ship-check").mkdir(parents=True)
+    (src / "skills" / "ship-check" / "SKILL.md").write_text(
+        "---\nname: ship-check\ndescription: 物流对账\nslash: 物流对账\n---\n# ship\n",
+        encoding="utf-8",
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-shipping", "category": "跨境物流", "title": "物流对账", "skills": ["ship-check"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+
+    packs = list_packs()
+    official = next(x for x in packs if x["id"] == "cross-border-ecommerce-research")
+    third = next(x for x in packs if x["id"] == "vendor-shipping")
+    assert official["source"] == "official"
+    assert third["source"] == "third-party"
+    assert third["categoryLabel"] == "跨境物流"
+    assert official["categoryLabel"] == "跨境电商"
+
+
+def test_install_third_party_pack_allows_free_category(tmp_path, monkeypatch):
+    import user_skills_store
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-logistics"
+    (src / "skills" / "logistics-check").mkdir(parents=True)
+    (src / "skills" / "logistics-check" / "SKILL.md").write_text(
+        "---\nname: logistics-check\ndescription: 物流检查\nslash: 物流检查\n---\n# check\n",
+        encoding="utf-8",
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-logistics", "category": "自定义物流分类", "title": "物流", "skills": ["logistics-check"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    result = install_pack("vendor-logistics")
+    assert result["packId"] == "vendor-logistics"
+    rec = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
+    assert rec[0]["source"] == "third-party"
+    assert rec[0]["skills"] == ["logistics-check"]
+
+
+def test_install_third_party_pack_result_has_source_and_id(tmp_path, monkeypatch):
+    import user_skills_store
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-source"
+    (src / "skills" / "logistics-check").mkdir(parents=True)
+    (src / "skills" / "logistics-check" / "SKILL.md").write_text(
+        "---\nname: logistics-check\ndescription: 物流检查\nslash: 物流检查\n---\n# check\n",
+        encoding="utf-8",
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-source", "category": "自定义分类", "title": "源", "skills": ["logistics-check"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    result = install_pack("vendor-source")
+    assert result["source"] == "third-party"
+    assert result["id"] == "vendor-source"
+    assert result["packId"] == "vendor-source"
+
+
+def _make_zip(entries):
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in entries.items():
+            zf.writestr(name, content)
+    return buf.getvalue()
+
+
+def test_import_pack_zip_valid(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    z = _make_zip({"pack.json": json.dumps({"id": "vendor-pack", "category": "自定义", "title": "V", "skills": []})})
+    entry = user_packs_store.import_pack_zip(z)
+    assert entry["source"] == "third-party"
+    assert entry["id"] == "vendor-pack"
+    assert (tmp_path / "packs-imported" / "vendor-pack" / "pack.json").is_file()
+
+
+def test_import_pack_zip_missing_pack_json(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    with pytest.raises(ValueError, match="pack.json"):
+        user_packs_store.import_pack_zip(_make_zip({"skills/x": "1"}))
+
+
+def test_import_pack_zip_rejects_slip(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    with pytest.raises(ValueError, match="非法路径"):
+        user_packs_store.import_pack_zip(_make_zip({"../evil": "x"}))
+
+
+def test_import_pack_zip_rejects_id_collision(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "PACKS_DIR", tmp_path / "packs")
+    (tmp_path / "packs" / "xyz").mkdir(parents=True)
+    (tmp_path / "packs" / "xyz" / "pack.json").write_text(
+        json.dumps({"id": "xyz", "skills": []}), encoding="utf-8"
+    )
+    z = _make_zip({"pack.json": json.dumps({"id": "xyz", "skills": []})})
+    with pytest.raises(ValueError, match="已存在同名包"):
+        user_packs_store.import_pack_zip(z)
+
+
+def test_import_pack_zip_rejects_unsafe_ids(tmp_path, monkeypatch):
+    import user_packs_store
+    imported = tmp_path / "packs-imported"
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", imported)
+    for bad in (".", "..", "../../x"):
+        with pytest.raises(ValueError, match="pack id 无效"):
+            user_packs_store.import_pack_zip(
+                _make_zip({"pack.json": json.dumps({"id": bad, "skills": []})})
+            )
+    # 临时导入目录应被清空（.staging 已回收），且目录外无任何残留。
+    assert sorted(p.name for p in imported.iterdir()) == []
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["packs-imported"]
+
+
+def test_import_pack_zip_rejects_decompressed_over_5mb(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    z = _make_zip(
+        {
+            "pack.json": json.dumps({"id": "vendor-big", "skills": []}),
+            "big.bin": "x" * user_packs_store.MAX_IMPORT_BYTES,
+        }
+    )
+    with pytest.raises(ValueError, match="解压超过 5MB"):
+        user_packs_store.import_pack_zip(z)
+
+
+def test_remove_imported_pack(tmp_path, monkeypatch):
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-x"
+    src.mkdir(parents=True)
+    (src / "pack.json").write_text(json.dumps({"id": "vendor-x", "skills": []}), encoding="utf-8")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+
+    user_packs_store.remove_imported_pack("vendor-x")
+    assert not src.exists()
+
+    installed = tmp_path / "packs-imported" / "vendor-y"
+    installed.mkdir(parents=True)
+    (installed / "pack.json").write_text(json.dumps({"id": "vendor-y", "skills": []}), encoding="utf-8")
+    (tmp_path / "installed_packs.json").write_text(json.dumps([{"id": "vendor-y"}]), encoding="utf-8")
+    with pytest.raises(ValueError, match="请先卸载"):
+        user_packs_store.remove_imported_pack("vendor-y")
+
+
+def test_export_import_roundtrip(tmp_path, monkeypatch):
+    import shutil
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-z"
+    (src / "skills" / "zs").mkdir(parents=True)
+    (src / "skills" / "zs" / "SKILL.md").write_text(
+        "---\nname: zs\ndescription: z\nslash: z\n---\n# z\n", encoding="utf-8"
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-z", "category": "第三方", "title": "Z", "skills": ["zs"]}), encoding="utf-8"
+    )
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+
+    z = user_packs_store.export_pack_zip("vendor-z")
+    assert z
+    shutil.rmtree(src)
+    entry = user_packs_store.import_pack_zip(z)
+    assert entry["id"] == "vendor-z"
+    assert (tmp_path / "packs-imported" / "vendor-z" / "skills" / "zs" / "SKILL.md").is_file()

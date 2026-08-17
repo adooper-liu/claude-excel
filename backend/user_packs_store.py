@@ -7,8 +7,10 @@ via the knowledge bar (not auto-ingested in P0).
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -23,11 +25,23 @@ from user_extension_registry import (
 SAMPLES_DIR = Path(__file__).resolve().parents[1] / "samples"
 PACKS_DIR = SAMPLES_DIR / "packs"
 TAXONOMY_FILE = SAMPLES_DIR / "taxonomy.json"
+IMPORTED_PACKS_DIR = CONFIG_DIR / "packs-imported"
 
 # Cap so a malformed pack can't dump a huge number of skills.
 MAX_PACK_SKILLS = 20
 MAX_PACK_KNOWLEDGE = 20
 MAX_PACK_EXTENSIONS = 20
+
+
+def _resolve_pack_dir(pack_id: str) -> tuple[Path, str]:
+    pid = _safe_pack_id(pack_id)
+    official = PACKS_DIR / pid
+    if (official / "pack.json").is_file():
+        return official, "official"
+    imported = IMPORTED_PACKS_DIR / pid
+    if (imported / "pack.json").is_file():
+        return imported, "third-party"
+    raise ValueError("示例包不存在: " + pid)
 
 
 def _read_json(path: Path) -> dict:
@@ -38,6 +52,107 @@ def _read_json(path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"{path.name} 需要是 JSON 对象")
     return data
+
+
+_WINDOWS_INVALID_CHARS = set(':*?"<>|')
+
+
+def _safe_pack_id(pid: str) -> str:
+    """Validate a pack id used to build filesystem paths.
+
+    Pack ids come from untrusted pack.json or user input and are used as a
+    single path segment under IMPORTED_PACKS_DIR / PACKS_DIR. Reject anything
+    that could escape the pack directory (traversal) or is not a portable
+    single-segment name (Windows-invalid chars).
+    """
+    pid = str(pid or "").strip()
+    if not pid:
+        raise ValueError("pack id 无效: " + pid)
+    if pid in (".", ".."):
+        raise ValueError("pack id 无效: " + pid)
+    if "/" in pid or "\\" in pid:
+        raise ValueError("pack id 无效: " + pid)
+    if any(seg == ".." for seg in pid.split("/")):
+        raise ValueError("pack id 无效: " + pid)
+    if any(ch in _WINDOWS_INVALID_CHARS for ch in pid):
+        raise ValueError("pack id 无效: " + pid)
+    return pid
+
+
+MAX_IMPORT_BYTES = 5 * 1024 * 1024
+MAX_IMPORT_ENTRIES = 200
+
+
+def _safe_zip_name(name: str) -> bool:
+    if not name or name.startswith("/") or "\\" in name:
+        return False
+    return ".." not in name.split("/")
+
+
+def _extract_import_zip(zip_bytes: bytes, dest: Path) -> None:
+    if len(zip_bytes) > MAX_IMPORT_BYTES:
+        raise ValueError("zip 超过 5MB 上限")
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ValueError("无法解析 zip") from exc
+    infos = zf.infolist()
+    if len(infos) > MAX_IMPORT_ENTRIES:
+        raise ValueError(f"zip 条目超过 {MAX_IMPORT_ENTRIES} 上限")
+    if sum(i.file_size for i in infos) > MAX_IMPORT_BYTES:
+        raise ValueError("zip 解压超过 5MB 上限")
+    for info in infos:
+        if not _safe_zip_name(info.filename):
+            raise ValueError("zip 含非法路径: " + info.filename)
+    if not any(info.filename == "pack.json" and not info.is_dir() for info in infos):
+        raise ValueError("zip 根目录需要 pack.json")
+    dest.mkdir(parents=True, exist_ok=True)
+    zf.extractall(dest)
+
+
+def import_pack_zip(zip_bytes: bytes) -> dict:
+    IMPORTED_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+    staging = IMPORTED_PACKS_DIR / ".staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    try:
+        _extract_import_zip(zip_bytes, staging)
+        pack = _read_json(staging / "pack.json")
+        pid = _safe_pack_id(str(pack.get("id") or ""))
+        if (PACKS_DIR / pid / "pack.json").is_file() or (IMPORTED_PACKS_DIR / pid / "pack.json").is_file():
+            raise ValueError(f"已存在同名包: {pid}，请改用 {{vendor}}-{{pack}} 命名")
+        dest = IMPORTED_PACKS_DIR / pid
+        if dest.exists():
+            shutil.rmtree(dest)
+        staging.rename(dest)
+        return _catalog_entry(dest, "third-party")
+    except Exception:
+        if staging.exists():
+            shutil.rmtree(staging)
+        raise
+
+
+def remove_imported_pack(pack_id: str) -> dict:
+    pid = _safe_pack_id(pack_id)
+    if pid in _installed_ids():
+        raise ValueError("请先卸载: " + pid)
+    dest = IMPORTED_PACKS_DIR / pid
+    if not (dest / "pack.json").is_file():
+        raise ValueError("第三方包不存在: " + pid)
+    shutil.rmtree(dest)
+    return {"packId": pid}
+
+
+def export_pack_zip(pack_id: str) -> bytes:
+    pid = _safe_pack_id(pack_id)
+    pack_dir, _ = _resolve_pack_dir(pid)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(pack_dir.rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts:
+                zf.write(path, path.relative_to(pack_dir).as_posix())
+    return buf.getvalue()
 
 
 def load_taxonomy() -> list[dict]:
@@ -57,41 +172,52 @@ def category_label(category_id: str) -> str:
     return category_id or "未分类"
 
 
+def _catalog_entry(pack_dir: Path, source: str) -> dict | None:
+    pf = pack_dir / "pack.json"
+    if not pf.is_file():
+        return None
+    try:
+        pack = _read_json(pf)
+    except ValueError:
+        return None
+    pid = str(pack.get("id") or "").strip()
+    if not pid:
+        return None
+    category = str(pack.get("category") or "").strip()
+    cat_label = category_label(category) if source == "official" else (category or "第三方")
+    return {
+        "id": pid,
+        "source": source,
+        "category": category,
+        "categoryLabel": cat_label,
+        "title": str(pack.get("title") or pid),
+        "description": str(pack.get("description") or ""),
+        "version": str(pack.get("version") or ""),
+        "gate": str(pack.get("gate") or ""),
+        "skills": _list_skills(pack_dir),
+        "knowledge": _list_knowledge(pack_dir),
+        "extensions": list_catalog_extensions(pack_dir),
+        "deps": pack.get("deps") or {},
+        "installed": pid in _installed_ids(),
+    }
+
+
 def list_packs() -> list[dict]:
-    """Scan samples/packs/*/pack.json and return catalog entries."""
-    if not PACKS_DIR.is_dir():
-        return []
     out: list[dict] = []
-    for pack_dir in sorted(PACKS_DIR.iterdir()):
-        pf = pack_dir / "pack.json"
-        if not pf.is_file():
-            continue
-        try:
-            pack = _read_json(pf)
-        except ValueError:
-            continue
-        pid = str(pack.get("id") or "").strip()
-        if not pid:
-            continue
-        skills = _list_skills(pack_dir)
-        knowledge = _list_knowledge(pack_dir)
-        extensions = list_catalog_extensions(pack_dir)
-        out.append(
-            {
-                "id": pid,
-                "category": str(pack.get("category") or ""),
-                "categoryLabel": category_label(str(pack.get("category") or "")),
-                "title": str(pack.get("title") or pid),
-                "description": str(pack.get("description") or ""),
-                "version": str(pack.get("version") or ""),
-                "gate": str(pack.get("gate") or ""),
-                "skills": skills,
-                "knowledge": knowledge,
-                "extensions": extensions,
-                "deps": pack.get("deps") or {},
-                "installed": pid in _installed_ids(),
-            }
-        )
+    if PACKS_DIR.is_dir():
+        for pack_dir in sorted(PACKS_DIR.iterdir()):
+            if pack_dir.name.startswith("."):
+                continue
+            e = _catalog_entry(pack_dir, "official")
+            if e:
+                out.append(e)
+    if IMPORTED_PACKS_DIR.is_dir():
+        for pack_dir in sorted(IMPORTED_PACKS_DIR.iterdir()):
+            if pack_dir.name.startswith("."):
+                continue
+            e = _catalog_entry(pack_dir, "third-party")
+            if e:
+                out.append(e)
     return out
 
 
@@ -207,17 +333,14 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
     pid = str(pack_id or "").strip()
     if not pid:
         raise ValueError("packId required")
-    pack_dir = PACKS_DIR / pid
+    pack_dir, source = _resolve_pack_dir(pid)
     pf = pack_dir / "pack.json"
-    if not pf.is_file():
-        raise ValueError("示例包不存在: " + pid)
-
     pack = _read_json(pf)
     if str(pack.get("id") or "").strip() != pid:
         raise ValueError("pack.json 的 id 与目录名不一致")
 
     category = str(pack.get("category") or "").strip()
-    if category and not any(c.get("id") == category for c in load_taxonomy()):
+    if source == "official" and category and not any(c.get("id") == category for c in load_taxonomy()):
         raise ValueError(f"category 不在 taxonomy 里: {category}")
 
     skills = _list_skills(pack_dir)
@@ -293,6 +416,8 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
     records.append(
         {
             "id": pid,
+            "source": source,
+            "skills": [s["id"] for s in result_skills],
             "installedAt": now,
             "version": str(pack.get("version") or ""),
             "capabilityHash": cap_hash if extensions else "",
@@ -303,6 +428,8 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
 
     return {
         "packId": pid,
+        "id": pid,
+        "source": source,
         "category": category,
         "categoryLabel": category_label(category),
         "title": str(pack.get("title") or pid),
@@ -320,10 +447,16 @@ def uninstall_pack(pack_id: str) -> dict:
     if not pid:
         raise ValueError("packId required")
     records = _read_installed_records()
-    if not any(str(r.get("id") or "").strip() == pid for r in records):
+    rec = next((r for r in records if str(r.get("id") or "").strip() == pid), None)
+    if rec is None:
         raise ValueError("示例包未安装: " + pid)
 
-    skill_ids = [s["id"] for s in _list_skills(PACKS_DIR / pid)]
+    skill_ids = list(rec.get("skills") or [])
+    if not skill_ids:
+        try:
+            skill_ids = [s["id"] for s in _list_skills(_resolve_pack_dir(pid)[0])]
+        except ValueError:
+            pass
     for sid in skill_ids:
         try:
             delete_skill(None, sid)
