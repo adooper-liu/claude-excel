@@ -85,4 +85,5 @@ git checkout master && git pull && git checkout -b feat/finance-date-window
 
 | 日期 | 阶段 | 负责 | commit | 说明 |
 |---|---|---|---|---|
-| 2026-08-17 | design | Claude Code | `—` | 定方案：reviewPending 放 core、finance-run 用 date_window(7)/biz_date、pack-audit 加字段、SKILL.md 同步 |
+| 2026-08-17 | design | Claude Code | `—` |
+| 2026-08-17 | coding | Codex CLI | `efa049e` | Pack §B1.4：reconcile 暴露 reviewPending + finance-run 用 date_window(7)/biz_date + pack-audit 加 review_pending 列 + SKILL.md 同步；前端 241 / 后端 121 / typecheck 全绿，dirty fixture 集成核验 date_window reviewPending=10、SKU-016/17/18 收回 | 定方案：reviewPending 放 core、finance-run 用 date_window(7)/biz_date、pack-audit 加字段、SKILL.md 同步 |
