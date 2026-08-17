@@ -348,3 +348,25 @@ def test_remove_imported_pack(tmp_path, monkeypatch):
     (tmp_path / "installed_packs.json").write_text(json.dumps([{"id": "vendor-y"}]), encoding="utf-8")
     with pytest.raises(ValueError, match="请先卸载"):
         user_packs_store.remove_imported_pack("vendor-y")
+
+
+def test_export_import_roundtrip(tmp_path, monkeypatch):
+    import shutil
+    import user_packs_store
+
+    src = tmp_path / "packs-imported" / "vendor-z"
+    (src / "skills" / "zs").mkdir(parents=True)
+    (src / "skills" / "zs" / "SKILL.md").write_text(
+        "---\nname: zs\ndescription: z\nslash: z\n---\n# z\n", encoding="utf-8"
+    )
+    (src / "pack.json").write_text(
+        json.dumps({"id": "vendor-z", "category": "第三方", "title": "Z", "skills": ["zs"]}), encoding="utf-8"
+    )
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+
+    z = user_packs_store.export_pack_zip("vendor-z")
+    assert z
+    shutil.rmtree(src)
+    entry = user_packs_store.import_pack_zip(z)
+    assert entry["id"] == "vendor-z"
+    assert (tmp_path / "packs-imported" / "vendor-z" / "skills" / "zs" / "SKILL.md").is_file()

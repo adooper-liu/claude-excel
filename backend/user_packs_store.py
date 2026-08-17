@@ -120,6 +120,17 @@ def remove_imported_pack(pack_id: str) -> dict:
     return {"packId": pid}
 
 
+def export_pack_zip(pack_id: str) -> bytes:
+    pid = str(pack_id or "").strip()
+    pack_dir, _ = _resolve_pack_dir(pid)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(pack_dir.rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts:
+                zf.write(path, path.relative_to(pack_dir).as_posix())
+    return buf.getvalue()
+
+
 def load_taxonomy() -> list[dict]:
     if not TAXONOMY_FILE.is_file():
         return []
