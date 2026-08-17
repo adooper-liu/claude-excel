@@ -10,6 +10,6 @@
 |---|---|
 | **install-pack** | `{"packId":"cross-border-ecommerce-research"}` — Gate 1a 选品 |
 | **install-pack** | `{"packId":"cross-border-ecommerce-finance"}` — Gate 1b 业财 |
-| install-sample | `{"id":"amazon-research"}` — 仅装单个 skill（遗留） |
+| install-sample | `{"id":"amazon-research"}` 或 `{"id":"product-info-search"}` — 仅装单个 skill（遗留） |
 | 手动复制 | 到 `~/.claude-excel-web/skills/` |
 | `/安装` 粘贴 | SKILL.md 全文 |
