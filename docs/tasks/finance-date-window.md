@@ -28,6 +28,7 @@ git checkout master && git pull && git checkout -b feat/finance-date-window
 
 - [ ] 后端 `pytest backend/tests` 全绿
 - [ ] 前端 `npm run test:unit` + `npm run typecheck` 全绿
+- [ ] 日期规整单测：Excel 序列号 `45296`、yyyyymmdd `20240105`、ISO `2024-01-05` → 统一 `2024-01-05`（coerceDate + dateToDay 各补）
 - [ ] `reconcile-core.test.js` 补 `reviewPending` 断言（date_window 配对 + conflict → 需复核计数正确；exact 基线 reviewPending=0）
 - [ ] `/跨境业财` 跑完后 `_pack_audit` 新行 `note` 含 `review_pending=N`（N > 0，含归因偏移行）
 - [ ] 归因偏移行（ad_date 早 3 天）在 `业财对账结果` 中 `__match_mode=date_window`、`__review=需复核`
@@ -44,6 +45,36 @@ git checkout master && git pull && git checkout -b feat/finance-date-window
 | `addin/src/excel/finance-run.ts` | `reconcileTables` 调用 L126、`appendPackAudit` L183 | 用 exact（无 matchMode）；auditNote 只有 attrNote + matched |
 | `addin/src/excel/pack-audit.ts` | `PackAuditEntry` L5、`auditHeaders()` L18、`entryToRow()` L34 | 无 reviewPending 字段 |
 | `samples/packs/cross-border-ecommerce-finance/skills/finance-reconciliation/SKILL.md` | 第 3 步 L22、归因窗口段 L32、第 7 步 L30 | 写「精确匹配，不做模糊窗口」「归因只标注不解决」 |
+
+### 0. 日期规整（date_window 前置，根因修复）
+
+**根因**：日期列混存 Excel 序列号（`45296`=2024-01-05）与 yyyymmdd 数字（`20240105`=2024-01-05），三处日期处理都不完整：
+- `reshape-core.ts` `coerceDate` L207：数字原样返回（不当序列号转日期），只认 ISO 字符串
+- `column-format-core.ts` `applyFormatToCell` datetime 分支 L179：原样保留，不统一
+- `reconcile-core.ts` `dateToDay` L84：数字一律当 Excel 序列号，yyyyymmdd `20240105` 被 `Math.round` 成巨大天数
+
+**改法**：新建 `addin/src/excel/date-cell.ts`（纯函数，无 Office JS），统一识别三种格式：
+
+```ts
+/** 识别 Excel 序列号 / yyyymmdd / ISO 字符串 → 返回 Excel 天数（序列号）；非日期返回 null */
+export function parseDateCell(value: Cell): number | null
+/** Excel 天数 → "YYYY-MM-DD" */
+export function dayToIso(day: number): string
+```
+
+识别规则：
+1. number ≥ 19000101 且 ≤ 20991231 → yyyymmdd（拆年/月/日，`Date.UTC`）
+2. number 其他（1–60000）→ Excel 序列号（天数），直接返回
+3. string 匹配 `YYYY-MM-DD` / `YYYY/M/D` → `Date.UTC`
+4. string 8 位数字（yyyymmdd）→ 拆年/月/日
+5. 其他 string → `Date.parse`（NaN → null）
+
+三处接入：
+- `reshape-core.ts` `coerceDate` → `parseDateCell` + `dayToIso`，统一输出 ISO 字符串（解决「整理结果」表 E 列混存）
+- `column-format-core.ts` datetime 分支 → 同上，datetime 列统一 ISO
+- `reconcile-core.ts` `dateToDay` → `parseDateCell`（返回天数）
+
+**验证基准**（`1899-12-30 + 天数`）：45296→2024-01-05、45297→2024-01-06、46027→2026-01-05、20240105→2024-01-05。
 
 ### 1. `reconcile-core.ts`：ReconcileResult 加 `reviewPending`
 
@@ -85,5 +116,6 @@ git checkout master && git pull && git checkout -b feat/finance-date-window
 
 | 日期 | 阶段 | 负责 | commit | 说明 |
 |---|---|---|---|---|
-| 2026-08-17 | design | Claude Code | `—` |
-| 2026-08-17 | coding | Codex CLI | `efa049e` | Pack §B1.4：reconcile 暴露 reviewPending + finance-run 用 date_window(7)/biz_date + pack-audit 加 review_pending 列 + SKILL.md 同步；前端 241 / 后端 121 / typecheck 全绿，dirty fixture 集成核验 date_window reviewPending=10、SKU-016/17/18 收回 | 定方案：reviewPending 放 core、finance-run 用 date_window(7)/biz_date、pack-audit 加字段、SKILL.md 同步 |
+| 2026-08-17 | design | Claude Code | `—` | 定方案：reviewPending 放 core、finance-run 用 date_window(7)/biz_date、pack-audit 加字段、SKILL.md 同步 |
+| 2026-08-17 | coding | Codex CLI | `efa049e` | Pack §B1.4：reconcile 暴露 reviewPending + finance-run 用 date_window(7)/biz_date + pack-audit 加 review_pending 列 + SKILL.md 同步；前端 241 / 后端 121 / typecheck 全绿，dirty fixture 集成核验 date_window reviewPending=10、SKU-016/17/18 收回 |
+| 2026-08-17 | design | Claude Code | `—` | 补第 0 步日期规整：Excel 序列号/yyyymmdd/ISO 混存 → 共享 parseDateCell 统一三处（coerceDate/datetime/dateToDay） |
