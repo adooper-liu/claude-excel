@@ -30,6 +30,7 @@ export type PackExtension = {
 
 export type Pack = {
   id: string;
+  source: string;
   category: string;
   categoryLabel: string;
   title: string;
@@ -137,6 +138,7 @@ export async function fetchPacks(): Promise<Pack[]> {
     if (!id) continue;
     out.push({
       id,
+      source: String((p as Pack).source || "official"),
       category: String((p as Pack).category || ""),
       categoryLabel: String((p as Pack).categoryLabel || ""),
       title: String((p as Pack).title || id),
@@ -220,6 +222,7 @@ export async function installPack(
   const p = (data && typeof data === "object" ? (data as { pack?: unknown }).pack : null) || {};
   return {
     id: String((p as Pack).id || packId),
+    source: String((p as Pack).source || "official"),
     category: String((p as Pack).category || ""),
     categoryLabel: String((p as Pack).categoryLabel || ""),
     title: String((p as Pack).title || packId),
@@ -245,4 +248,48 @@ export async function uninstallPack(packId: string): Promise<void> {
   if (!r.ok && r.status !== 404) {
     throw new Error("卸载失败");
   }
+}
+
+export async function importPackZip(file: File): Promise<Pack> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(API + "/packs/import", { method: "POST", body: fd });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "导入失败";
+    throw new Error(detail);
+  }
+  const p = (data && typeof data === "object" ? (data as { pack?: unknown }).pack : null) || {};
+  return {
+    id: String((p as Pack).id || ""),
+    source: String((p as Pack).source || "third-party"),
+    category: String((p as Pack).category || ""),
+    categoryLabel: String((p as Pack).categoryLabel || "第三方"),
+    title: String((p as Pack).title || ""),
+    description: String((p as Pack).description || ""),
+    version: String((p as Pack).version || ""),
+    gate: String((p as Pack).gate || ""),
+    skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
+    knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
+    extensions: Array.isArray((p as Pack).extensions) ? ((p as Pack).extensions as PackExtension[]) : [],
+    deps: (p as Pack).deps && typeof (p as Pack).deps === "object" ? ((p as Pack).deps as Record<string, unknown>) : {},
+    installed: false,
+  };
+}
+
+export async function removeImportedPack(id: string): Promise<void> {
+  const r = await fetch(API + "/packs/imported/" + encodeURIComponent(id), { method: "DELETE" });
+  if (!r.ok && r.status !== 404) throw new Error("删除来源失败");
+}
+
+export async function exportPack(id: string): Promise<void> {
+  const r = await fetch(API + "/packs/" + encodeURIComponent(id) + "/export");
+  if (!r.ok) return;
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = id + ".zip";
+  a.click();
+  URL.revokeObjectURL(url);
 }
