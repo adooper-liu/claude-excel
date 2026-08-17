@@ -13,12 +13,16 @@ export type ConnectorFeedPayload = {
 
 export async function loadConnectorFeed(
   feed: "orders" | "ads" | "inventory",
-  packId = "cross-border-ecommerce-finance"
+  packId = "cross-border-ecommerce-finance",
+  opts?: { content?: string; contentBase64?: string }
 ): Promise<ConnectorFeedPayload> {
+  const params: Record<string, string> = { feed, packId };
+  if (opts?.contentBase64) params.contentBase64 = opts.contentBase64;
+  else if (opts?.content) params.content = opts.content;
   const r = await fetch(API + "/" + encodeURIComponent("user.connector_load_feed"), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ params: { feed, packId } }),
+    body: JSON.stringify({ params }),
   });
   const body = await r.text();
   let parsed: { ok?: boolean; data?: ConnectorFeedPayload; error?: { message?: string } };

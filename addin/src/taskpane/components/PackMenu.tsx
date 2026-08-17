@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import type { Pack } from "../../services/user-skills";
 import { formatExtensionConsent } from "../../services/user-skills";
+import { FINANCE_PACK_ID, importFinanceCsvFiles } from "../../services/finance-csv-import";
 
 interface Props {
   packs: Pack[];
@@ -18,6 +19,12 @@ export default function PackMenu({
   const [packBusy, setPackBusy] = useState<string | null>(null);
   const [packErr, setPackErr] = useState("");
   const [consentFor, setConsentFor] = useState<string | null>(null);
+  const [ordersFile, setOrdersFile] = useState<File | null>(null);
+  const [adsFile, setAdsFile] = useState<File | null>(null);
+  const [importMsg, setImportMsg] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const ordersInputRef = useRef<HTMLInputElement>(null);
+  const adsInputRef = useRef<HTMLInputElement>(null);
 
   const packGroups = useMemo(() => {
     const groups: Array<{ label: string; items: Pack[] }> = [];
@@ -51,6 +58,36 @@ export default function PackMenu({
       return;
     }
     void runInstall(p.id);
+  }
+
+  async function runCsvImport(): Promise<void> {
+    if (!ordersFile || !adsFile) {
+      setPackErr("请先选择订单 CSV 和广告 CSV");
+      return;
+    }
+    setPackErr("");
+    setImportMsg("");
+    setImportBusy(true);
+    try {
+      const r = await importFinanceCsvFiles(ordersFile, adsFile);
+      setImportMsg(
+        "已导入 " +
+          r.orderSheet +
+          "（" +
+          r.orderRows +
+          " 行）与 " +
+          r.adsSheet +
+          "（" +
+          r.adsRows +
+          " 行）。发 /跨境业财 跑 recipe。"
+      );
+      setOrdersFile(null);
+      setAdsFile(null);
+    } catch (err) {
+      setPackErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImportBusy(false);
+    }
   }
 
   return (
@@ -132,6 +169,57 @@ export default function PackMenu({
                       {packBusy === p.id ? "卸载中…" : "卸载"}
                     </button>
                   )}
+                  {p.installed && p.id === FINANCE_PACK_ID && (
+                    <div className="pack-csv-import">
+                      <div className="pack-csv-import-label">导入 CSV（真实业务数据）</div>
+                      <input
+                        ref={ordersInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="pack-csv-input-hidden"
+                        onChange={(e) => {
+                          setOrdersFile(e.target.files?.[0] || null);
+                          setImportMsg("");
+                        }}
+                      />
+                      <input
+                        ref={adsInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="pack-csv-input-hidden"
+                        onChange={(e) => {
+                          setAdsFile(e.target.files?.[0] || null);
+                          setImportMsg("");
+                        }}
+                      />
+                      <div className="pack-csv-import-actions">
+                        <button
+                          type="button"
+                          className="sample-btn ghost"
+                          disabled={importBusy}
+                          onClick={() => ordersInputRef.current?.click()}
+                        >
+                          {ordersFile ? "订单 ✓" : "选订单 CSV"}
+                        </button>
+                        <button
+                          type="button"
+                          className="sample-btn ghost"
+                          disabled={importBusy}
+                          onClick={() => adsInputRef.current?.click()}
+                        >
+                          {adsFile ? "广告 ✓" : "选广告 CSV"}
+                        </button>
+                        <button
+                          type="button"
+                          className="pack-install-btn"
+                          disabled={importBusy || !ordersFile || !adsFile}
+                          onClick={() => void runCsvImport()}
+                        >
+                          {importBusy ? "导入中…" : "导入并写表"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -139,6 +227,7 @@ export default function PackMenu({
         </div>
       )}
       {packErr && <p className="pack-menu-err">{packErr}</p>}
+      {importMsg && <p className="pack-menu-ok">{importMsg}</p>}
     </div>
   );
 }

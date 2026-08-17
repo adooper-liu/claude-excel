@@ -1,4 +1,6 @@
 import { calculateTable } from "./calculate";
+import { consumeFinanceImportMeta } from "../services/finance-import-meta";
+import { FINANCE_ADS_SHEET, FINANCE_ORDER_SHEET, FINANCE_PACK_ID } from "../services/finance-csv-import";
 import { loadConnectorFeed } from "../services/user-fn";
 import { appendPackAudit } from "./pack-audit";
 import { createPivot } from "./pivot";
@@ -8,10 +10,10 @@ import { ensureTable } from "./table";
 import { writeInputs } from "./write-inputs";
 import { writeToNewSheet } from "./write";
 
-const PACK_ID = "cross-border-ecommerce-finance";
+const PACK_ID = FINANCE_PACK_ID;
 const PACK_VERSION = "0.1.0";
-const ORDER_SHEET = "Pack_订单";
-const ADS_SHEET = "Pack_广告";
+const ORDER_SHEET = FINANCE_ORDER_SHEET;
+const ADS_SHEET = FINANCE_ADS_SHEET;
 const ASSUME_SHEET = "假设参数";
 const RECONCILE_SHEET = "业财对账结果";
 const RECONCILE_TABLE = "T_finance_recon";
@@ -52,34 +54,60 @@ async function ensureAssumeSheet(onStep?: (msg: string) => void): Promise<void> 
   ]);
 }
 
-/** Gate 1b: fixture → Pack sheets → reconcile → 假设 → pivot → _pack_audit */
+/** Gate 1b: fixture/import → Pack sheets → reconcile → 假设 → pivot → _pack_audit */
 export async function runFinanceIntent(
   _userText: string,
   onStep?: (msg: string) => void
 ): Promise<string> {
-  if (onStep) onStep('🔧 user.connector_load_feed({feed:"orders"})');
-  let orders;
-  let ads;
-  try {
-    orders = await loadConnectorFeed("orders", PACK_ID);
-    if (onStep) onStep('🔧 user.connector_load_feed({feed:"ads"})');
-    ads = await loadConnectorFeed("ads", PACK_ID);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      "无法加载 connector fixture：" +
-        msg +
-        "。请先安装「跨境电商业财包」（cross-border-ecommerce-finance）并同意本机扩展（user.connector_load_feed）。"
-    );
+  const names = await getSheetNames();
+  const useImported = names.indexOf(ORDER_SHEET) >= 0 && names.indexOf(ADS_SHEET) >= 0;
+
+  let ordersHash = "";
+  let adsHash = "";
+  let orderRowCount = 0;
+  let adsRowCount = 0;
+  let orderWritten = ORDER_SHEET;
+  let adsWritten = ADS_SHEET;
+
+  if (useImported) {
+    if (onStep) {
+      onStep("🔧 使用已导入表 " + ORDER_SHEET + " / " + ADS_SHEET + "（跳过 fixture）");
+    }
+    const meta = consumeFinanceImportMeta();
+    ordersHash = meta?.ordersHash || "imported";
+    adsHash = meta?.adsHash || "imported";
+    orderRowCount = meta?.orderRows || 0;
+    adsRowCount = meta?.adsRows || 0;
+  } else {
+    if (onStep) onStep('🔧 user.connector_load_feed({feed:"orders"})');
+    let orders;
+    let ads;
+    try {
+      orders = await loadConnectorFeed("orders", PACK_ID);
+      if (onStep) onStep('🔧 user.connector_load_feed({feed:"ads"})');
+      ads = await loadConnectorFeed("ads", PACK_ID);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        "无法加载 connector 数据：" +
+          msg +
+          "。请安装「跨境电商业财包」并同意扩展，或用场景包菜单「导入 CSV」上传订单/广告文件。"
+      );
+    }
+
+    ordersHash = String(orders.meta?.sourceHash || "");
+    adsHash = String(ads.meta?.sourceHash || "");
+    orderRowCount = orders.rows.length;
+    adsRowCount = ads.rows.length;
+
+    const orderGrid = [orders.headers, ...orders.rows] as (string | number)[][];
+    const adsGrid = [ads.headers, ...ads.rows] as (string | number)[][];
+
+    if (onStep) onStep('🔧 writeToNewSheet("' + ORDER_SHEET + '")');
+    orderWritten = await writeToNewSheet(ORDER_SHEET, orderGrid);
+    if (onStep) onStep('🔧 writeToNewSheet("' + ADS_SHEET + '")');
+    adsWritten = await writeToNewSheet(ADS_SHEET, adsGrid);
   }
-
-  const orderGrid = [orders.headers, ...orders.rows] as (string | number)[][];
-  const adsGrid = [ads.headers, ...ads.rows] as (string | number)[][];
-
-  if (onStep) onStep('🔧 writeToNewSheet("' + ORDER_SHEET + '")');
-  const orderWritten = await writeToNewSheet(ORDER_SHEET, orderGrid);
-  if (onStep) onStep('🔧 writeToNewSheet("' + ADS_SHEET + '")');
-  const adsWritten = await writeToNewSheet(ADS_SHEET, adsGrid);
 
   if (onStep) onStep('🔧 ensure_table("' + orderWritten + '")');
   const left = await ensureTable(orderWritten, undefined, orderWritten);
@@ -139,9 +167,9 @@ export async function runFinanceIntent(
     outputSheet: PIVOT_SHEET,
   });
 
-  const ordersHash = String(orders.meta?.sourceHash || "");
-  const adsHash = String(ads.meta?.sourceHash || "");
-  const attrNote = String(orders.meta?.attributionNote || ads.meta?.attributionNote || "");
+  const ordersHashFinal = ordersHash;
+  const adsHashFinal = adsHash;
+  const attrNote = "广告点击日 vs 订单成交日存在 0–7 天偏移；精确键匹配，毛利为近似口径";
   const total =
     recon.counts.matched +
     recon.counts.left_only +
@@ -160,15 +188,15 @@ export async function runFinanceIntent(
     leftOnly: recon.counts.left_only,
     rightOnly: recon.counts.right_only,
     conflict: recon.counts.conflict,
-    sourceHashOrders: ordersHash,
-    sourceHashAds: adsHash,
+    sourceHashOrders: ordersHashFinal,
+    sourceHashAds: adsHashFinal,
     note: auditNote,
   });
 
   return [
-    "已跑完 Gate 1b 业财闭环（fixture → 对账 → 假设 → 透视 → 审计）。",
-    "订单表：" + orderWritten + "（" + orders.rows.length + " 行，hash " + ordersHash + "）",
-    "广告表：" + adsWritten + "（" + ads.rows.length + " 行，hash " + adsHash + "）",
+    "已跑完 Gate 1b 业财闭环（" + (useImported ? "导入 CSV" : "fixture") + " → 对账 → 假设 → 透视 → 审计）。",
+    "订单表：" + orderWritten + "（" + orderRowCount + " 行，hash " + ordersHashFinal + "）",
+    "广告表：" + adsWritten + "（" + adsRowCount + " 行，hash " + adsHashFinal + "）",
     "对账结果：" +
       recon.outputSheet +
       "（表 " +

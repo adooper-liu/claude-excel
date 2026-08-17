@@ -1,6 +1,6 @@
 {
   "name": "user.connector_load_feed",
-  "description": "从 Pack connector fixtures 读取 CSV，映射为 canonical 列（Phase 1 csv_local）",
+  "description": "从 CSV（上传或 Pack fixture）映射为 canonical 列（Phase 1 csv_local）",
   "entry": "handler.py",
   "params": {
     "type": "object",
@@ -13,6 +13,14 @@
       "packId": {
         "type": "string",
         "description": "已安装 pack id，默认 cross-border-ecommerce-finance"
+      },
+      "content": {
+        "type": "string",
+        "description": "CSV 文本（UTF-8）；与 contentBase64 二选一"
+      },
+      "contentBase64": {
+        "type": "string",
+        "description": "CSV 原始字节 base64；connector 内做 UTF-8/GBK/Latin1 检测"
       }
     },
     "required": ["feed"]

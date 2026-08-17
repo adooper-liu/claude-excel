@@ -20,8 +20,20 @@
 
 ## 前置（不计时）
 
-- 加载项 + Pack（含 extensions 同意）已安装
-- `fixtures/orders.csv` + `ads.csv`（+ 可选 `inventory.csv`）就位 — **真实卖家脱敏**，见 connector README
+- 加载项 + **`cross-border-ecommerce-finance`** Pack（含 extensions 同意）已安装
+- fixture 就位 — 见 connector README
+
+### 录屏用什么 CSV？
+
+| 场景 | 文件 | 切换 |
+|---|---|---|
+| **pytest / Gate 功能验收** | `orders.csv` + `ads.csv`（5/4 行干净） | git 默认 |
+| **对外录屏 / 脏特征演示** | 同上路径，内容为 dirty 副本（50/42 行） | `python dev-tools/gen_dirty_fixtures.py --demo` |
+| **录屏后恢复** | 干净基准 | `python dev-tools/gen_dirty_fixtures.py --restore` |
+
+`user.connector_load_feed` 只读 `orders.csv` / `ads.csv`（见 `FEED_FILES`），不会自动读 `*_dirty.csv`。
+
+> 2026-08-16 首次 Gate 验收录屏用的是干净 5/4 行（流程通）；**对外商业录屏应改用 `--demo` 脏数据**。
 
 ## 计时
 

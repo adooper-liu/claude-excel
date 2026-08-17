@@ -3,7 +3,7 @@
 > Claude Code × Cursor 唯一交接载体。聊天只传文件名 + 分支名。
 
 - **分支**：`feat/csv-import`
-- **状态**：`design`
+- **状态**：`coding`
 - **主责（当前阶段）**：Claude Code（design）→ Cursor（coding）
 
 ## 目标
@@ -19,11 +19,11 @@
 
 ## 验收
 
-- [ ] 后端 `pytest backend/tests` 全绿（含 GBK 编码检测测试）
-- [ ] 前端 `npm run test:unit` + `npm run typecheck` 全绿
-- [ ] 任务窗格「导入 CSV」按钮：选订单 CSV + 广告 CSV → 自动编码检测 → 写 `Pack_订单` / `Pack_广告`
-- [ ] 导入后发 `/跨境业财` → recipe 在已导入的表上跑（**不重新读 fixture**）
-- [ ] GBK 编码中文列名 CSV 能正确识别（不崩、不乱码）
+- [x] 后端 `pytest backend/tests` 全绿（含 GBK 编码检测测试）
+- [x] 前端 `npm run test:unit` + `npm run typecheck` 全绿
+- [x] 任务窗格「导入 CSV」按钮：选订单 CSV + 广告 CSV → 自动编码检测 → 写 `Pack_订单` / `Pack_广告`
+- [x] 导入后发 `/跨境业财` → recipe 在已导入的表上跑（**不重新读 fixture**）
+- [x] GBK 编码中文列名 CSV 能正确识别（不崩、不乱码）
 
 ## 方案
 
@@ -84,3 +84,4 @@ def _decode_bytes(raw: bytes) -> str:
 | 日期 | 阶段 | 负责 | commit | 说明 |
 |---|---|---|---|---|
 | 2026-08-16 | design | Claude Code | `—` | 初稿 brief（编码检测 + content 参数 + file picker + recipe 跳过 fixture） |
+| 2026-08-16 | coding | Cursor | `—` | handler contentBase64 + PackMenu 导入 + finance-run 跳过 fixture |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import csv
 import hashlib
 import json
@@ -144,23 +145,25 @@ def _row_to_list(row: dict[str, Any], headers: list[str]) -> list[Any]:
     return out
 
 
-def load_feed(pack_id: str, feed: str) -> dict[str, Any]:
-    feed_id = str(feed or "").strip()
-    if feed_id not in FEED_FILES:
-        raise ValueError(f"未知 feed: {feed_id!r}")
+def _decode_bytes(raw: bytes) -> str:
+    for enc in ("utf-8-sig", "gbk", "latin-1"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("无法识别编码")
 
-    pack_dir = _config_dir() / "packs" / pack_id
-    fixture = pack_dir / "connector" / "fixtures" / FEED_FILES[feed_id]
-    if not fixture.is_file():
-        raise FileNotFoundError(f"fixture 不存在: {fixture}")
 
-    raw_bytes = fixture.read_bytes()
-    source_hash = hashlib.sha256(raw_bytes).hexdigest()[:16]
-
+def _parse_feed_csv(
+    text: str,
+    feed_id: str,
+    pack_dir: Path,
+    source_hash: str,
+    source_file: str,
+) -> dict[str, Any]:
     schema_cols, sheet_name = _load_schema(pack_dir, feed_id)
     headers = _output_headers(schema_cols)
 
-    text = raw_bytes.decode("utf-8-sig")
     reader = csv.DictReader(text.splitlines())
     if not reader.fieldnames:
         raise ValueError("CSV 缺少表头")
@@ -174,18 +177,52 @@ def load_feed(pack_id: str, feed: str) -> dict[str, Any]:
 
     return {
         "feed": feed_id,
-        "packId": pack_id,
+        "packId": pack_dir.name,
         "sheetName": sheet_name,
         "headers": headers,
         "rows": rows,
         "meta": {
-            "source": "csv_local",
-            "sourceFile": FEED_FILES[feed_id],
+            "source": "csv_upload" if source_file == "upload" else "csv_local",
+            "sourceFile": source_file,
             "sourceHash": source_hash,
             "rowCount": len(rows),
             "attributionNote": "广告点击日 vs 订单成交日存在 0–7 天偏移；精确键匹配，毛利为近似口径",
         },
     }
+
+
+def load_feed(
+    pack_id: str,
+    feed: str,
+    content: str | None = None,
+    content_base64: str | None = None,
+) -> dict[str, Any]:
+    feed_id = str(feed or "").strip()
+    if feed_id not in FEED_FILES:
+        raise ValueError(f"未知 feed: {feed_id!r}")
+
+    pack_dir = _config_dir() / "packs" / pack_id
+
+    if content_base64:
+        raw_bytes = base64.b64decode(str(content_base64))
+        text = _decode_bytes(raw_bytes)
+        source_hash = hashlib.sha256(raw_bytes).hexdigest()[:16]
+        return _parse_feed_csv(text, feed_id, pack_dir, source_hash, "upload")
+
+    if content is not None and str(content).strip():
+        text = str(content)
+        raw_bytes = text.encode("utf-8")
+        source_hash = hashlib.sha256(raw_bytes).hexdigest()[:16]
+        return _parse_feed_csv(text, feed_id, pack_dir, source_hash, "upload")
+
+    fixture = pack_dir / "connector" / "fixtures" / FEED_FILES[feed_id]
+    if not fixture.is_file():
+        raise FileNotFoundError(f"fixture 不存在: {fixture}")
+
+    raw_bytes = fixture.read_bytes()
+    source_hash = hashlib.sha256(raw_bytes).hexdigest()[:16]
+    text = _decode_bytes(raw_bytes)
+    return _parse_feed_csv(text, feed_id, pack_dir, source_hash, FEED_FILES[feed_id])
 
 
 def main() -> None:
@@ -195,8 +232,15 @@ def main() -> None:
         params = {}
     feed = str(params.get("feed") or "").strip()
     pack_id = str(params.get("packId") or "cross-border-ecommerce-finance").strip()
+    content = params.get("content")
+    content_base64 = params.get("contentBase64")
     try:
-        out = load_feed(pack_id, feed)
+        out = load_feed(
+            pack_id,
+            feed,
+            content=str(content) if content is not None else None,
+            content_base64=str(content_base64) if content_base64 else None,
+        )
     except (FileNotFoundError, ValueError) as exc:
         sys.stderr.write(str(exc))
         sys.exit(1)

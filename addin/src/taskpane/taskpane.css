@@ -200,6 +200,11 @@ select:focus-visible {
 .pack-menu-group { display: flex; flex-direction: column; gap: 6px; }
 .pack-menu-item { border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; background: var(--paper); }
 .pack-menu-err { font-size: 12px; color: #b91c1c; margin: 6px 0 0; }
+.pack-menu-ok { font-size: 12px; color: #15803d; margin: 6px 0 0; line-height: 1.4; }
+.pack-csv-import { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--rule); }
+.pack-csv-import-label { font-size: 11px; font-weight: 650; color: var(--muted); margin-bottom: 6px; }
+.pack-csv-import-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.pack-csv-input-hidden { display: none; }
 .pack-uninstall-btn { background: var(--cell); color: var(--ink); border-color: var(--rule); }
 .prompt-flyout { left: 0; bottom: calc(100% + 6px); width: 280px; }
 .flyout-head {

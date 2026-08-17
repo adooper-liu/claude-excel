@@ -1,5 +1,6 @@
 """Gate 1b: user.connector_load_feed + pack connector install."""
 
+import base64
 import sys
 from pathlib import Path
 
@@ -93,3 +94,48 @@ async def test_connector_load_feed_normalizes_sku_and_dates(isolated_pack_env):
     first = ads["data"]["rows"][0]
     assert first[sku_i] == "abc-01"
     assert first[date_i] == "2026-01-15"
+
+
+@pytest.mark.asyncio
+async def test_connector_load_feed_content_base64_gbk(isolated_pack_env):
+    _tmp_path, sync = isolated_pack_env
+    install_pack("cross-border-ecommerce-finance", consent_extensions=True)
+    sync("cross-border-ecommerce-finance")
+
+    csv_gbk = (
+        "订单号,成交日,sku,数量,单价,币种\n"
+        "O-gbk,2026-01-15,Widget-Gbk,2,19.99,USD\n"
+    ).encode("gbk")
+    b64 = base64.b64encode(csv_gbk).decode("ascii")
+
+    out = await run_user_fn(
+        "user.connector_load_feed",
+        {"feed": "orders", "contentBase64": b64},
+    )
+    assert out["ok"] is True
+    data = out["data"]
+    assert data["meta"]["source"] == "csv_upload"
+    headers = data["headers"]
+    sku_i = headers.index("platform_sku")
+    assert data["rows"][0][sku_i] == "widget-gbk"
+
+
+@pytest.mark.asyncio
+async def test_connector_load_feed_content_skips_fixture(isolated_pack_env):
+    _tmp_path, sync = isolated_pack_env
+    install_pack("cross-border-ecommerce-finance", consent_extensions=True)
+    sync("cross-border-ecommerce-finance")
+
+    csv_text = (
+        "order_id,order_date,platform_sku,quantity,item_price,currency\n"
+        "O-upload,2026-02-01,upload-sku,1,9.5,USD\n"
+    )
+    out = await run_user_fn(
+        "user.connector_load_feed",
+        {"feed": "orders", "content": csv_text},
+    )
+    assert out["ok"] is True
+    assert out["data"]["meta"]["sourceFile"] == "upload"
+    headers = out["data"]["headers"]
+    sku_i = headers.index("platform_sku")
+    assert out["data"]["rows"][0][sku_i] == "upload-sku"
