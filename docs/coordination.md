@@ -1,6 +1,6 @@
-# 多工具协同方案（Claude Code × Cursor）
+# 多工具协同方案（Claude 出方案 + 双执行器：Codex CLI / Cursor）
 
-> 目的：两个 AI 工具 + 人类开发者共同维护本仓库时，**不冲突、不重复、一致**。
+> 目的：Claude Code 定方案/只读评审，执行器（**Codex CLI** 二段协同 或 **Cursor** IDE 交互）二选一写代码，人类拍板。**不冲突、不重复、一致**。
 > 摘要见根目录 [AGENTS.md](../AGENTS.md)；本文是完整版。
 
 ---
@@ -24,12 +24,14 @@
 
 默认**串行**：定方案 → 写代码 → 评审（只读）→ 修正 → 合 master → 下一任务。
 
+> **执行器二选一，按需切换**：阶段 2/4 的实现可走 **Codex CLI**（二段协同，`scripts/codex-execute-latest-plan.sh` 注入 plan 自动执行）或 **Cursor**（IDE 交互）。能写成完整 plan、要自动/后台跑 → Codex CLI；需 IDE 交互迭代 → Cursor。骨架不变：Claude 定方案 + 只读评审。
+
 | 阶段 | 主责 | 辅责 | 产出（落盘，不贴聊天） |
 |---|---|---|---|
 | **1. 定方案 / 边界** | Claude Code | 人类拍板 | `docs/*.md`、`CLAUDE.md` 补丁；[任务 brief 模板](tasks/_template.md)（目标、边界、验收） |
-| **2. 写代码 / 补测试** | Cursor | — | 任务分支上的代码 + 测试；commit message 对应 brief 条目 |
+| **2. 写代码 / 补测试** | **Codex CLI / Cursor** | — | 任务分支上的代码 + 测试；commit message 对应 brief 条目 |
 | **3. 评审（只读）** | Claude Code | — | brief 内 **Review notes**，或 PR 评论；**不改代码** |
-| **4. 按评审修正** | Cursor | Claude 只读确认 | 同分支继续 commit；测绿后合 master |
+| **4. 按评审修正** | 同执行器 | Claude 只读确认 | 同分支继续 commit；测绿后合 master |
 | **5. 合入 / push** | 完成阶段 4 的一方 | 另一方先 `git fetch` | merge 到 `master` |
 
 同一任务**不要** Claude 与 Cursor 同时在同一分支改代码。评审阶段 Claude **只读**。

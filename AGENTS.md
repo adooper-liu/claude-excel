@@ -1,6 +1,6 @@
-# AGENTS.md — 多工具协同约定（Claude Code × Cursor）
+# AGENTS.md — 多工具协同约定（Claude 出方案 + 双执行器）
 
-本仓库由 **Claude Code** 与 **Cursor** 两个 AI 工具共同维护。为避免重复劳动、目录混淆和提交冲突，所有工具（含人类开发者）开工前必须遵守本约定。
+本仓库由 **Claude Code** 出方案/只读评审，执行器在 **Codex CLI**（二段协同）与 **Cursor**（IDE 交互）间**按需切换**。为避免重复劳动、目录混淆和提交冲突，所有工具（含人类开发者）开工前必须遵守本约定。
 
 ## 主目录与分支（单一真相）
 
@@ -40,9 +40,11 @@ git branch -a             # 有没有进行中的分支
 | 阶段 | 主责 | 产出（落盘，不贴聊天） |
 |---|---|---|
 | 定方案 / 边界 | Claude Code | `docs/` 或 `docs/tasks/<任务>.md` |
-| 写代码 / 补测试 | Cursor | 任务分支上的代码 + commit |
+| 写代码 / 补测试 | **Codex CLI 或 Cursor** | 任务分支上的代码 + commit |
 | 评审（**只读**） | Claude Code | `Review notes` 或 PR 评论 |
-| 按评审修正 | Cursor | 同分支继续 commit，测绿后合 master |
+| 按评审修正 | 同执行器 | 同分支继续 commit，测绿后合 master |
+
+**执行器二选一，按需切换**：能写成完整 plan、要自动/后台跑 → **Codex CLI**（`scripts/codex-execute-latest-plan.sh`，git 桥）；需 IDE 交互迭代 → **Cursor**。骨架不变：Claude 定方案 + 只读评审。
 
 **交接**：用 `docs/tasks/<任务>.md` + Git；聊天只传任务文件名、分支名、起点命令。**禁止**互贴长方案/状态。
 

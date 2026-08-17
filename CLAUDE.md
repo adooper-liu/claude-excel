@@ -2,11 +2,11 @@
 
 本文件给在本仓库里改代码的人看。产品目标：**独立的 AI Excel 插件**，不绑 Claude 付费账号。
 
-多工具协同（Claude Code × Cursor）见 **`docs/coordination.md`**（摘要 **`AGENTS.md`**）。复杂任务分两段（Claude 出 plan → Codex 执行）见下方「分两段工作流」。
+多工具协同：**Claude 出方案 + 只读评审，执行器二选一**——**Codex CLI**（二段协同，git 桥）或 **Cursor**（IDE 交互），按需切换。详见 **`docs/coordination.md`**（摘要 **`AGENTS.md`**）。
 
-## 分两段工作流（Claude 出 plan → Codex CLI 执行）
+## 二段协同（Claude 出 plan → Codex CLI 执行）
 
-复杂任务（业务逻辑重、出错成本高，或用户点名「分两段」）默认走两段：**Claude 侧锁死只出 plan、禁止实现**；实现交给 Codex CLI。Git 当桥、不贴聊天（方案二）。
+与 Cursor 交互式是**同一骨架的两套执行器**：Claude 出方案、只读评审不变，变的只是谁写实现。二段协同走 git 桥，用于能写成完整 plan 的复杂任务（业务逻辑重、出错成本高）：**Claude 侧锁死只出 plan、禁止实现**；实现交给 Codex CLI（`scripts/codex-execute-latest-plan.sh`）。
 
 | 步骤 | 谁 | 动作 |
 |---|---|---|
@@ -15,7 +15,7 @@
 | 3. 执行 | Codex | 逐粒实现，照 plan 跑测试/构建并贴真实输出，按 plan 的 commit 步骤提交 |
 | 4. 审 diff | Claude | `code-review` 对照 plan 逐粒核对，只读不改代码 |
 
-**判断标准**：写 plan 的时间 > 写代码的时间才值得分两段；小改动 / 快速原型 / 边写边验证的探索直接一次做完。串行化仍遵守 `AGENTS.md`（同一时刻只有一个工具在 master 上工作）。
+**何时二段 / 何时 Cursor**：能写成完整 plan、要自动/后台跑 → **Codex CLI**；需在 IDE 里交互迭代、快速试 → **Cursor**。写 plan 的时间 > 写代码的时间才值得二段。串行化仍遵守 `AGENTS.md`（同一时刻只有一个工具在 master 上工作）。
 
 ## 定位：三层 + 底层/用户侧边界（已定）
 
