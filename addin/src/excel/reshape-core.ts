@@ -2,9 +2,14 @@
 
 import { columnKeyToIndex } from "./filter-core";
 import { indexToCol } from "./formula-inspect-core";
+import {
+  coerceGridByFormats,
+  inferColumnFormats,
+  type ColumnFormatHint,
+} from "./column-format-core";
 
 export type Cell = string | number | boolean | null;
-export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project" | "flatten_header";
+export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project" | "flatten_header" | "coerce_columns";
 export type CoerceType = "number" | "text" | "date";
 
 export interface ProjectColumnSpec {
@@ -30,6 +35,8 @@ export interface ReshapeInput {
   type?: CoerceType;
   headerless?: boolean;
   columns?: ProjectColumnSpec[];
+  formatHints?: ColumnFormatHint[];
+  format?: "auto" | "manual";
 }
 
 export interface ReshapeResult {
@@ -343,11 +350,30 @@ function project(input: ReshapeInput): ReshapeResult {
   return pack(outHeaders, outRows, { converted: converted, blanked: blanked });
 }
 
+function coerceColumns(input: ReshapeInput): ReshapeResult {
+  const hints =
+    input.formatHints && input.formatHints.length
+      ? input.formatHints
+      : inferColumnFormats(input.headers, input.rows.slice(0, 12));
+  const part = coerceGridByFormats(input.rows, hints);
+  return pack(input.headers, part.rows, { converted: part.converted, blanked: part.blanked });
+}
+
+export function coerceColumnsChunk(
+  _headers: string[],
+  rows: Cell[][],
+  hints: ColumnFormatHint[],
+  textRows?: string[][]
+): { rows: Cell[][]; converted: number; blanked: number } {
+  return coerceGridByFormats(rows, hints, textRows);
+}
+
 export function reshape(input: ReshapeInput): ReshapeResult {
   if (input.op === "dedupe") return dedupe(input);
   if (input.op === "unpivot") return unpivot(input);
   if (input.op === "split") return splitColumn(input);
   if (input.op === "coerce") return coerce(input);
   if (input.op === "project") return project(input);
+  if (input.op === "coerce_columns") return coerceColumns(input);
   throw new Error("Unknown reshape op");
 }

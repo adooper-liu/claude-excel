@@ -10,7 +10,7 @@
     },
     {
       "name": "inspect_table",
-      "description": "Inspect one Excel Table: headers, columns (0-based index + letter A/B/…), data row count, up to 5 sample rows. For 取数_* sheets may include likelyHeaderless and reshapeHint — use reshape_table op=project with headerless:true, not read_range.",
+      "description": "Inspect one Excel Table: headers, columns (0-based index + letter A/B/…), data row count, up to 5 sample rows, columnHints (inferred id_text/datetime/number/amount). For 取数_* sheets may include likelyHeaderless and reshapeHint — use reshape_table op=project with headerless:true, not read_range.",
       "input_schema": {
         "type": "object",
         "properties": {

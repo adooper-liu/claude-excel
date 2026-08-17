@@ -113,17 +113,40 @@ export async function createSheetWithHeader(
 export async function writeSheetRows(
   sheetName: string,
   startRow: number,
-  rows: (string | number)[][]
+  rows: (string | number)[][],
+  textColumns?: number[]
 ): Promise<void> {
   if (!rows.length || !rows[0] || !rows[0].length) return;
   const cols = rows[0].length;
+  const textCols = textColumns && textColumns.length ? textColumns : [];
   await Excel.run(async (context) => {
     const sheet = context.workbook.worksheets.getItem(sheetName);
     for (const ch of chunkRanges(rows.length, CHUNK_ROWS)) {
       const slice = rows.slice(ch.start, ch.start + ch.count);
-      sheet.getRangeByIndexes(startRow + ch.start, 0, ch.count, cols).values = slice;
+      const absStart = startRow + ch.start;
+      textCols.forEach(function (col) {
+        sheet.getRangeByIndexes(absStart, col, ch.count, 1).numberFormat = [["@"]];
+      });
+      sheet.getRangeByIndexes(absStart, 0, ch.count, cols).values = slice;
       await context.sync();
     }
+  });
+}
+
+/** Mark columns as text (@) before bulk writes so numeric-looking ids are not coerced. */
+export async function prepareTextColumns(
+  sheetName: string,
+  colIndexes: number[],
+  startRow: number,
+  rowCount: number
+): Promise<void> {
+  if (!colIndexes.length || rowCount <= 0) return;
+  await Excel.run(async (context) => {
+    const sheet = context.workbook.worksheets.getItem(sheetName);
+    colIndexes.forEach(function (col) {
+      sheet.getRangeByIndexes(startRow, col, rowCount, 1).numberFormat = [["@"]];
+    });
+    await context.sync();
   });
 }
 

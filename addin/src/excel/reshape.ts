@@ -1,9 +1,22 @@
 /// <reference types="@types/office-js" />
 
-import { reshape as reshapeCore, dedupeChunk, type Cell, type ReshapeInput, type ReshapeOp, type CoerceType, type ProjectColumnSpec } from "./reshape-core";
+import { reshape as reshapeCore, dedupeChunk, coerceColumnsChunk, type Cell, type ReshapeInput, type ReshapeOp, type CoerceType, type ProjectColumnSpec } from "./reshape-core";
 import { flattenHeader } from "./flatten-header-core";
-import { readTable, readTableMeta, readTableBodyChunk } from "./table";
-import { createSheetWithHeader, writeSheetRows, finishResultSheet, writeToNewSheet } from "./write";
+import {
+  inferColumnFormats,
+  textColumnIndexes,
+  coerceRowByFormats,
+  gridCellsForWrite,
+  type ColumnFormatHint,
+} from "./column-format-core";
+import { readTable, readTableMeta, readTableBodyChunk, readTableBodyChunkWithText } from "./table";
+import {
+  createSheetWithHeader,
+  writeSheetRows,
+  finishResultSheet,
+  writeToNewSheet,
+  prepareTextColumns,
+} from "./write";
 import { CHUNK_ROWS, chunkRanges } from "./range-chunk";
 import { uniqueWorkbookSheetName } from "./sheet-name";
 import { parseA1Range } from "./table-name";
@@ -25,6 +38,8 @@ export interface ReshapeTableInput {
   type?: CoerceType;
   headerless?: boolean;
   columns?: ProjectColumnSpec[];
+  formatHints?: ColumnFormatHint[];
+  format?: "auto" | "manual";
   outputSheet?: string;
 }
 
@@ -35,6 +50,7 @@ const DEFAULT_SHEET: Record<ReshapeOp, string> = {
   coerce: "类型结果",
   project: "映射结果",
   flatten_header: "拍平结果",
+  coerce_columns: "格式结果",
 };
 
 function asWriteGrid(rows: Cell[][]): (string | number)[][] {
@@ -71,22 +87,96 @@ async function reshapeDedupeStreaming(input: ReshapeTableInput): Promise<{
   return { outputSheet: outputSheet, op: "dedupe", rows: written, dropped: dropped };
 }
 
+async function reshapeCoerceColumnsStreaming(input: ReshapeTableInput): Promise<{
+  outputSheet: string;
+  op: ReshapeOp;
+  rows: number;
+  converted?: number;
+  blanked?: number;
+}> {
+  const meta = await readTableMeta(input.tableName!);
+  let hints = input.formatHints;
+  if (!hints || !hints.length) {
+    const sampleN = Math.min(12, meta.dataRows);
+    const sample =
+      sampleN > 0 ? await readTableBodyChunk(meta.name, 0, sampleN) : ([] as Cell[][]);
+    hints = inferColumnFormats(meta.headers, sample as Cell[][]);
+  }
+  const textCols = textColumnIndexes(hints);
+  const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET.coerce_columns);
+  await createSheetWithHeader(outputSheet, meta.headers);
+  if (textCols.length && meta.dataRows > 0) {
+    await prepareTextColumns(outputSheet, textCols, 1, meta.dataRows);
+  }
+  let written = 0;
+  let converted = 0;
+  let blanked = 0;
+  for (const ch of chunkRanges(meta.dataRows, CHUNK_ROWS)) {
+    const body = await readTableBodyChunkWithText(meta.name, ch.start, ch.count);
+    const part = coerceColumnsChunk(
+      meta.headers,
+      body.values as Cell[][],
+      hints,
+      body.text
+    );
+    converted += part.converted;
+    blanked += part.blanked;
+    if (part.rows.length) {
+      await writeSheetRows(
+        outputSheet,
+        1 + written,
+        gridCellsForWrite(part.rows, hints),
+        textCols
+      );
+      written += part.rows.length;
+    }
+  }
+  await finishResultSheet(outputSheet, written, meta.headers.length);
+  return {
+    outputSheet: outputSheet,
+    op: "coerce_columns",
+    rows: written,
+    converted: converted,
+    blanked: blanked,
+  };
+}
+
+async function loadRangeBounds(
+  sheetName: string,
+  rangeAddress: string
+): Promise<{ rowIndex: number; columnIndex: number; rowCount: number; columnCount: number }> {
+  return Excel.run(async function (context) {
+    const sheet = context.workbook.worksheets.getItem(sheetName);
+    const range = sheet.getRange(rangeAddress);
+    range.load(["rowIndex", "columnIndex", "rowCount", "columnCount"]);
+    await context.sync();
+    return {
+      rowIndex: range.rowIndex,
+      columnIndex: range.columnIndex,
+      rowCount: range.rowCount,
+      columnCount: range.columnCount,
+    };
+  });
+}
+
 async function readRangeHeaderAndMeta(
   sheetName: string,
-  rangeAddress: string,
+  bounds: { rowIndex: number; columnIndex: number; rowCount: number; columnCount: number },
   headerRows: number
 ): Promise<{ totalRows: number; totalCols: number; headerGrid: Cell[][] }> {
   return Excel.run(async function (context) {
     const sheet = context.workbook.worksheets.getItem(sheetName);
-    const range = sheet.getRange(rangeAddress);
-    range.load(["rowCount", "columnCount"]);
-    await context.sync();
-    const headerRange = range.getResizedRange(headerRows - range.rowCount, 0);
+    const headerRange = sheet.getRangeByIndexes(
+      bounds.rowIndex,
+      bounds.columnIndex,
+      headerRows,
+      bounds.columnCount
+    );
     headerRange.load("values");
     await context.sync();
     return {
-      totalRows: range.rowCount,
-      totalCols: range.columnCount,
+      totalRows: bounds.rowCount,
+      totalCols: bounds.columnCount,
       headerGrid: (headerRange.values as Cell[][]) || [],
     };
   });
@@ -94,23 +184,28 @@ async function readRangeHeaderAndMeta(
 
 async function readRangeBodyChunk(
   sheetName: string,
-  rangeAddress: string,
+  bounds: { rowIndex: number; columnIndex: number; rowCount: number; columnCount: number },
   headerRows: number,
   start: number,
-  count: number
-): Promise<Cell[][]> {
-  if (count <= 0) return [];
+  count: number,
+  idCols?: number[]
+): Promise<{ values: Cell[][]; text: string[][] }> {
+  if (count <= 0) return { values: [], text: [] };
+  const loadText = !!(idCols && idCols.length);
   return Excel.run(async function (context) {
     const sheet = context.workbook.worksheets.getItem(sheetName);
-    const range = sheet.getRange(rangeAddress);
-    range.load(["columnCount"]);
+    const bodyRange = sheet.getRangeByIndexes(
+      bounds.rowIndex + headerRows + start,
+      bounds.columnIndex,
+      count,
+      bounds.columnCount
+    );
+    bodyRange.load(loadText ? ["values", "text"] : "values");
     await context.sync();
-    const bodyRange = range
-      .getOffsetRange(headerRows + start, 0)
-      .getResizedRange(count - 1, range.columnCount - 1);
-    bodyRange.load("values");
-    await context.sync();
-    return (bodyRange.values as Cell[][]) || [];
+    return {
+      values: (bodyRange.values as Cell[][]) || [],
+      text: loadText ? ((bodyRange.text as string[][]) || []) : [],
+    };
   });
 }
 
@@ -129,28 +224,42 @@ async function reshapeFlattenHeader(input: ReshapeTableInput): Promise<{
   const headerRows = Math.max(1, Math.floor(Number(input.headerRows) || 2));
   const separator = input.separator == null || input.separator === "" ? "_" : String(input.separator);
 
-  const meta = await readRangeHeaderAndMeta(sheetName, a1, headerRows);
+  const bounds = await loadRangeBounds(sheetName, a1);
+  const meta = await readRangeHeaderAndMeta(sheetName, bounds, headerRows);
   if (meta.totalRows <= headerRows) {
     throw new Error("区域行数（" + meta.totalRows + "）必须大于表头行数（" + headerRows + "）。");
   }
 
-  const previewBody = await readRangeBodyChunk(sheetName, a1, headerRows, 0, 1);
+  const previewBody = await readRangeBodyChunk(sheetName, bounds, headerRows, 0, 1);
   const preview = flattenHeader({
-    grid: meta.headerGrid.concat(previewBody),
+    grid: meta.headerGrid.concat(previewBody.values),
     headerRows: headerRows,
     separator: separator,
   });
+  const columnHints = inferColumnFormats(preview.headers, previewBody.values);
+  const textCols = textColumnIndexes(columnHints);
 
   const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET.flatten_header);
   await createSheetWithHeader(outputSheet, preview.headers);
 
   const dataRows = meta.totalRows - headerRows;
+  if (textCols.length && dataRows > 0) {
+    await prepareTextColumns(outputSheet, textCols, 1, dataRows);
+  }
   let written = 0;
   for (const ch of chunkRanges(dataRows, CHUNK_ROWS)) {
-    const body = await readRangeBodyChunk(sheetName, a1, headerRows, ch.start, ch.count);
-    if (body.length) {
-      await writeSheetRows(outputSheet, 1 + written, asWriteGrid(body));
-      written += body.length;
+    const body = await readRangeBodyChunk(sheetName, bounds, headerRows, ch.start, ch.count, textCols);
+    if (body.values.length) {
+      const rows = body.values.map(function (row, ri) {
+        return coerceRowByFormats(row, columnHints, body.text[ri]);
+      });
+      await writeSheetRows(
+        outputSheet,
+        1 + written,
+        gridCellsForWrite(rows, columnHints),
+        textCols
+      );
+      written += body.values.length;
     }
   }
   await finishResultSheet(outputSheet, written, preview.headers.length);
@@ -167,6 +276,10 @@ export async function reshapeTable(input: ReshapeTableInput): Promise<{
 }> {
   if (input.op === "flatten_header") {
     return reshapeFlattenHeader(input);
+  }
+  if (input.op === "coerce_columns") {
+    if (!input.tableName) throw new Error("coerce_columns 需要 tableName。");
+    return reshapeCoerceColumnsStreaming(input as ReshapeTableInput & { tableName: string });
   }
   if (input.op === "dedupe") {
     if (!input.tableName) throw new Error("dedupe 需要 tableName。");
@@ -189,6 +302,7 @@ export async function reshapeTable(input: ReshapeTableInput): Promise<{
     type: input.type,
     headerless: input.headerless,
     columns: input.columns,
+    formatHints: input.formatHints,
   };
   const result = reshapeCore(coreInput);
   const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || DEFAULT_SHEET[input.op]);

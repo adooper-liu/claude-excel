@@ -37,7 +37,7 @@ const MODULE_LABELS: Record<string, string> = {
 /** One-line Chinese hints; manifest description is fallback. */
 const OPERATOR_HINTS: Record<string, string> = {
   inspect_workbook: "先看表名、表头、行数。不要倾倒表体。",
-  inspect_table: "看一张 Table 的表头和最多 5 行样例。",
+  inspect_table: "看一张 Table 的表头和最多 5 行样例；含 columnHints 列格式推断。",
   inspect_formulas: "分清输入格与公式格，抽查错误。",
   scan_formula_errors: "只扫 #REF! #DIV/0! 等错误值。",
   ensure_table: "把带表头的区域升级成 Table，后续用返回的 name。",
@@ -49,7 +49,7 @@ const OPERATOR_HINTS: Record<string, string> = {
   write_inputs: "只改假设/输入格。公式格会拒绝。",
   get_sheet_names: "列出工作表名。",
   find_replace: "查找替换。lookIn=values 时不碰公式格。",
-  reshape_table: "dedupe|unpivot|split|coerce|project|flatten_header，只写新表。",
+  reshape_table: "dedupe|unpivot|split|coerce|coerce_columns|project|flatten_header，只写新表。",
   reconcile_tables: "两表精确对账，只写新表。",
   calculate_table: "lookup=INDEX/MATCH；sumifs=活汇总；fix_ref 修 #REF!。禁止写死合计。",
   create_pivot: "透视表。字段名必须来自 inspect 的真实表头。",

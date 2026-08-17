@@ -5,7 +5,7 @@
   "tools": [
     {
       "name": "reshape_table",
-      "description": "Reshape one Excel Table and WRITE A NEW SHEET only (never overwrite the source). op: dedupe (keep first row per key), unpivot (wide→long), split (one column by separator), coerce (number|text|date), project (map/merge columns by position or header into new columns), flatten_header (multi-row merged headers → one row). Table must already exist for most ops (use ensure_table first); flatten_header uses sheetName+range directly.",
+      "description": "Reshape one Excel Table and WRITE A NEW SHEET only (never overwrite the source). op: dedupe, unpivot, split, coerce (single column), coerce_columns (apply inspect columnHints / format:auto), project, flatten_header. Table must already exist for most ops; flatten_header uses sheetName+range.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -13,7 +13,7 @@
           "sheetName": { "type": "string", "description": "flatten_header: worksheet name from inspect_workbook" },
           "range": { "type": "string", "description": "flatten_header: used range including all header rows and data, e.g. A1:Z500" },
           "headerRows": { "type": "number", "description": "flatten_header: number of header rows (default 2). Handles merged cells via fill-forward." },
-          "op": { "type": "string", "description": "dedupe | unpivot | split | coerce | project | flatten_header" },
+          "op": { "type": "string", "description": "dedupe | unpivot | split | coerce | coerce_columns | project | flatten_header" },
           "keys": { "type": "string", "description": "dedupe: uniqueness column(s), comma-separated" },
           "idColumns": { "type": "string", "description": "unpivot: columns that stay. Default: first column" },
           "valueColumns": { "type": "string", "description": "unpivot: columns to melt. Default: all except idColumns" },
@@ -23,13 +23,18 @@
           "separator": { "type": "string", "description": "split: delimiter. Default comma. project merge: join separator (default empty). flatten_header: parent_child join (default _)" },
           "maxParts": { "type": "number", "description": "split: max new columns. Default = max observed" },
           "type": { "type": "string", "description": "coerce: number | text | date" },
+          "format": { "type": "string", "description": "coerce_columns: auto (infer from inspect columnHints / samples) or manual with columnHints" },
+          "columnHints": {
+            "type": "array",
+            "description": "coerce_columns manual: [{index, header, kind}] from inspect_table.columnHints. kind: id_text|datetime|number|amount|percent|plain_text"
+          },
           "headerless": { "type": "boolean", "description": "project: first table row is data, not headers (include it in output)" },
           "columns": {
             "type": "array",
             "description": "project: [{as, from?, merge?, separator?, coerce?}]. from/merge use 0-based index, column letter (A), 1-based number, or header name",
             "items": { "type": "object" }
           },
-          "outputSheet": { "type": "string", "description": "New sheet name. Default 去重结果 / 反透视结果 / 拆列结果 / 类型结果 / 映射结果 / 拍平结果" }
+          "outputSheet": { "type": "string", "description": "New sheet name. Default 去重结果 / 反透视结果 / 拆列结果 / 类型结果 / 格式结果 / 映射结果 / 拍平结果" }
         },
         "required": ["op"]
       }

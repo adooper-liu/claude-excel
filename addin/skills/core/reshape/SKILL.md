@@ -7,7 +7,8 @@
 | `dedupe` | 按订单号去重 | 键相同只留第一行 |
 | `unpivot` | 反透视 / 转长表 | 宽表变长表（属性 / 值） |
 | `split` | 把标签按逗号拆开 | 一列拆成 `列_1` `列_2` … |
-| `coerce` | 把金额转成数字 | 非法值变空 |
+| `coerce` | 把金额转成数字 | 单列非法值变空 |
+| `coerce_columns` | 按列格式规范化 | 用 inspect 的 columnHints：单号→文本 @，金额→数字，时间原样 |
 | `project` | 按位置映射/合并列 | 选列或 merge 多列成新列名；无真表头时 `headerless:true` |
 | `flatten_header` | 双层/合并表头拍平 | 大类+子列合成一行表头，写新表；时间值原样保留 |
 

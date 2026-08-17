@@ -3,6 +3,7 @@
 import { indexToCol } from "./formula-inspect-core";
 import { inspectSampleRows } from "./range-chunk";
 import { parseA1Range, resolveTableName } from "./table-name";
+import { inferColumnFormats, type ColumnFormatHint } from "./column-format-core";
 
 export interface TableColumnMeta {
   index: number;
@@ -30,6 +31,7 @@ export interface TableInfo {
   sampleRows: (string | number | boolean | null)[][];
   likelyHeaderless?: boolean;
   reshapeHint?: string;
+  columnHints?: ColumnFormatHint[];
 }
 
 function columnMeta(headers: string[]): TableColumnMeta[] {
@@ -125,6 +127,7 @@ export async function inspectWorkbook(): Promise<WorkbookInspect> {
         ? ((sample.values as unknown[][]) || []) as (string | number | boolean | null)[][]
         : [];
       const headerless = likelyHeaderlessTable(sheetName, headers, sampleRows);
+      const columnHints = sampleRows.length ? inferColumnFormats(headers, sampleRows) : inferColumnFormats(headers, []);
       tableInfos.push({
         name: t.table.name,
         sheet: sheetName,
@@ -134,9 +137,14 @@ export async function inspectWorkbook(): Promise<WorkbookInspect> {
         dataRows: sampleRanges[i].dataRows,
         sampleRows: sampleRows,
         likelyHeaderless: headerless,
+        columnHints: columnHints,
         reshapeHint: headerless
           ? "首行可能是数据不是表头。规整列用 reshape_table op=project headerless:true；from/merge 用 columns[].index 或 letter，不要用 read_range。"
-          : undefined,
+          : columnHints.some(function (c) {
+                return c.kind === "id_text";
+              })
+            ? "含单号/面单类列：写结果表用 reshape_table op=coerce_columns format:auto，或 flatten_header 自动按 columnHints 写文本。"
+            : undefined,
       });
     });
 

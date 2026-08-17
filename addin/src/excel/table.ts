@@ -126,6 +126,30 @@ export async function readTableBodyChunk(
   });
 }
 
+export async function readTableBodyChunkWithText(
+  tableName: string,
+  start: number,
+  count: number
+): Promise<{ values: (string | number | boolean | null)[][]; text: string[][] }> {
+  if (count <= 0) return { values: [], text: [] };
+  return Excel.run(async (context) => {
+    const tables = context.workbook.tables;
+    tables.load("items/name");
+    await context.sync();
+    const existing = tables.items.map((t) => t.name);
+    const resolved = resolveTableName(tableName, existing);
+    const table = tables.getItem(resolved);
+    const body = table.getDataBodyRange();
+    const chunk = body.getRow(start).getBoundingRect(body.getRow(start + count - 1));
+    chunk.load(["values", "text"]);
+    await context.sync();
+    return {
+      values: chunk.values as (string | number | boolean | null)[][],
+      text: (chunk.text as string[][]) || [],
+    };
+  });
+}
+
 export async function ensureTable(
   sheetName: string,
   rangeAddress?: string,

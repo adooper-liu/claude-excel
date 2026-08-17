@@ -35,6 +35,7 @@ export const reshapeSkill = [
   "| `unpivot` | 反透视 / 转长表 | 宽表变长表（属性 / 值） |",
   "| `split` | 把标签按逗号拆开 | 一列拆成 `列_1` `列_2` … |",
   "| `coerce` | 把金额转成数字 | 非法值变空 |",
+  "| `coerce_columns` | 识别列格式并写新表 | 先 inspect_table 看 columnHints；单号 id_text→@，金额→数字，时间 datetime 原样 |",
   "| `project` | 按位置映射/合并列 | 选列或 merge 多列，赋新列名；`headerless:true` 时首行也是数据 |",
   "| `flatten_header` | 双层/合并表头拍平 | 大类+子列→一行表头（如 首次扫描时间_文本）；`sheetName`+`range`+`headerRows:2`；不需 ensure_table |",
   "",

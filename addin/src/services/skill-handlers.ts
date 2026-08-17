@@ -47,7 +47,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const d = input.data as (string | number)[][];
         const n = String(input.sheetName || '').trim();
         if (!n) return 'Error: sheetName required, e.g. 订单 or 流水.';
-        if (/对账|reconcile|去重|反透视|拆列|reshape|提取|_规范|拍平|查找结果|汇总结果|公式修复|XLOOKUP|SUMIFS/i.test(n)) {
+        if (/对账|reconcile|去重|反透视|拆列|reshape|提取|_规范|拍平|格式结果|查找结果|汇总结果|公式修复|XLOOKUP|SUMIFS/i.test(n)) {
           return 'write_to_sheet blocked: 对账用 reconcile_tables，整形用 reshape_table，公式用 calculate_table。先 ensure_table。';
         }
         await E.writeToNewSheet(n, d);
@@ -205,7 +205,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           return String(v).split(',').map((s) => s.trim()).filter(Boolean);
         };
         const op = String(input.op || '').trim();
-        if (!op) return 'Error: op required (dedupe|unpivot|split|coerce|project|flatten_header)';
+        if (!op) return 'Error: op required (dedupe|unpivot|split|coerce|coerce_columns|project|flatten_header)';
         const parseColumns = (v: unknown) => {
           if (Array.isArray(v)) return v;
           if (v == null || v === '') return undefined;
@@ -216,7 +216,28 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
             return undefined;
           }
         };
+        const parseColumnHints = (v: unknown) => {
+          const raw = parseColumns(v) || parseColumns(input.formatHints);
+          if (!raw) return undefined;
+          return raw
+            .map(function (item) {
+              if (!item || typeof item !== 'object') return null;
+              const o = item as Record<string, unknown>;
+              const kind = String(o.kind || '').trim();
+              if (!kind) return null;
+              return {
+                index: typeof o.index === 'number' ? o.index : parseInt(String(o.index ?? ''), 10),
+                letter: String(o.letter || '').trim(),
+                header: String(o.header || '').trim(),
+                kind: kind,
+                hint: String(o.hint || '').trim(),
+                excelFormat: o.excelFormat ? String(o.excelFormat) : undefined,
+              };
+            })
+            .filter(Boolean);
+        };
         const columns = parseColumns(input.columns);
+        const columnHints = parseColumnHints(input.columnHints);
         if (op === 'flatten_header') {
           if (!String(input.sheetName || '').trim() || !String(input.range || '').trim()) {
             return 'Error: op=flatten_header 需要 sheetName + range（含双层表头与数据）。不要用 read_range 代替。';
@@ -238,7 +259,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           sheetName: input.sheetName as string | undefined,
           range: input.range as string | undefined,
           headerRows: Number.isFinite(headerRows) ? headerRows : undefined,
-          op: op as 'dedupe' | 'unpivot' | 'split' | 'coerce' | 'project' | 'flatten_header',
+          op: op as 'dedupe' | 'unpivot' | 'split' | 'coerce' | 'coerce_columns' | 'project' | 'flatten_header',
           keys: splitCsv(input.keys),
           idColumns: splitCsv(input.idColumns),
           valueColumns: splitCsv(input.valueColumns),
@@ -250,6 +271,8 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           type: input.type as 'number' | 'text' | 'date' | undefined,
           headerless: Boolean(input.headerless),
           columns: columns,
+          formatHints: columnHints as import('../excel/column-format-core').ColumnFormatHint[] | undefined,
+          format: input.format === 'manual' ? 'manual' : 'auto',
           outputSheet: input.outputSheet as string | undefined,
         });
         return JSON.stringify(r);
