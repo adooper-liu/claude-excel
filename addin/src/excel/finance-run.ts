@@ -1,14 +1,14 @@
-import { calculateTable } from "./calculate";
+import { createPivot } from "./pivot";
 import { consumeFinanceImportMeta } from "../services/finance-import-meta";
 import { FINANCE_ADS_SHEET, FINANCE_ORDER_SHEET, FINANCE_PACK_ID } from "../services/finance-csv-import";
-import { loadConnectorFeed } from "../services/user-fn";
+import { loadConnectorFeed, loadProfitAssumptions } from "../services/user-fn";
 import { appendPackAudit } from "./pack-audit";
-import { createPivot } from "./pivot";
+import { ensureTable, readTable } from "./table";
 import { reconcileTables } from "./reconcile";
 import { getSheetNames } from "./sheet";
-import { ensureTable } from "./table";
 import { writeInputs } from "./write-inputs";
-import { writeToNewSheet } from "./write";
+import { writeFormulas, writeToNewSheet } from "./write";
+import { assumptionRows, netProfitFormula } from "./profit-formula-core";
 
 const PACK_ID = FINANCE_PACK_ID;
 const PACK_VERSION = "0.1.0";
@@ -31,30 +31,77 @@ export function isFinanceRequest(text: string): boolean {
   return false;
 }
 
-async function ensureAssumeSheet(onStep?: (msg: string) => void): Promise<void> {
+async function ensureAssumeSheet(asins: string[], onStep?: (msg: string) => void): Promise<void> {
+  const payload = await loadProfitAssumptions(asins.length ? asins : ["default"]);
+  const first = payload.assumptions[0];
+  if (!first) throw new Error("user.profit_assumptions 未返回任何费率");
+  const rows = assumptionRows(first);
   const headerGrid: (string | number)[][] = [
     ["参数", "值", "说明"],
-    ["USD汇率", "", "用户提供/待验证"],
-    ["广告占比", "", "默认假设"],
-    ["退款率", "", "默认假设"],
-    ["归因说明", "点击日vs成交日0-7天偏移", "只标注不解决"],
+    ...rows.map((r) => [r.label, "", r.description]),
   ];
   const names = await getSheetNames();
   if (names.indexOf(ASSUME_SHEET) < 0) {
     if (onStep) onStep('🔧 writeToNewSheet("' + ASSUME_SHEET + '") 表头');
     await writeToNewSheet(ASSUME_SHEET, headerGrid);
   }
-  if (onStep) {
-    onStep('🔧 write_inputs({sheet:"' + ASSUME_SHEET + '",cells:["B2","B3","B4"]})');
-  }
-  await writeInputs(ASSUME_SHEET, [
-    { address: "B2", value: 7.2 },
-    { address: "B3", value: 0.08 },
-    { address: "B4", value: 0.03 },
-  ]);
+  if (onStep) onStep('🔧 user.profit_assumptions({asins:[…]}) + write_inputs("' + ASSUME_SHEET + '")');
+  await writeInputs(
+    ASSUME_SHEET,
+    rows.map((r, i) => ({ address: "B" + (2 + i), value: r.value }))
+  );
 }
 
-/** Gate 1b: fixture/import → Pack sheets → reconcile → 假设 → pivot → _pack_audit */
+function uniqueSkuCells(
+  rows: (string | number | boolean | null)[][],
+  skuIndex: number
+): (string | number)[] {
+  const seen = new Map<string, string | number>();
+  for (const row of rows) {
+    const v = row[skuIndex] ?? null;
+    if (v === null || v === undefined || v === "") continue;
+    const key = String(v).trim();
+    if (!key) continue;
+    const out: string | number = typeof v === "number" ? v : key;
+    if (!seen.has(key)) seen.set(key, out);
+  }
+  return Array.from(seen.values());
+}
+
+async function writeProfitFormulaSheet(
+  skus: (string | number)[],
+  reconTable: string,
+  onStep?: (msg: string) => void
+): Promise<{ outputSheet: string; rows: number }> {
+  const values: (string | number)[][] = [
+    ["platform_sku", "净利"],
+    ...skus.map((sku) => [sku, ""]),
+  ];
+  const sheet = await writeToNewSheet(PROFIT_FORMULA_SHEET, values);
+  if (skus.length > 0) {
+    const formulas: string[][] = skus.map((_sku, i) => [
+      netProfitFormula({ row: i + 2, reconTable: reconTable, assumeSheet: ASSUME_SHEET }),
+    ]);
+    if (onStep) {
+      onStep(
+        '🔧 write_formula({sheet:"' +
+          sheet +
+          '",range:"B2:B' +
+          (skus.length + 1) +
+          '"}) 每 SKU 净利活公式'
+      );
+    }
+    await writeFormulas(sheet, "B2:B" + (skus.length + 1), formulas);
+  }
+  await ensureTable(sheet, undefined, PROFIT_FORMULA_TABLE);
+  await Excel.run(async (context) => {
+    context.workbook.worksheets.getItem(sheet).activate();
+    await context.sync();
+  });
+  return { outputSheet: sheet, rows: skus.length };
+}
+
+/** Gate 1b: fixture/import → Pack sheets → reconcile → 假设 → 利润活公式 → pivot → _pack_audit */
 export async function runFinanceIntent(
   _userText: string,
   onStep?: (msg: string) => void
@@ -136,23 +183,14 @@ export async function runFinanceIntent(
   });
   const reconTable = recon.outputTable;
 
-  await ensureAssumeSheet(onStep);
+  const reconRead = await readTable(reconTable);
+  const skuIndex = reconRead.headers.indexOf("left_platform_sku");
+  if (skuIndex < 0) throw new Error("对账结果缺少列 left_platform_sku");
+  const skuList = uniqueSkuCells(reconRead.rows, skuIndex);
 
-  if (onStep) {
-    onStep(
-      '🔧 calculate_table({op:"sumifs",tableName:"' +
-        reconTable +
-        '",groupBy:"left_platform_sku",valueColumn:"left_item_price"})'
-    );
-  }
-  const profitFormula = await calculateTable({
-    op: "sumifs",
-    tableName: reconTable,
-    groupBy: "left_platform_sku",
-    valueColumn: "left_item_price",
-    outputSheet: PROFIT_FORMULA_SHEET,
-    outputTable: PROFIT_FORMULA_TABLE,
-  });
+  await ensureAssumeSheet(skuList.map((sku) => String(sku).trim()), onStep);
+
+  const profitFormula = await writeProfitFormulaSheet(skuList, reconTable, onStep);
 
   if (onStep) {
     onStep(
@@ -203,7 +241,9 @@ export async function runFinanceIntent(
   });
 
   return [
-    "已跑完 Gate 1b 业财闭环（" + (useImported ? "导入 CSV" : "fixture") + " → 对账 → 假设 → 透视 → 审计）。",
+    "已跑完 Gate 1b 业财闭环（" +
+      (useImported ? "导入 CSV" : "fixture") +
+      " → 对账 → 假设 → 利润活公式 → 透视 → 审计）。",
     "订单表：" + orderWritten + "（" + orderRowCount + " 行，hash " + ordersHashFinal + "）",
     "广告表：" + adsWritten + "（" + adsRowCount + " 行，hash " + adsHashFinal + "）",
     "对账结果：" +
@@ -218,9 +258,11 @@ export async function runFinanceIntent(
       recon.counts.right_only +
       " / conflict " +
       recon.counts.conflict,
-    "假设参数：" + ASSUME_SHEET + "（write_inputs 写入 B2–B4 汇率/占比/退款率）",
-    "活公式：" + profitFormula.outputSheet + "（按 SKU SUMIFS item_price，随源表变）",
+    "假设参数：" + ASSUME_SHEET + "（user.profit_assumptions 写入 11 项费率）",
+    "活公式：" +
+      profitFormula.outputSheet +
+      "（每 SKU 净利 = 收入 − spend − 佣金 − FBA − COGS − 退款，引用假设参数，随源表变）",
     "透视表：" + pivot.sheet + "（按 SKU+日期切片 item_price 与 spend）",
-    "审计：_pack_audit 已追加一行（含 sourceHash 与归因说明）。",
+    "审计：_pack_audit 已追加一行（含 sourceHash、review_pending 与归因说明）。",
   ].join("\n");
 }

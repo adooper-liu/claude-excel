@@ -21,9 +21,9 @@ slash: 跨境业财
 
 3. **reconcile_tables**：`leftTable=Pack_订单` `rightTable=Pack_广告` `keys=[platform_sku,biz_date]`，加 `matchMode: "date_window", dateWindowDays: 7, leftDateKey: "biz_date", rightDateKey: "biz_date"`（收回归因偏移），输出差异到新表（默认 `业财对账结果`）。
 
-4. **write_inputs**：把汇率 / 广告占比 / 退款率写入 `假设参数` sheet。
+4. **write_inputs**：把 `user.profit_assumptions` 返回的 11 项费率写入 `假设参数` sheet。
 
-5. **write_formula**（或 **calculate_table**）：按利润公式写活公式到新表（合计随源表变）— 公式见 `knowledge/profit_formula.md`。
+5. **write_formula**：按净利公式写活公式到新表（收入 − 广告花费 − 佣金 − FBA − COGS − 退款等，引用 `假设参数` 的 11 项费率；合计随源表变）— 公式见 `knowledge/profit_formula.md` 第一节。
 
 6. **create_pivot**：按 SKU / 日期 / 平台切片；口径只列选项，不替用户拍板。
 

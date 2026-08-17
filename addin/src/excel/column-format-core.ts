@@ -87,7 +87,7 @@ function rate(samples: string[], pred: (s: string) => boolean): number {
 
 function kindHint(kind: ColumnKind): string {
   if (kind === "id_text") return "单号/长数字 → 文本 @，避免科学计数法";
-  if (kind === "datetime") return "日期时间 → 原样保留，不统一时区";
+  if (kind === "datetime") return "日期时间 → 统一为 YYYY-MM-DD（丢弃时间部分）";
   if (kind === "amount") return "金额 → 转数字";
   if (kind === "number") return "数值 → 转数字";
   if (kind === "percent") return "比例 → 保持原值";

@@ -37,6 +37,45 @@ export async function loadConnectorFeed(
   return parsed.data;
 }
 
+export type ProfitAssumptions = {
+  referral_rate: number;
+  fba_fee_rate: number;
+  return_rate: number;
+  ad_rate: number;
+  cogs_rate: number;
+  inbound_rate: number;
+  storage_rate: number;
+  fx_loss_rate: number;
+  vat_rate: number;
+  duty_rate: number;
+  other_rate: number;
+};
+
+export type ProfitAssumptionsPayload = {
+  assumptions: Array<{ asin: string } & ProfitAssumptions>;
+  count: number;
+  source: string;
+};
+
+export async function loadProfitAssumptions(asins: string[]): Promise<ProfitAssumptionsPayload> {
+  const r = await fetch(API + "/" + encodeURIComponent("user.profit_assumptions"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ params: { asins } }),
+  });
+  const body = await r.text();
+  let parsed: { ok?: boolean; data?: ProfitAssumptionsPayload; error?: { message?: string } };
+  try {
+    parsed = JSON.parse(body || "{}");
+  } catch {
+    throw new Error("profit_assumptions 响应不是 JSON");
+  }
+  if (!parsed.ok || !parsed.data) {
+    throw new Error(parsed.error?.message || "user.profit_assumptions 失败");
+  }
+  return parsed.data;
+}
+
 export async function executeUserFn(tool: ToolCall): Promise<string> {
   const name = String(tool.name || "").trim();
   if (!name.startsWith("user.")) {
