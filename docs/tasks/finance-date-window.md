@@ -110,7 +110,15 @@ export function dayToIso(day: number): string
 
 ## Review notes
 
-（待 coding 后填）
+**结论：efa049e（Pack §B1.4 核心）正确、无阻塞；但日期规整（第 0 步）未做，date_window 对混存日期仍会错，需补完再合入。**
+
+已确认正确：
+- `reviewPending` 统计 = `review === "需复核"` 行数（reconcile-core.ts），语义正确
+- date_window 参数正确（dateWindowDays=7、leftDateKey/rightDateKey 同名 biz_date，满足实现约束）
+- `__` 审计列不影响下游 calculate_table / pivot（只取 left_platform_sku / item_price / spend）
+- 测试断言正确（exact=0、date_window 配对=3、tie conflict=1）
+
+待办（非缺陷）：**日期规整（第 0 步）未做**——efa049e 无 `date-cell.ts`。当前 date_window 对 ISO 日期正确（dirty fixture 核验通过），但混存日期（Excel 序列号 `45296` / yyyymmdd `20240105`）会被 dateToDay 解析错（`20240105` 当序列号 → 巨大天数）。需按 brief 第 0 步补 `parseDateCell` + 三处接入后再合入。
 
 ## 进度 log
 
@@ -119,3 +127,4 @@ export function dayToIso(day: number): string
 | 2026-08-17 | design | Claude Code | `—` | 定方案：reviewPending 放 core、finance-run 用 date_window(7)/biz_date、pack-audit 加字段、SKILL.md 同步 |
 | 2026-08-17 | coding | Codex CLI | `efa049e` | Pack §B1.4：reconcile 暴露 reviewPending + finance-run 用 date_window(7)/biz_date + pack-audit 加 review_pending 列 + SKILL.md 同步；前端 241 / 后端 121 / typecheck 全绿，dirty fixture 集成核验 date_window reviewPending=10、SKU-016/17/18 收回 |
 | 2026-08-17 | design | Claude Code | `—` | 补第 0 步日期规整：Excel 序列号/yyyymmdd/ISO 混存 → 共享 parseDateCell 统一三处（coerceDate/datetime/dateToDay） |
+| 2026-08-17 | review | Claude Code | `—` | 只读 review：efa049e 核心正确无阻塞；日期规整（第 0 步）未做，需补完再合入 |
