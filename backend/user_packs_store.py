@@ -7,8 +7,10 @@ via the knowledge bar (not auto-ingested in P0).
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +51,60 @@ def _read_json(path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"{path.name} 需要是 JSON 对象")
     return data
+
+
+MAX_IMPORT_BYTES = 5 * 1024 * 1024
+MAX_IMPORT_ENTRIES = 200
+
+
+def _safe_zip_name(name: str) -> bool:
+    if not name or name.startswith("/") or "\\" in name:
+        return False
+    return ".." not in name.split("/")
+
+
+def _extract_import_zip(zip_bytes: bytes, dest: Path) -> None:
+    if len(zip_bytes) > MAX_IMPORT_BYTES:
+        raise ValueError("zip 超过 5MB 上限")
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ValueError("无法解析 zip") from exc
+    infos = zf.infolist()
+    if len(infos) > MAX_IMPORT_ENTRIES:
+        raise ValueError(f"zip 条目超过 {MAX_IMPORT_ENTRIES} 上限")
+    for info in infos:
+        if not _safe_zip_name(info.filename):
+            raise ValueError("zip 含非法路径: " + info.filename)
+    if not any(info.filename == "pack.json" and not info.is_dir() for info in infos):
+        raise ValueError("zip 根目录需要 pack.json")
+    dest.mkdir(parents=True, exist_ok=True)
+    zf.extractall(dest)
+
+
+def import_pack_zip(zip_bytes: bytes) -> dict:
+    IMPORTED_PACKS_DIR.mkdir(parents=True, exist_ok=True)
+    staging = IMPORTED_PACKS_DIR / ".staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    try:
+        _extract_import_zip(zip_bytes, staging)
+        pack = _read_json(staging / "pack.json")
+        pid = str(pack.get("id") or "").strip()
+        if not pid:
+            raise ValueError("pack.json 需要 id")
+        if (PACKS_DIR / pid / "pack.json").is_file() or (IMPORTED_PACKS_DIR / pid / "pack.json").is_file():
+            raise ValueError(f"已存在同名包: {pid}，请改用 {{vendor}}-{{pack}} 命名")
+        dest = IMPORTED_PACKS_DIR / pid
+        if dest.exists():
+            shutil.rmtree(dest)
+        staging.rename(dest)
+        return _catalog_entry(dest, "third-party")
+    except Exception:
+        if staging.exists():
+            shutil.rmtree(staging)
+        raise
 
 
 def load_taxonomy() -> list[dict]:

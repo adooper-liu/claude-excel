@@ -285,3 +285,46 @@ def test_install_third_party_pack_allows_free_category(tmp_path, monkeypatch):
     rec = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
     assert rec[0]["source"] == "third-party"
     assert rec[0]["skills"] == ["logistics-check"]
+
+
+def _make_zip(entries):
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in entries.items():
+            zf.writestr(name, content)
+    return buf.getvalue()
+
+
+def test_import_pack_zip_valid(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    z = _make_zip({"pack.json": json.dumps({"id": "vendor-pack", "category": "自定义", "title": "V", "skills": []})})
+    entry = user_packs_store.import_pack_zip(z)
+    assert entry["source"] == "third-party"
+    assert entry["id"] == "vendor-pack"
+    assert (tmp_path / "packs-imported" / "vendor-pack" / "pack.json").is_file()
+
+
+def test_import_pack_zip_missing_pack_json(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    with pytest.raises(ValueError, match="pack.json"):
+        user_packs_store.import_pack_zip(_make_zip({"skills/x": "1"}))
+
+
+def test_import_pack_zip_rejects_slip(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    with pytest.raises(ValueError, match="非法路径"):
+        user_packs_store.import_pack_zip(_make_zip({"../evil": "x"}))
+
+
+def test_import_pack_zip_rejects_id_collision(tmp_path, monkeypatch):
+    import user_packs_store
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    z = _make_zip({"pack.json": json.dumps({"id": "cross-border-ecommerce-research", "skills": []})})
+    with pytest.raises(ValueError, match="已存在同名包"):
+        user_packs_store.import_pack_zip(z)
