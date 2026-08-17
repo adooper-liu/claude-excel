@@ -40,7 +40,7 @@ def test_list_packs_merges_imported_with_source(tmp_path, monkeypatch):
     import user_packs_store
 
     src = tmp_path / "packs-imported" / "vendor-shipping"
-    (src / "skills" / "ship-check" / "SKILL.md").mkdir(parents=True)
+    (src / "skills" / "ship-check").mkdir(parents=True)
     (src / "skills" / "ship-check" / "SKILL.md").write_text(
         "---\nname: ship-check\ndescription: 物流对账\nslash: 物流对账\n---\n# ship\n",
         encoding="utf-8",
@@ -163,7 +163,7 @@ def test_install_third_party_pack_allows_free_category(tmp_path, monkeypatch):
     import user_packs_store
 
     src = tmp_path / "packs-imported" / "vendor-logistics"
-    (src / "skills" / "logistics-check" / "SKILL.md").mkdir(parents=True)
+    (src / "skills" / "logistics-check").mkdir(parents=True)
     (src / "skills" / "logistics-check" / "SKILL.md").write_text(
         "---\nname: logistics-check\ndescription: 物流检查\nslash: 物流检查\n---\n# check\n",
         encoding="utf-8",
@@ -254,7 +254,7 @@ def test_uninstall_uses_record_skills_when_source_removed(tmp_path, monkeypatch)
     import user_extension_registry
 
     src = tmp_path / "packs-imported" / "vendor-logistics"
-    (src / "skills" / "logistics-check" / "SKILL.md").mkdir(parents=True)
+    (src / "skills" / "logistics-check").mkdir(parents=True)
     (src / "skills" / "logistics-check" / "SKILL.md").write_text(
         "---\nname: logistics-check\ndescription: 物流检查\nslash: 物流检查\n---\n# check\n",
         encoding="utf-8",
@@ -483,6 +483,7 @@ def test_remove_imported_pack(tmp_path, monkeypatch):
     import user_packs_store
 
     src = tmp_path / "packs-imported" / "vendor-x"
+    src.mkdir(parents=True)
     (src / "pack.json").write_text(json.dumps({"id": "vendor-x", "skills": []}), encoding="utf-8")
     monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
     monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
@@ -551,7 +552,7 @@ def test_export_import_roundtrip(tmp_path, monkeypatch):
     import user_packs_store
 
     src = tmp_path / "packs-imported" / "vendor-z"
-    (src / "skills" / "zs" / "SKILL.md").mkdir(parents=True)
+    (src / "skills" / "zs").mkdir(parents=True)
     (src / "skills" / "zs" / "SKILL.md").write_text(
         "---\nname: zs\ndescription: z\nslash: z\n---\n# z\n", encoding="utf-8"
     )
