@@ -178,8 +178,29 @@ async def api_knowledge_delete(doc_id: str, request: Request):
     return {"ok": True, "status": status()}
 
 
+def _ignore_proactor_reset(loop, context):
+    """Silence benign Windows Proactor noise when a client aborts a connection.
+
+    asyncio's _ProactorBasePipeTransport._call_connection_lost() calls
+    sock.shutdown() on a socket the peer already reset, raising
+    ConnectionResetError (WinError 10054) / ConnectionAbortedError (10053).
+    The connection is already dead, so it is safe to drop; everything else
+    goes to the default handler unchanged.
+    """
+    exc = context.get("exception")
+    if (
+        isinstance(exc, (ConnectionResetError, ConnectionAbortedError))
+        and context.get("message", "").startswith(
+            "Exception in callback _ProactorBasePipeTransport._call_connection_lost"
+        )
+    ):
+        return
+    loop.default_exception_handler(context)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    asyncio.get_running_loop().set_exception_handler(_ignore_proactor_reset)
     try:
         validate_backend_skills(ROOT_DIR)
     except SkillRegistryError as exc:
