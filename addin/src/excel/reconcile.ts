@@ -1,6 +1,11 @@
 /// <reference types="@types/office-js" />
 
-import { reconcile as reconcileCore, type Cell } from "./reconcile-core";
+import {
+  reconcile as reconcileCore,
+  type Cell,
+  type KeyNormalizeMode,
+  type MatchMode,
+} from "./reconcile-core";
 import { ensureTable, readTable } from "./table";
 import { writeToNewSheet } from "./write";
 import { uniqueWorkbookSheetName } from "./sheet-name";
@@ -13,6 +18,18 @@ export interface ReconcileTablesInput {
   outputSheet?: string;
   /** Excel ListObject name; use ASCII to keep SUMIFS structured refs stable. */
   outputTable?: string;
+  /** exact (default) | normalize | date_window */
+  matchMode?: MatchMode;
+  /** Key normalization for normalize / date_window stages. Default trim. */
+  keyNormalize?: KeyNormalizeMode;
+  /** Only with matchMode=date_window: ±N days window for second-pass pairing. */
+  dateWindowDays?: number;
+  /** Left date column header; must be one of keys when matchMode=date_window. */
+  leftDateKey?: string;
+  /** Right date column header; must be one of keys when matchMode=date_window. */
+  rightDateKey?: string;
+  /** Append __match_mode / __match_score / __review. Default: true when matchMode !== "exact". */
+  auditColumns?: boolean;
 }
 
 export async function reconcileTables(input: ReconcileTablesInput): Promise<{
@@ -30,6 +47,12 @@ export async function reconcileTables(input: ReconcileTablesInput): Promise<{
     rightRows: right.rows as Cell[][],
     keys: input.keys,
     compareColumns: input.compareColumns,
+    matchMode: input.matchMode,
+    keyNormalize: input.keyNormalize,
+    dateWindowDays: input.dateWindowDays,
+    leftDateKey: input.leftDateKey,
+    rightDateKey: input.rightDateKey,
+    auditColumns: input.auditColumns,
   });
 
   const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || "对账结果");

@@ -189,12 +189,32 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const compare = Array.isArray(input.compareColumns)
           ? (input.compareColumns as string[])
           : undefined;
+        const matchMode =
+          input.matchMode === 'normalize' || input.matchMode === 'date_window'
+            ? input.matchMode
+            : undefined;
+        const keyNormalize =
+          input.keyNormalize === 'trim_lower' || input.keyNormalize === 'trim_collapse_ws'
+            ? input.keyNormalize
+            : undefined;
+        const dateWindowDays =
+          typeof input.dateWindowDays === 'number' && input.dateWindowDays > 0
+            ? input.dateWindowDays
+            : undefined;
+        const auditColumns =
+          input.auditColumns === true ? true : input.auditColumns === false ? false : undefined;
         const r = await E.reconcileTables({
           leftTable: input.leftTable as string,
           rightTable: input.rightTable as string,
           keys,
           compareColumns: compare,
           outputSheet: input.outputSheet as string | undefined,
+          matchMode,
+          keyNormalize,
+          dateWindowDays,
+          leftDateKey: input.leftDateKey as string | undefined,
+          rightDateKey: input.rightDateKey as string | undefined,
+          auditColumns,
         });
         return JSON.stringify(r);
       }

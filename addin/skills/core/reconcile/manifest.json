@@ -1,11 +1,11 @@
 {
   "name": "reconcile",
   "version": "1.0.0",
-  "description": "Exact-match two Excel Tables by key columns; write a new result sheet only",
+  "description": "Exact/normalize/date_window match two Excel Tables by key columns; write a new result sheet only",
   "tools": [
     {
       "name": "reconcile_tables",
-      "description": "Compare two Excel Tables by one or more key columns. Writes a NEW sheet (never overwrites sources) with status matched|left_only|right_only|conflict. Exact match after trim; blank keys never match; no fuzzy match. Duplicate keys pair equal remaining rows first (order-independent), leftover same-key rows with different values are conflict. Both sides must already be Tables (use ensure_table first).",
+      "description": "Compare two Excel Tables by one or more key columns. Writes a NEW sheet (never overwrites sources) with status matched|left_only|right_only|conflict. Default exact match after trim; optional matchMode normalize (keyNormalize trim_lower/trim_collapse_ws) or date_window (±N days second pass, needs leftDateKey/rightDateKey in keys). Blank keys never match; no fuzzy match. Duplicate keys pair equal remaining rows first (order-independent), leftover same-key rows with different values are conflict. Both sides must already be Tables (use ensure_table first).",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -13,14 +13,40 @@
           "rightTable": { "type": "string", "description": "Right Excel Table name" },
           "keys": {
             "type": "string",
-            "description": "Join key header name(s), comma-separated. Example: 订单号"
+            "description": "Join key header name(s), comma-separated. Example: 订单号。date_window 时须含日期列对（leftDateKey + rightDateKey）"
           },
           "compareColumns": {
             "type": "array",
             "items": { "type": "string" },
             "description": "Columns to check for conflicts when keys match. Default: all shared non-key columns"
           },
-          "outputSheet": { "type": "string", "description": "New sheet name. Default 对账结果" }
+          "outputSheet": { "type": "string", "description": "New sheet name. Default 对账结果" },
+          "matchMode": {
+            "type": "string",
+            "enum": ["exact", "normalize", "date_window"],
+            "description": "匹配模式：exact（默认，trim 后精确相等）| normalize（键标准化后再精确匹配）| date_window（键匹配后按日期窗口二次配对）"
+          },
+          "keyNormalize": {
+            "type": "string",
+            "enum": ["trim", "trim_lower", "trim_collapse_ws"],
+            "description": "键标准化（normalize / date_window 时生效）：trim 去首尾空格（默认）| trim_lower 去空格+小写 | trim_collapse_ws 去空格+合并连续空白"
+          },
+          "dateWindowDays": {
+            "type": "number",
+            "description": "仅 matchMode=date_window：允许的日期差窗口 ±N 天"
+          },
+          "leftDateKey": {
+            "type": "string",
+            "description": "左表日期列名（须在 keys 中），仅 date_window 使用"
+          },
+          "rightDateKey": {
+            "type": "string",
+            "description": "右表日期列名（须在 keys 中），仅 date_window 使用"
+          },
+          "auditColumns": {
+            "type": "boolean",
+            "description": "输出行级审计列 __match_mode / __match_score / __review；非 exact 默认 true"
+          }
         },
         "required": ["leftTable", "rightTable", "keys"]
       }
