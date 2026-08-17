@@ -90,6 +90,25 @@ describe("reshape-core", function () {
     assert.strictEqual(result.blanked, 1);
   });
 
+  it("coerces mixed date formats to ISO", function () {
+    const result = reshape({
+      headers: ["date"],
+      rows: [[45296], [20240105], ["2024-01-05"], ["2024/1/5"], ["bad"]],
+      op: "coerce",
+      column: "date",
+      type: "date",
+    });
+    assert.deepStrictEqual(result.rows, [
+      ["2024-01-05"],
+      ["2024-01-05"],
+      ["2024-01-05"],
+      ["2024-01-05"],
+      [null],
+    ]);
+    assert.strictEqual(result.converted, 4);
+    assert.strictEqual(result.blanked, 1);
+  });
+
   it("throws when a required column is missing", function () {
     assert.throws(function () {
       reshape({

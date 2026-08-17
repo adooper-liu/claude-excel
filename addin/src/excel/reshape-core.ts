@@ -7,6 +7,7 @@ import {
   inferColumnFormats,
   type ColumnFormatHint,
 } from "./column-format-core";
+import { dayToIso, parseDateCell } from "./date-cell";
 
 export type Cell = string | number | boolean | null;
 export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project" | "flatten_header" | "coerce_columns";
@@ -200,21 +201,13 @@ function coerceNumber(value: Cell): { value: Cell; kind: "same" | "converted" | 
   return { value: null, kind: "blanked" };
 }
 
-function pad2(n: string): string {
-  return n.length === 1 ? "0" + n : n;
-}
-
 function coerceDate(value: Cell): { value: Cell; kind: "same" | "converted" | "blanked" } {
   if (value === null || value === undefined || value === "") {
     return { value: null, kind: "same" };
   }
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return { value: value, kind: "same" };
-  }
-  const s = String(value).trim();
-  const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (m) return { value: m[1] + "-" + pad2(m[2]) + "-" + pad2(m[3]), kind: "converted" };
-  return { value: null, kind: "blanked" };
+  const day = parseDateCell(value);
+  if (day === null) return { value: null, kind: "blanked" };
+  return { value: dayToIso(day), kind: "converted" };
 }
 
 function coerceText(value: Cell): Cell {

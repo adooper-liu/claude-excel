@@ -194,6 +194,36 @@ describe("reconcile-core", function () {
     assert.strictEqual(data[data.length - 1], "需复核");
   });
 
+  it("date_window unifies Excel serial, yyyymmdd, and ISO date keys", function () {
+    const result = reconcile({
+      leftHeaders: ["sku", "date"],
+      leftRows: [
+        ["A", 45296],
+        ["B", 20240105],
+        ["C", "2024/1/5"],
+      ],
+      rightHeaders: ["sku", "date"],
+      rightRows: [
+        ["A", "2024-01-05"],
+        ["B", 45296],
+        ["C", "2024-01-05"],
+      ],
+      keys: ["sku", "date"],
+      compareColumns: [],
+      matchMode: "date_window",
+      dateWindowDays: 7,
+      leftDateKey: "date",
+      rightDateKey: "date",
+    });
+    assert.strictEqual(result.counts.matched, 3);
+    assert.strictEqual(result.reviewPending, 3);
+    result.rows.forEach(function (r) {
+      assert.strictEqual(r.status, "matched");
+      assert.strictEqual(r.matchMode, "date_window");
+      assert.strictEqual(r.score, 1);
+    });
+  });
+
   it("date_window picks the smallest date difference inside the window", function () {
     const result = reconcile({
       leftHeaders: ["sku", "date", "amt"],

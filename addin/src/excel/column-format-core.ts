@@ -1,6 +1,7 @@
 /** Infer column formats from headers + samples; apply on reshape write. Pure — no Office JS. */
 
 import { indexToCol } from "./formula-inspect-core";
+import { dayToIso, parseDateCell } from "./date-cell";
 import type { Cell } from "./reshape-core";
 
 export type ColumnKind = "id_text" | "datetime" | "number" | "amount" | "percent" | "plain_text";
@@ -178,7 +179,8 @@ export function applyFormatToCell(value: Cell, kind: ColumnKind, displayedText?:
   if (kind === "id_text") return resolveIdCell(value, displayedText || "");
   if (kind === "datetime") {
     if (value === null || value === undefined) return "";
-    return typeof value === "string" ? value.trim() : String(value);
+    const day = parseDateCell(value);
+    return day === null ? "" : dayToIso(day);
   }
   if (kind === "number" || kind === "amount") {
     return coerceNumberCell(value).value;

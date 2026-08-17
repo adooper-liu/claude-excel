@@ -1,5 +1,7 @@
 /** Pure reconcile logic — no Office JS. exact | normalize | date_window; blank keys never match. */
 
+import { parseDateCell } from "./date-cell";
+
 export type Cell = string | number | boolean | null;
 export type Row = Record<string, Cell>;
 export type ReconcileStatus = "matched" | "left_only" | "right_only" | "conflict";
@@ -81,28 +83,9 @@ function compareRow(left: Row, right: Row, columns: string[]): string[] {
   return columns.filter((c) => !cellEqual(left[c] ?? null, right[c] ?? null));
 }
 
-/** Parse a date cell to a day number (Excel serial for numbers, YYYY-MM-DD / YYYY/M/D for strings). */
-function dateToDay(value: unknown): number | null {
-  if (value instanceof Date) {
-    const t = value.getTime();
-    return Number.isNaN(t) ? null : Math.round(t / 86400000);
-  }
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? Math.round(value) : null;
-  }
-  if (value === null || value === undefined) return null;
-  const s = String(value).trim();
-  if (!s) return null;
-  const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (m) {
-    const y = Number(m[1]);
-    const mo = Number(m[2]);
-    const d = Number(m[3]);
-    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-    return Math.round(Date.UTC(y, mo - 1, d) / 86400000);
-  }
-  const t = Date.parse(s);
-  return Number.isNaN(t) ? null : Math.round(t / 86400000);
+/** Unified date-cell parsing: Excel serial / yyyymmdd / ISO string → Excel day number. */
+function dateToDay(value: Cell | Date): number | null {
+  return parseDateCell(value);
 }
 
 interface PhaseResult {
