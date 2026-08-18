@@ -19,10 +19,16 @@ export interface ReshapeIntent {
   type?: CoerceType;
 }
 
+/** 解读/分析表结构是只读任务，交给 LLM，不做整形/拆列硬路由（避免「表结构解读与拆分」被 /拆分/ 劫持成拆列）。 */
+function isInterpretationRequest(text: string): boolean {
+  return /解读|分析|看懂|看.{0,6}结构|结构.{0,8}解读/.test(String(text || "").trim());
+}
+
 export function isProjectReshapeRequest(text: string): boolean {
   const t = String(text || "").trim();
   if (isSetupRequest(t)) return false;
   if (/对账|reconcile/i.test(t)) return false;
+  if (isInterpretationRequest(t)) return false;
   return /规整|整理.{0,12}列|列映射|投影|\bproject\b/i.test(t);
 }
 
@@ -30,6 +36,7 @@ export function isFlattenHeaderRequest(text: string): boolean {
   const t = String(text || "").trim();
   if (isSetupRequest(t)) return false;
   if (/对账|reconcile/i.test(t)) return false;
+  if (isInterpretationRequest(t)) return false;
   return (
     /拍平.{0,8}表头|双层表头|合并表头|多行表头|一行表头|flatten_header/i.test(t) ||
     (/表头/.test(t) && /拍平|合并|双层|一行/.test(t))
@@ -42,6 +49,7 @@ export function isReshapeRequest(text: string): boolean {
   const t = String(text || "").trim();
   if (isSetupRequest(t)) return false;
   if (/对账|reconcile/i.test(t)) return false;
+  if (isInterpretationRequest(t)) return false;
   return (
     /按.{1,20}去重/.test(t) ||
     /帮我去重|做去重|去重一下|\bdedupe\b/i.test(t) ||

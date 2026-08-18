@@ -18,6 +18,11 @@ describe("isReshapeRequest", function () {
   it("does not treat 规整列 as dedupe-style shortcut", function () {
     assert.strictEqual(isReshapeRequest("整理成规整列"), false);
   });
+
+  it("does not hijack 表结构解读与拆分 into reshape split", function () {
+    assert.strictEqual(isReshapeRequest("表结构解读与拆分"), false);
+    assert.strictEqual(isReshapeRequest("解读一下这张表的结构"), false);
+  });
 });
 
 describe("isProjectReshapeRequest", function () {
