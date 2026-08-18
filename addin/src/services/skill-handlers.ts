@@ -361,6 +361,8 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         if (!run) {
           return 'Error: run_flow 需要 flow ∈ reconcile|extract|project|flatten_header|reshape|calculate|finance。';
         }
+        // 明示选中的流程，让选错可见（B 类错误 fail-visible）
+        ctx.showMessage('🔧 run_flow(flow=' + flow + ') 用户原话：' + text.slice(0, 80));
         return await run(text, ctx.showMessage);
       }
       default: return `Unknown tool: ${tool.name}`;
