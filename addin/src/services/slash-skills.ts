@@ -90,7 +90,7 @@ const ASK: Record<string, string> = {
   deconstruct:
     "拆解用户说的工作流。先确认一句话命名，再写动作流、判断点、边界、验证。标 🟢🟡🔴。口径只列选项，不替用户拍板，不编数字。可 inspect 看表头。不要改表。末尾说明哪些 🟢 步骤可以做成技能。",
   "skill-creator":
-    "把用户的工作流做成一条可安装的 Excel 技能。若流程还含糊，先拆解再写技能。若现有对账、整形、计算、透视、假设、取数、调研、规范已经能做，用中文说明怎么开口即可，不要让用户先背斜杠清单，也不要新建技能。先判断用户处在哪一步（从零写 / 已有草稿要改 / 只要试跑）。用户没说清楚要自动化什么时，最多问四件事：做什么、什么口令触发、结果长什么样、要不要用当前表头走一遍。可 inspect_workbook（只读，不要改表）。起草 SKILL.md：YAML 必须有 name、description、slash。正文每步点名现有 Office JS 算子（extract_selection / reshape_table / reconcile_tables / calculate_table / create_pivot / write_inputs 等），禁止发明工具、禁止把表体读进对话再写回。附 2–3 句试跑口令。最后用一个 markdown 代码块给出完整 SKILL.md。",
+    "把用户的工作流做成一条可安装的 Excel 技能。若对话上一轮有【拆解交接】代码块，直接按它起草——🟢 步骤映射现有算子、🟡 判断点作口径选项、验证锚点作试跑检查，不要重新问流程，只补口令/结果形态/试跑口令。若流程还含糊，先拆解再写技能。若现有对账、整形、计算、透视、假设、取数、调研、规范已经能做，用中文说明怎么开口即可，不要让用户先背斜杠清单，也不要新建技能。先判断用户处在哪一步（从零写 / 已有草稿要改 / 只要试跑）。用户没说清楚要自动化什么时，最多问四件事：做什么、什么口令触发、结果长什么样、要不要用当前表头走一遍。可 inspect_workbook（只读，不要改表）。起草 SKILL.md：YAML 必须有 name、description、slash。正文每步点名现有 Office JS 算子（extract_selection / reshape_table / reconcile_tables / calculate_table / create_pivot / write_inputs 等），禁止发明工具、禁止把表体读进对话再写回。附 2–3 句试跑口令。最后用一个 markdown 代码块给出完整 SKILL.md。",
 };
 
 export function mergeSlashSkills(installed?: SlashSkill[]): SlashSkill[] {
