@@ -107,6 +107,20 @@ git branch -d feat/任务名          # 本地删除；远端分支按需 git pu
 
 一个工具开始改代码前，先确认 master 上没有另一个工具的进行中工作。用「私有分支 → 完成 → 合并 → 同步 → 弃用分支 → 下一任务从最新 master 再开」串行化，不靠记忆。
 
+### 会话生命周期（harness 四件套适配，机器可校验）
+
+框架来源见 `docs/harness-guide.md`。每个任务按「开始 → 选择 → 执行 → 收尾」走：
+
+| 阶段 | 命令 | 检查/产出什么 |
+|---|---|---|
+| **开始** | `git-flow.sh check`（含 `env`） | git 状态 + 环境自检：node / `addin/node_modules` / python 依赖 / 后端 :8765（init.sh 适配，只读不自动装） |
+| **选择** | `git-flow.sh status` | 扫 `docs/tasks/*.md` 的 frontmatter `status`：进行中只允许一个（串行化）；`done` 须验收项全勾（feature_list.json 适配） |
+| **执行** | 测试门禁 | pytest + test:unit + typecheck 全绿 |
+| **收尾** | `git-flow.sh finish` | 合 master + 删分支；更新对应 brief 的 frontmatter `status` + append 一行进度 log（progress.md 适配） |
+
+- 任务 brief 的 `status` / `branch` 写进文件顶部 frontmatter（机器可读，`git-flow.sh status` 读取），**不再**用正文自由文本当状态。
+- 旧 brief 无 frontmatter：`status` 按旧「**状态**」行尽力解析，读不到只提示不报错，不强制迁移。
+
 ## 5. 一致性保证
 
 | 机制 | 内容 |
@@ -117,8 +131,9 @@ git branch -d feat/任务名          # 本地删除；远端分支按需 git pu
 
 ## 6. 落地
 
-- 摘要：根目录 `AGENTS.md`（主目录/串行化/阶段分工/测试门禁），两边启动可见。
+- 摘要：根目录 `AGENTS.md`（主目录/串行化/阶段分工/测试门禁/会话生命周期），两边启动可见。
 - 完整版：本文 `docs/coordination.md`。
-- 任务 brief：`docs/tasks/_template.md`（每个任务复制一份，作交接唯一载体）。
-- git 操作脚本：`scripts/git-flow.sh`（`check`/`start`/`sync`/`update`/`push-branch`/`finish`），封装 §4 的流程，避免手敲命令出错。
+- 任务 brief：`docs/tasks/_template.md`（每个任务复制一份，作交接唯一载体；顶部 frontmatter `status`/`branch` 是机器可校验状态）。
+- git 操作脚本：`scripts/git-flow.sh`（`check`/`env`/`status`/`start`/`sync`/`update`/`push-branch`/`finish`），封装 §4 的流程 + 会话生命周期，避免手敲命令出错。
+- harness 六层框架摘要与对照：`docs/harness-guide.md`（参考文档）。
 - 改架构：先改文档再改代码（`CLAUDE.md` 与 docs 是单一真相）。

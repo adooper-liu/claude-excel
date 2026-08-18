@@ -25,7 +25,20 @@ git branch -a             # 有没有进行中的分支
 
 发现有进行中分支 / 未提交改动 → **先停下来对齐**，不另起炉灶。
 
-> 上面这套已封装成 [`scripts/git-flow.sh`](scripts/git-flow.sh)：`check`（开工检查）/ `start`（开分支）/ `update` / `push-branch` / `finish`（合入+推送+删分支）/ `sync`（同步 master）。Windows 双击 [`scripts/git-flow.bat`](scripts/git-flow.bat) 默认跑 `check`。
+> 上面这套已封装成 [`scripts/git-flow.sh`](scripts/git-flow.sh)：`check`（开工检查）/ `env`（环境自检）/ `status`（任务状态扫描）/ `start`（开分支）/ `update` / `push-branch` / `finish`（合入+推送+删分支）/ `sync`（同步 master）。Windows 双击 [`scripts/git-flow.bat`](scripts/git-flow.bat) 默认跑 `check`。
+
+## 会话生命周期（开始→选择→执行→收尾）
+
+每个任务按「开始→选择→执行→收尾」走，各对应一个 `git-flow.sh` 子命令：
+
+| 阶段 | 动作 |
+|---|---|
+| **开始** | `check`（git + 环境自检，只读） |
+| **选择** | `status` 确认只有一个 brief 处于进行中（串行化） |
+| **执行** | 任务分支上改 + 测试门禁全绿 |
+| **收尾** | `finish` 合 master；更新对应 brief 的 frontmatter `status` + append 一行进度 log |
+
+任务 brief 的 frontmatter `status` 是**机器可校验**交接状态：同一时刻只允许一个进行中；无验证证据不得标 `done`（`git-flow.sh status` 会提醒）。框架来源见 `docs/harness-guide.md`。
 
 ## 分支（一个任务一条）
 
