@@ -349,7 +349,15 @@ export async function chatWithTools(
       text = parsed.text;
       cb.onToken?.(parsed.text);
     }
-    if (parsed.toolUses.length === 0) break;
+    if (parsed.toolUses.length === 0) {
+      // 模型停在"汇报计划"式文字上：本回合已执行过工具且文字像中途暂停 → 自动续一次，不用用户手动点「继续执行」
+      if (digest.length && /还没|还缺|还差|我这就继续|接下来.*(执行|做)|下一步.*(执行|做)/.test(parsed.text)) {
+        messages.push({ role: 'assistant', content: data.content });
+        messages.push({ role: 'user', content: '继续执行到完成，不要再停下汇报计划；全部做完后一次性汇报结论。' });
+        continue;
+      }
+      break;
+    }
     messages.push({ role: 'assistant', content: data.content });
     const results: Array<{ type: string; tool_use_id: string; content: string }> = [];
     for (const raw of parsed.toolUses) {
