@@ -17,11 +17,17 @@ export const reconcileSkill = [
   "3. `inspect_table` 确认键列名",
   "4. `reconcile_tables`，传入 `leftTable` `rightTable` `keys`",
   "",
+  "键列有空格/大小写/前导零差异时：先看 `inspect_table` 的 sampleRows 判断差异大小。差异小（空格/大小写）对账会自动去空格；差异大（前导零、缩写、别名对不上）提示用户先 /整形 归一键，或换键列，不要硬对。",
+  "",
   "不要覆盖源表。不要用模糊匹配。空键不会互配。不要用 `write_to_sheet` 手写对账结果。",
   "",
   "## 结果列",
   "",
   "`status`（matched / left_only / right_only / conflict）、`key`、`left_*`、`right_*`、`conflict_columns`",
+  "",
+  "## conflict 处理",
+  "",
+  "conflict（键相同但字段不一致）把 left_*/right_* 的差异摆出来，交给用户判断：以左表为准 / 以右表为准 / 人工核对。列选项，不替用户选。报告冲突行数和涉及列名。",
 ].join("\n");
 
 export const reshapeSkill = [
@@ -40,6 +46,8 @@ export const reshapeSkill = [
   "| `flatten_header` | 双层/合并表头拍平 | 大类+子列→一行表头（如 首次扫描时间_文本）；`sheetName`+`range`+`headerRows:2`；不需 ensure_table |",
   "",
   "除 `flatten_header` 外必须先是 Excel Table（`ensure_table`）。双层表头禁止 read_range 后 write_to_sheet。空工作簿或没有带表头的表时，只回短句让界面出勾选框，不要报错结束。不跨文件合并。从网址/ERP 取数走 /取数。",
+  "",
+  "用户说法不在上面任何 op 的「怎么说」列时（如转置、行转列、合并表），列出 2–3 个候选 op 让用户选，不要硬套一个。",
 ].join("\n");
 
 export const calculateSkill = [
@@ -58,6 +66,8 @@ export const calculateSkill = [
   "## 写公式时",
   "",
   "- 查找默认 `INDEX`/`MATCH`，分类汇总默认 `SUMIFS`，容错用 `IFERROR`。不要把心算或脚本算好的数字贴进单元格。",
+  "- 日期区间求和（近 30 天金额）：`SUMIFS(金额列, 日期列, \">=\"&起, 日期列, \"<=\"&止)`；日期列用真实列字母，条件里日期用 DATE() 或引用单元格，不写裸字符串。",
+  "- 多条件求和（按类别+仓库）：`SUMIFS(金额列, 类别列, 条件1, 仓库列, 条件2)`。",
   "- 分母可能为 0 时写成 `IF(分母=0,\"\",分子/分母)`，不要直接相除。",
   "- 工作表名不是纯英文下划线时，跨表引用必须加单引号：`='假设输入'!$B$5`。",
   "- 合并单元格只写左上角。",
@@ -79,7 +89,7 @@ export const craftSkill = [
   "1. `inspect_workbook`。空表或没有表头：只回短句让界面出勾选框，不要编数据。",
   "2. `inspect_formulas`（有 Table 就传 tableName）或 `scan_formula_errors`。同时看公式原文和算出来的值。错误只报告位置；`#REF!` 交给 `/计算` 的 fix_ref，其它错误不要瞎改。",
   "3. 该汇总或按键匹配的，走 `/计算`（`calculate_table`）。汇总值必须是活公式：`INDEX`/`MATCH`、`SUMIFS`。禁止把心算结果写进格子，禁止默认 XLOOKUP。",
-  "4. 用 `format_range` 按格上色（不要发明新工具）：手工输入的数字 `color=#0000FF`；同表公式 `color=#000000`；公式里带 `!` 的跨表引用 `color=#008000`；用户标明的关键假设区 `bgColor=#FFFF00`。表头可 `bold`+`hAlign=center`+`border=thin`；冻结首行 `freezeRows=1`。下拉列表用 `data_validation` type=list。",
+  "4. 用 `format_range` 按格上色（不要发明新工具）：手工输入的数字 `color=#0000FF`；同表公式 `color=#000000`；公式里带 `!` 的跨表引用 `color=#008000`；用户标明的关键假设区 `bgColor=#FFFF00`。上色前先用一句话告诉用户这套颜色语义（蓝=可改输入、黑=公式、绿=跨表引用、黄=关键假设），用户同意或已懂再上色，不要默默上色。表头可 `bold`+`hAlign=center`+`border=thin`；冻结首行 `freezeRows=1`。下拉列表用 `data_validation` type=list。",
   "5. 金额 `numberFormat=¥#,##0.00;¥(#,##0.00);-`；比例 `0.0%`（格子里存 0.15，不要写 15）；年份当文本，不要千分位。",
   "6. 假设放在单独格子，公式引用它，禁止 `=B5*1.05` 这种魔数。旁边一格写来源（用户给的就写「用户提供」）。",
   "7. 改已有表：先靠 inspect_formulas 认出输入格，只改那些格，已有公式不要碰。给别人填的空表才加「填写说明」和一行示例；编辑别人的文件时不加示例行。",
@@ -133,6 +143,10 @@ export const skillCreatorSkill = [
   "附 2–3 句真人会说的话。用当前表头在脑子里走一遍：缺列、缺工具、会覆盖源表，就改草稿再给。用户说跳过试跑则跳过。",
   "",
   "回复里用一个 markdown 代码块给出完整 SKILL.md。",
+  "",
+  "## 安装引导",
+  "",
+  "给完 SKILL.md 代码块后，告诉用户怎么装：任务窗格输入 `/` 后点「安装外部技能」→ 上传 SKILL.md 文件，或拖放 / 粘贴内容。装完用 2–3 句试跑口令验证。",
 ].join("\n");
 
 export const pivotSkill = [
@@ -142,7 +156,7 @@ export const pivotSkill = [
   "",
   "1. `inspect_workbook`，表头以返回为准，不要猜列名。",
   "2. 还不是 Table → `ensure_table`，后续用返回的 name。",
-  "3. `create_pivot`：rows 用分类字段，values 用金额等（aggregation 默认 sum）。列字段、筛选可选。",
+  "3. `create_pivot`：rows 用「要按什么分类」的列（可多级，rows 传数组）；values 用「要加总/计数」的列（aggregation 默认 sum，计数用 count，平均用 average）；列字段、筛选可选。字段名必须来自 inspect 的真实表头。",
   "4. 汇报新表名。不要用 write_to_sheet 手搓透视结果。",
 ].join("\n");
 
@@ -153,8 +167,9 @@ export const assumeSkill = [
   "",
   "1. `inspect_workbook` 再 `inspect_formulas`，从 inputSample 认出输入格。",
   "2. 只用 `write_inputs` 写入用户给的新数字。目标格若是公式，工具会拒绝，不要改用 write_to_range。",
-  "3. 再 `inspect_formulas` 或 `scan_formula_errors`，报告用户关心的结果格新旧值。",
+  "3. 再 `inspect_formulas` 或 `scan_formula_errors`，报告用户关心的结果格新旧值、下游是否还报错。",
   "4. 不要复制整张模型到新表。不要把密码或 ERP 账号写进格子。",
+  "5. 用户要对比两套假设（乐观/悲观、改税前后）时：先把输入区复制到新表或新列，再改其中一套，不覆盖原假设；对比结果若要落表，用 /计算 或 /透视 出。",
 ].join("\n");
 
 export const fetchSkill = [
