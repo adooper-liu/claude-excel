@@ -395,30 +395,44 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const sheet = String(input.sheet || '').trim();
         if (!sheet) return 'Error: save_structure_note 需要 sheet。';
         const fileKey = await workbookFileKey();
-        const r = await fetch('https://localhost:8765/api/table-structure', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            fileKey: fileKey,
-            sheet: sheet,
-            schema: input.schema,
-            inferences: input.inferences,
-            advisories: input.advisories,
-          }),
-        });
-        return (await r.text()) || '{}';
+        let r: Response;
+        try {
+          r = await fetch('https://localhost:8765/api/table-structure', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              fileKey: fileKey,
+              sheet: sheet,
+              schema: input.schema,
+              inferences: input.inferences,
+              advisories: input.advisories,
+            }),
+          });
+        } catch (e) {
+          return 'Error: save_structure_note 后端不可达：' + String(e);
+        }
+        const body = await r.text();
+        if (!r.ok) return 'Error: save_structure_note 失败（HTTP ' + r.status + '）：' + body;
+        return body;
       }
       case 'load_structure_notes': {
         const sheet = String(input.sheet || '').trim();
         if (!sheet) return 'Error: load_structure_notes 需要 sheet。';
         const fileKey = await workbookFileKey();
-        const r = await fetch(
-          'https://localhost:8765/api/table-structure?fileKey=' +
-            encodeURIComponent(fileKey) +
-            '&sheet=' +
-            encodeURIComponent(sheet)
-        );
-        return (await r.text()) || '{}';
+        let r: Response;
+        try {
+          r = await fetch(
+            'https://localhost:8765/api/table-structure?fileKey=' +
+              encodeURIComponent(fileKey) +
+              '&sheet=' +
+              encodeURIComponent(sheet)
+          );
+        } catch (e) {
+          return 'Error: load_structure_notes 后端不可达：' + String(e);
+        }
+        const body = await r.text();
+        if (!r.ok) return 'Error: load_structure_notes 失败（HTTP ' + r.status + '）：' + body;
+        return body || '{}';
       }
       default: return `Unknown tool: ${tool.name}`;
     }
