@@ -19,15 +19,15 @@ export const TALK_EXAMPLES = [
 
 export const SLASH_SKILLS: SlashSkill[] = [
   { id: "reconcile", slash: "对账", title: "两表精确对账，只写新表" },
-  { id: "reshape", slash: "整形", title: "去重 / 反透视 / 拆列 / 转数字" },
-  { id: "calculate", slash: "计算", title: "活公式：SUMIFS / INDEX+MATCH / 修 #REF!" },
+  { id: "reshape", slash: "整形", title: "洗表：去重 / 拆列 / 宽表转长表 / 转数字" },
+  { id: "calculate", slash: "计算", title: "按条件求和 / 匹配数据 / 修 #REF!，公式活的" },
   { id: "pivot", slash: "透视", title: "按表头做透视表" },
-  { id: "assume", slash: "假设", title: "只改输入格，下游公式重算" },
+  { id: "assume", slash: "假设", title: "改参数或假设数字，公式自动重算，不覆盖公式" },
   { id: "fetch", slash: "取数", title: "从网址取表；登录用本机取数栏" },
   { id: "research", slash: "调研", title: "查资料、多源核实；默认不落表" },
   { id: "knowledge", slash: "知识", title: "检索本机已上传文档" },
-  { id: "craft", slash: "规范", title: "检查公式、输入格着色、数字格式" },
-  { id: "deconstruct", slash: "拆解", title: "把工作流拆成可验证步骤，不改表" },
+  { id: "craft", slash: "规范", title: "查公式错误、标出能改的数字格、数字格式" },
+  { id: "deconstruct", slash: "拆解", title: "把你的流程拆成步骤，标出哪些能自动做" },
   { id: "skill-creator", slash: "skill-creator", title: "把流程做成可复用技能" },
 ];
 

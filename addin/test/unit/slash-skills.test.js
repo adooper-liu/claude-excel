@@ -102,7 +102,7 @@ describe("slash-skills", function () {
     assert.deepStrictEqual(slashDisplay("/计算 按类别求和"), {
       token: "计算",
       extra: "按类别求和",
-      title: "活公式：SUMIFS / INDEX+MATCH / 修 #REF!",
+      title: "按条件求和 / 匹配数据 / 修 #REF!，公式活的",
     });
     assert.strictEqual(slashDisplay("按类别求和"), null);
   });
