@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,8 @@ from config_store import CONFIG_DIR
 NOTES_FILE = CONFIG_DIR / "table-structures.json"
 MAX_ENTRIES = 200
 CONFIDENCE = {"low", "medium", "high"}
+# 合法列字母：A..XFD（1-3 位大写字母）。headers 键必须是它，拒绝列索引等脏键。
+COL_LETTER_RE = re.compile(r"^[A-Z]{1,3}$")
 
 
 def _now_iso() -> str:
@@ -70,9 +73,10 @@ def _valid_schema(schema: Any) -> bool:
     if not isinstance(schema.get("cols"), int) or schema["cols"] <= 0:
         return False
     headers = schema.get("headers")
-    if not isinstance(headers, dict) or not headers:
+    if not isinstance(headers, dict):
         return False
-    return True
+    # 至少有一个合法列字母键
+    return any(COL_LETTER_RE.match(str(k)) for k in headers)
 
 
 def _valid_inference(i: Any) -> bool:
@@ -112,7 +116,12 @@ def save_notes(file_key: str, sheet: str, payload: dict) -> dict:
         "schema": {
             "cols": int(schema["cols"]),
             "rows": int(schema.get("rows") or 0),
-            "headers": {str(k): str(v) for k, v in schema.get("headers", {}).items()},
+            # 丢弃非法列字母键（如把列索引 184 当字母），防脏键进真相源
+            "headers": {
+                str(k): str(v)
+                for k, v in schema.get("headers", {}).items()
+                if COL_LETTER_RE.match(str(k))
+            },
         },
         "inferences": [i for i in payload.get("inferences") or [] if _valid_inference(i)],
         "advisories": [a for a in payload.get("advisories") or [] if _valid_advisory(a)],

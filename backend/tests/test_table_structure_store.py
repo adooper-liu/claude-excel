@@ -47,6 +47,15 @@ def test_rejects_missing_schema(notes_root):
         save_notes("k", "S", {"inferences": []})
 
 
+def test_drops_invalid_header_keys(notes_root):
+    """headers 键必须是列字母；列索引等脏键丢弃，不污染真相源。"""
+    entry = save_notes("k", "S", {
+        "schema": {"cols": 2, "headers": {"A": "列A", "184": "脏键"}},
+    })
+    assert "A" in entry["schema"]["headers"]
+    assert "184" not in entry["schema"]["headers"]
+
+
 def test_previous_keeps_old_for_diff(notes_root):
     save_notes("k", "S", {"schema": {"cols": 10, "headers": {"A": "旧"}}})
     second = save_notes("k", "S", {"schema": {"cols": 12, "headers": {"A": "新"}}})
