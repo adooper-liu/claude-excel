@@ -106,6 +106,9 @@ function inferKind(header: string, samples: string[]): ColumnKind {
   // 表头含日期词 + 无纯数字样本 → datetime；纯数字列（天数/数量）不自动转日期，
   // 防被 parseDateCell 当 Excel 序列号改写（1–60000 的整数都会被解释成日期）。
   if (DATETIME_HEADER.test(h) && numericRate === 0) return "datetime";
+  // 前导零（如 "002"、"026014"）= 编码/标识符，不是数字——保留原样，防 coercion 丢零。
+  // 通用规则：任何列样本带前导零即按文本，不写死具体列名。
+  if (rate(samples, function (s) { return /^0\d/.test(s); }) > 0) return "plain_text";
   if (AMOUNT_HEADER.test(h)) return "amount";
   if (rate(samples, looksLikeAmountSample) >= 0.6 && datetimeSampleRate < 0.2) {
     return "amount";

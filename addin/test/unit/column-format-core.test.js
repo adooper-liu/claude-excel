@@ -34,6 +34,19 @@ describe("column-format-core", function () {
     assert.strictEqual(typeof grid[0][0], "string");
   });
 
+  it("keeps leading-zero values as text (ZONE 002 / 工号 026014) — 通用规则非特例", function () {
+    const hints = inferColumnFormats(["ZONE/区域"], [["002"], ["003"]]);
+    assert.strictEqual(hints[0].kind, "plain_text");
+    assert.strictEqual(applyFormatToCell("002", hints[0].kind), "002");
+    const worker = inferColumnFormats(["创建人.工号"], [["026014"]]);
+    assert.strictEqual(worker[0].kind, "plain_text");
+  });
+
+  it("does not treat decimal rates (0.5 / 0.25) as leading-zero text", function () {
+    const hints = inferColumnFormats(["燃油费率"], [["0.25"], ["0.5"]]);
+    assert.notStrictEqual(hints[0].kind, "plain_text");
+  });
+
   it("keeps numeric values numeric even when header contains a date keyword", function () {
     const hints = inferColumnFormats(["days_to date"], [[120, 365]]);
     assert.notStrictEqual(hints[0].kind, "datetime");
