@@ -2,7 +2,7 @@
 
 import pytest
 
-from table_structure_store import get_notes, list_notes, save_notes
+from table_structure_store import all_notes, get_notes, list_notes, save_notes
 
 
 @pytest.fixture
@@ -79,3 +79,18 @@ def test_list_notes_returns_markers(notes_root):
     assert {"sheet": "S", "cols": 135, "rows": 1051, "has_note": True} in markers
     assert {"sheet": "T", "cols": 3, "rows": 5, "has_note": True} in markers
     assert list_notes("nokey") == []
+
+
+def test_all_notes_returns_full_notes(notes_root):
+    """会话上下文注入用：返回完整笔记（schema + inferences + advisories）。"""
+    save_notes("k1", "S", {
+        "schema": {"cols": 135, "rows": 1051, "headers": {"BG": "计价重"}},
+        "inferences": [{"claim": "1050=7区x150重", "confidence": "high", "evidence": "rows=1051"}],
+        "advisories": [{"note": "公式用列字母", "source": "inspect"}],
+    })
+    notes = all_notes("k1")
+    assert len(notes) == 1
+    assert notes[0]["schema"]["cols"] == 135
+    assert notes[0]["inferences"][0]["claim"] == "1050=7区x150重"
+    assert notes[0]["advisories"][0]["note"] == "公式用列字母"
+    assert all_notes("nokey") == []

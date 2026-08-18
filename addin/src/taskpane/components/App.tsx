@@ -158,23 +158,49 @@ function systemForTurn(skillId?: string, skillBody?: string): string {
   );
 }
 
-/** 当前工作簿哪些表已有结构笔记（固定标记），注入系统提示让模型跳过重复 inspect。 */
+/** 当前工作簿已有结构笔记的完整理解（schema 列映射 + 推断 + 读法），注入系统提示——模型开局就有，不用 inspect/load。 */
 async function knownTableMarkerLine(): Promise<string> {
   try {
     const fileKey = await Excel.workbookFileKey();
     const r = await fetch(
-      'https://localhost:8765/api/table-structure/list?fileKey=' + encodeURIComponent(fileKey)
+      'https://localhost:8765/api/table-structure/all?fileKey=' + encodeURIComponent(fileKey)
     );
-    const data = (await r.json()) as { tables?: Array<{ sheet: string; cols?: number; rows?: number }> };
+    const data = (await r.json()) as {
+      tables?: Array<{
+        sheet: string;
+        schema?: { cols?: number; rows?: number; headers?: Record<string, string> };
+        inferences?: Array<{ claim?: string; evidence?: string; confidence?: string }>;
+        advisories?: Array<{ note?: string; source?: string }>;
+      }>;
+    };
     const tables = (data && data.tables) || [];
     if (!tables.length) return '';
-    const list = tables
-      .map((t) => t.sheet + '（' + (t.cols ?? '?') + '列×' + (t.rows ?? '?') + '行）')
-      .join('、');
+    const blocks = tables.map((t) => {
+      const s = t.schema || {};
+      const headers = s.headers || {};
+      const cols = String(s.cols ?? '?');
+      const rows = String(s.rows ?? '?');
+      const infs = (t.inferences || [])
+        .map((i) => '• ' + (i.claim || '') + '（' + (i.confidence || '') + '）')
+        .join('\n');
+      const advs = (t.advisories || [])
+        .map((a) => '• ' + (a.note || ''))
+        .join('\n');
+      const headerList = Object.entries(headers)
+        .map(([k, v]) => k + '=' + v)
+        .join('、');
+      return [
+        '### ' + t.sheet + '（' + cols + '列×' + rows + '行）',
+        infs ? '推断：\n' + infs : '',
+        advs ? '读法：\n' + advs : '',
+        '列映射：' + headerList,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    });
     return (
-      '\n\n当前工作簿以下表已有结构笔记（固定标记）：' +
-      list +
-      '。处理这些表时不要 inspect_workbook 全量看——先 load_structure_notes 取笔记，用 inspect_table 对比 cols/rows/headers 验证一致后直接用。'
+      '\n\n当前工作簿已有结构笔记的表（直接使用以下理解，不要 inspect_workbook 全量看；怀疑结构变化才用 inspect_table 对比 cols/rows/headers）：\n\n' +
+      blocks.join('\n\n')
     );
   } catch {
     return '';

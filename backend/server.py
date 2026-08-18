@@ -31,7 +31,7 @@ from user_fn_runner import run_user_fn
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
 from knowledge_store import delete_document, ingest_document, ingest_document_from_path, list_documents, search, status
-from table_structure_store import get_notes as get_table_structure_notes, list_notes as list_table_structure_notes, save_notes as save_table_structure_notes
+from table_structure_store import all_notes as all_table_structure_notes, get_notes as get_table_structure_notes, list_notes as list_table_structure_notes, save_notes as save_table_structure_notes
 from fetch_recipe import (
     export_recipe,
     host_from_sheet_name,
@@ -175,6 +175,14 @@ async def api_knowledge_search(req: dict, request: Request):
         return await search(query, int(top_k), doc_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@ingest_router.get("/api/table-structure/all")
+async def api_table_structure_all(request: Request, fileKey: str = ""):
+    require_loopback(request)
+    if not fileKey:
+        raise HTTPException(400, "fileKey required")
+    return {"tables": all_table_structure_notes(fileKey)}
 
 
 @ingest_router.get("/api/table-structure/list")

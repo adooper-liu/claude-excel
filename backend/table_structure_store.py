@@ -67,6 +67,22 @@ def get_notes(file_key: str, sheet: str) -> dict | None:
     return entry.get(str(sheet or ""))
 
 
+def all_notes(file_key: str) -> list[dict]:
+    """当前工作簿全部表的完整笔记（schema + inferences + advisories），供会话上下文注入。"""
+    tables = _read()["tables"].get(str(file_key or ""), {})
+    out: list[dict] = []
+    for sheet, entry in tables.items():
+        if not isinstance(entry, dict):
+            continue
+        out.append({
+            "sheet": sheet,
+            "schema": entry.get("schema"),
+            "inferences": entry.get("inferences", []),
+            "advisories": entry.get("advisories", []),
+        })
+    return sorted(out, key=lambda x: str(x.get("sheet") or ""))
+
+
 def list_notes(file_key: str) -> list[dict]:
     """当前工作簿的紧凑标记清单：哪些 sheet 已有结构笔记（用于跳过重复 inspect）。"""
     tables = _read()["tables"].get(str(file_key or ""), {})
