@@ -1,11 +1,10 @@
 /// <reference types="@types/office-js" />
 
 import { reshape as reshapeCore, dedupeChunk, coerceColumnsChunk, type Cell, type ReshapeInput, type ReshapeOp, type CoerceType, type ProjectColumnSpec } from "./reshape-core";
-import { flattenHeader } from "./flatten-header-core";
+import { flattenHeader, preserveRowForFlatten } from "./flatten-header-core";
 import {
   inferColumnFormats,
   textColumnIndexes,
-  coerceRowByFormats,
   gridCellsForWrite,
   type ColumnFormatHint,
 } from "./column-format-core";
@@ -250,8 +249,9 @@ async function reshapeFlattenHeader(input: ReshapeTableInput): Promise<{
   for (const ch of chunkRanges(dataRows, CHUNK_ROWS)) {
     const body = await readRangeBodyChunk(sheetName, bounds, headerRows, ch.start, ch.count, textCols);
     if (body.values.length) {
+      // 结构性拍平：不改数值（时间值原样保留）。仅 id 文本列用显示文本保真防科学计数法。
       const rows = body.values.map(function (row, ri) {
-        return coerceRowByFormats(row, columnHints, body.text[ri]);
+        return preserveRowForFlatten(row, textCols, body.text[ri]);
       });
       await writeSheetRows(
         outputSheet,

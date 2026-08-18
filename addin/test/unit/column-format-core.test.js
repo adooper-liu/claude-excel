@@ -34,6 +34,14 @@ describe("column-format-core", function () {
     assert.strictEqual(typeof grid[0][0], "string");
   });
 
+  it("keeps numeric values numeric even when header contains a date keyword", function () {
+    const hints = inferColumnFormats(["days_to date"], [[120, 365]]);
+    assert.notStrictEqual(hints[0].kind, "datetime");
+    const applied = applyFormatToCell(120, hints[0].kind);
+    assert.strictEqual(typeof applied, "number");
+    assert.strictEqual(applied, 120);
+  });
+
   it("lists text column indexes from hints", function () {
     const hints = inferColumnFormats(["快递面单号", "金额"], []);
     assert.deepStrictEqual(textColumnIndexes(hints), [0]);

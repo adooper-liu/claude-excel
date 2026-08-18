@@ -1,6 +1,6 @@
 require("ts-node/register/transpile-only");
 const assert = require("assert");
-const { flattenHeader } = require("../../src/excel/flatten-header-core");
+const { flattenHeader, preserveRowForFlatten } = require("../../src/excel/flatten-header-core");
 
 describe("flatten-header-core", function () {
   it("combines merged parent headers with child row labels", function () {
@@ -51,5 +51,17 @@ describe("flatten-header-core", function () {
       ],
     });
     assert.deepStrictEqual(result.headers, ["同_列", "同_列_2"]);
+  });
+
+  it("preserves numeric and date values during flatten, only text-protecting id columns", function () {
+    const row = preserveRowForFlatten(
+      ["SKU-B", 120, 365, "2026-08-04T00:00:00-07:00"],
+      [0],
+      ["SKU-B", "120", "365", "2026-08-04T00:00:00-07:00"]
+    );
+    assert.strictEqual(row[0], "SKU-B"); // id 列 → 文本保真（防科学计数法）
+    assert.strictEqual(row[1], 120); // 数字原样，不转日期
+    assert.strictEqual(row[2], 365);
+    assert.strictEqual(row[3], "2026-08-04T00:00:00-07:00"); // 时间串原样
   });
 });

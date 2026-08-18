@@ -1,6 +1,7 @@
 /** Pure double/multi-row header flatten — no Office JS. */
 
 import { uniqueHeaders } from "./extract-core";
+import { resolveIdCell } from "./column-format-core";
 import type { Cell } from "./reshape-core";
 
 export interface FlattenHeaderInput {
@@ -143,4 +144,22 @@ export function flattenHeader(input: FlattenHeaderInput): FlattenHeaderResult {
     rows: rows,
     outputRows: [headers.slice() as Cell[]].concat(rows),
   };
+}
+
+/**
+ * 拍平写入时保真：仅 id 文本列（单号/运单等）用显示文本防科学计数法，
+ * 其余列**原样透传**（不改值、不按列格式推断转日期/金额）。flatten_header 是结构性操作。
+ */
+export function preserveRowForFlatten(
+  row: Cell[],
+  textCols: number[],
+  textRow?: string[]
+): Cell[] {
+  const next = row.slice();
+  if (textCols && textCols.length) {
+    textCols.forEach(function (col) {
+      next[col] = resolveIdCell(next[col] ?? null, textRow ? textRow[col] || "" : "");
+    });
+  }
+  return next;
 }

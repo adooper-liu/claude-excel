@@ -97,19 +97,21 @@ function kindHint(kind: ColumnKind): string {
 function inferKind(header: string, samples: string[]): ColumnKind {
   const h = String(header || "").trim();
   if (isIdLikeHeader(h) || rate(samples, looksLikeIdSample) >= 0.5) return "id_text";
-  if (DATETIME_HEADER.test(h) || rate(samples, looksLikeDatetimeSample) >= 0.4) return "datetime";
+  const datetimeSampleRate = rate(samples, looksLikeDatetimeSample);
+  const numericRate = rate(samples, function (s) {
+    return /^-?[\d,]+(\.\d+)?$/.test(s.replace(/,/g, ""));
+  });
+  // 日期证据优先：样本是日期串 / Date 对象（String 含 GMT/UTC 等）→ datetime
+  if (datetimeSampleRate >= 0.4) return "datetime";
+  // 表头含日期词 + 无纯数字样本 → datetime；纯数字列（天数/数量）不自动转日期，
+  // 防被 parseDateCell 当 Excel 序列号改写（1–60000 的整数都会被解释成日期）。
+  if (DATETIME_HEADER.test(h) && numericRate === 0) return "datetime";
   if (AMOUNT_HEADER.test(h)) return "amount";
-  if (
-    rate(samples, looksLikeAmountSample) >= 0.6 &&
-    rate(samples, looksLikeDatetimeSample) < 0.2
-  ) {
+  if (rate(samples, looksLikeAmountSample) >= 0.6 && datetimeSampleRate < 0.2) {
     return "amount";
   }
   if (PERCENT_HEADER.test(h) && !/效率|概率/.test(h)) return "percent";
-  const numeric = rate(samples, function (s) {
-    return /^-?[\d,]+(\.\d+)?$/.test(s.replace(/,/g, ""));
-  });
-  if (numeric >= 0.7 && !DATETIME_HEADER.test(h)) return "number";
+  if (numericRate >= 0.7) return "number";
   return "plain_text";
 }
 
