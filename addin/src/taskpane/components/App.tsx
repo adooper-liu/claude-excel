@@ -93,7 +93,7 @@ const SYSTEM_PROMPT = `你是 Excel 里的通用 AI 助手（Office JS 加载项
 
 ## 表结构笔记（跨会话复用理解）
 一张表被吃透（解读/校验/规整完成）后，调用 save_structure_note 把结构理解落盘供后续会话复用：schema 必须来自本会话 inspect（cols/rows/headers 按列字母），**不要凭记忆写**；inferences 必须带 evidence（样本值/计数），无证据不存；advisories 记用户修正/读法要点。
-新会话要处理某张表时：先 load_structure_notes。拿到笔记 → **先 inspect 实际表对比 cols/rows/headers 验证**：一致才信任；不一致只信一致部分、stale 部分重新理解；没有笔记 → 正常 inspect + 理解，完成后 save。**笔记是假设不是真相，加载后必须验证再信任，不要直接拿来当事实。**
+**有标记（笔记存在）的表：不要 inspect_workbook 全量看**——先 load_structure_notes 取笔记，用 inspect_table 只对比 cols/rows/headers 验证：一致直接用，不一致只信一致部分、stale 部分重新理解并 save 更新。**没有标记的表**才正常 inspect_workbook + 理解，完成后 save。**笔记是假设不是真相，验证后信任；不要重复 inspect 同一张已理解的表。**
 
 ## 空表
 工作簿空或没有表头：若用户要求生成/随机/准备样例，用 write_to_sheet 建小表。否则只回这句中文：「当前工作簿没有带表头的表。请勾选要生成的样例后点确认。」界面会出勾选框。不要列举样例表头，不要编造业务数据。
@@ -156,6 +156,29 @@ function systemForTurn(skillId?: string, skillBody?: string): string {
     body +
     "\nFollow this skill this turn. Inspect live headers. Do not assume column names like 订单号 or 类别."
   );
+}
+
+/** 当前工作簿哪些表已有结构笔记（固定标记），注入系统提示让模型跳过重复 inspect。 */
+async function knownTableMarkerLine(): Promise<string> {
+  try {
+    const fileKey = await Excel.workbookFileKey();
+    const r = await fetch(
+      'https://localhost:8765/api/table-structure/list?fileKey=' + encodeURIComponent(fileKey)
+    );
+    const data = (await r.json()) as { tables?: Array<{ sheet: string; cols?: number; rows?: number }> };
+    const tables = (data && data.tables) || [];
+    if (!tables.length) return '';
+    const list = tables
+      .map((t) => t.sheet + '（' + (t.cols ?? '?') + '列×' + (t.rows ?? '?') + '行）')
+      .join('、');
+    return (
+      '\n\n当前工作簿以下表已有结构笔记（固定标记）：' +
+      list +
+      '。处理这些表时不要 inspect_workbook 全量看——先 load_structure_notes 取笔记，用 inspect_table 对比 cols/rows/headers 验证一致后直接用。'
+    );
+  } catch {
+    return '';
+  }
 }
 
 function withSamplePrompt(assistantText: string, userText: string): Pick<Message, "content" | "samplePrompt"> {
@@ -313,7 +336,8 @@ export default function App(): JSX.Element {
           role: m.role as "user" | "assistant",
           content: String(m.content).slice(0, 1200),
         }));
-      let final = await chatWithTools(systemForTurn(slash?.id, skillBody), userText, tools, {
+      const knownLine = await knownTableMarkerLine();
+      let final = await chatWithTools(systemForTurn(slash?.id, skillBody) + knownLine, userText, tools, {
         signal: ac.signal,
         history,
         onToken: (t: string) => setIf(prev => prev.map(m => m.id === aid ? { ...m, content: m.content + t } : m)),

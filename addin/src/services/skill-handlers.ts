@@ -9,28 +9,6 @@ export interface HandlerContext {
   showMessage: (text: string) => void;
 }
 
-/** 当前工作簿的稳定键：Office 文件属性 url+title 的简单哈希（挪文件/改名会换键 → 笔记按需重学，保守不误用）。 */
-function workbookFileKey(): Promise<string> {
-  return new Promise((resolve) => {
-    try {
-      Office.context.document.getFilePropertiesAsync(function (result) {
-        const props = (result && result.value ? result.value : {}) as {
-          url?: string;
-          title?: string;
-        };
-        const url = String(props.url || '');
-        const title = String(props.title || '');
-        let h = 0;
-        const s = url + '|' + title;
-        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-        resolve(h.toString(36));
-      });
-    } catch {
-      resolve('unknown');
-    }
-  });
-}
-
 export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promise<string> {
   const { input } = tool;
   const E = ctx.excel;
@@ -394,7 +372,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
       case 'save_structure_note': {
         const sheet = String(input.sheet || '').trim();
         if (!sheet) return 'Error: save_structure_note 需要 sheet。';
-        const fileKey = await workbookFileKey();
+        const fileKey = await E.workbookFileKey();
         let r: Response;
         try {
           r = await fetch('https://localhost:8765/api/table-structure', {
@@ -418,7 +396,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
       case 'load_structure_notes': {
         const sheet = String(input.sheet || '').trim();
         if (!sheet) return 'Error: load_structure_notes 需要 sheet。';
-        const fileKey = await workbookFileKey();
+        const fileKey = await E.workbookFileKey();
         let r: Response;
         try {
           r = await fetch(

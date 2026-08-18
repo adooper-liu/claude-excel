@@ -6,7 +6,7 @@ export { applySortFilter } from './data-ops';
 export { fillRange } from './fill';
 export { findReplace } from './find-replace';
 export { applyDataValidation } from './validation';
-export { getSheetNames, setActiveSheet, undoLastResultSheet, undoResultSheet } from './sheet';
+export { getSheetNames, setActiveSheet, undoLastResultSheet, undoResultSheet, workbookFileKey } from './sheet';
 export { sheetHistory } from './sheet-history';
 export { inspectWorkbook, inspectTable } from './inspect';
 export { inspectFormulas, scanFormulaErrors } from './formula-inspect';

@@ -2,7 +2,7 @@
 
 import pytest
 
-from table_structure_store import get_notes, save_notes
+from table_structure_store import get_notes, list_notes, save_notes
 
 
 @pytest.fixture
@@ -69,3 +69,13 @@ def test_keyed_by_file_and_sheet(notes_root):
     assert get_notes("k1", "S")["schema"]["cols"] == 1
     assert get_notes("k2", "S")["schema"]["cols"] == 2
     assert get_notes("k1", "T")["schema"]["cols"] == 3
+
+
+def test_list_notes_returns_markers(notes_root):
+    """固定标记清单：哪些 sheet 已有笔记（用于跳过重复 inspect）。"""
+    save_notes("k1", "S", {"schema": {"cols": 135, "rows": 1051, "headers": {"BG": "x"}}})
+    save_notes("k1", "T", {"schema": {"cols": 3, "rows": 5, "headers": {"A": "x"}}})
+    markers = list_notes("k1")
+    assert {"sheet": "S", "cols": 135, "rows": 1051, "has_note": True} in markers
+    assert {"sheet": "T", "cols": 3, "rows": 5, "has_note": True} in markers
+    assert list_notes("nokey") == []

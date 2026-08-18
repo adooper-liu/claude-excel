@@ -67,6 +67,23 @@ def get_notes(file_key: str, sheet: str) -> dict | None:
     return entry.get(str(sheet or ""))
 
 
+def list_notes(file_key: str) -> list[dict]:
+    """当前工作簿的紧凑标记清单：哪些 sheet 已有结构笔记（用于跳过重复 inspect）。"""
+    tables = _read()["tables"].get(str(file_key or ""), {})
+    out: list[dict] = []
+    for sheet, entry in tables.items():
+        if not isinstance(entry, dict) or not isinstance(entry.get("schema"), dict):
+            continue
+        schema = entry["schema"]
+        out.append({
+            "sheet": sheet,
+            "cols": schema.get("cols"),
+            "rows": schema.get("rows"),
+            "has_note": True,
+        })
+    return sorted(out, key=lambda x: str(x.get("sheet") or ""))
+
+
 def _valid_schema(schema: Any) -> bool:
     if not isinstance(schema, dict):
         return False

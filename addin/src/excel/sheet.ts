@@ -2,6 +2,28 @@
 
 import { sheetHistory } from "./sheet-history";
 
+/** 当前工作簿的稳定键：Office 文件属性 url+title 的简单哈希（挪文件/改名会换键 → 笔记按需重学，保守不误用）。 */
+export function workbookFileKey(): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      Office.context.document.getFilePropertiesAsync(function (result) {
+        const props = (result && result.value ? result.value : {}) as {
+          url?: string;
+          title?: string;
+        };
+        const url = String(props.url || '');
+        const title = String(props.title || '');
+        let h = 0;
+        const s = url + '|' + title;
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+        resolve(h.toString(36));
+      });
+    } catch {
+      resolve('unknown');
+    }
+  });
+}
+
 export async function getSheetNames(): Promise<string[]> {
   return Excel.run(async (context) => {
     const sheets = context.workbook.worksheets; sheets.load('items/name'); await context.sync();
