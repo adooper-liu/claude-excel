@@ -93,6 +93,7 @@ ADDIN_HANDLERS: dict[str, str] = {
     "write_inputs": "skill-handlers.ts",
     "web_fetch": "skill-handlers.ts",
     "search_knowledge": "skill-handlers.ts",
+    "run_flow": "skill-handlers.ts",
 }
 
 
