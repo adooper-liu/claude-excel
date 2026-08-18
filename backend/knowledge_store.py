@@ -7,6 +7,7 @@ import math
 import re
 import sqlite3
 import uuid
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,9 @@ CHUNK_SIZE = 900
 CHUNK_OVERLAP = 120
 LOCAL_EMBED_DIM = 384
 ALLOWED_EXT = {".md", ".markdown", ".txt", ".csv"}
+
+# 本地向量算法版本。改 local_embed 需 +1，search 检测到旧版本会重建全部 chunk 向量。
+EMBED_VERSION = 2
 
 
 def _now_iso() -> str:
@@ -64,9 +68,46 @@ def _connect() -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id)")
     conn.commit()
     return conn
+
+
+def _embed_version(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT value FROM meta WHERE key = 'embed_version'").fetchone()
+    try:
+        return int(row["value"]) if row else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def _set_embed_version(conn: sqlite3.Connection, version: int) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('embed_version', ?)",
+        (str(version),),
+    )
+
+
+async def _reembed_all(conn: sqlite3.Connection) -> None:
+    """本地向量算法升级时重建全部 chunk 向量（小库，一次性；API 模式按配置走）。"""
+    rows = conn.execute("SELECT id, text FROM chunks").fetchall()
+    if rows:
+        vectors, _mode = await embed_texts([str(r["text"]) for r in rows])
+        for row, emb in zip(rows, vectors):
+            conn.execute(
+                "UPDATE chunks SET embedding = ? WHERE id = ?",
+                (json.dumps(emb), row["id"]),
+            )
+    _set_embed_version(conn, EMBED_VERSION)
+    conn.commit()
 
 
 def _safe_name(name: str) -> str:
@@ -107,6 +148,30 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     return out
 
 
+def _stable_hash(gram: str) -> int:
+    """进程间稳定的哈希。Python 内置 hash() 对字符串是随机种子，跨进程/重启不一致，
+    会让存进 index.sqlite 的向量在后端重启后对不上新查询。改用 crc32。"""
+    return zlib.crc32(gram.encode("utf-8"))
+
+
+def _n_grams(text: str) -> set[str]:
+    """小写、合并空白后的 2/3-gram 集合，用于词法匹配。"""
+    t = re.sub(r"\s+", " ", str(text or "").lower()).strip()
+    out: set[str] = set()
+    for n in (2, 3):
+        for i in range(max(0, len(t) - n + 1)):
+            out.add(t[i : i + n])
+    return out
+
+
+def _lexical_overlap(query_grams: set[str], chunk_text: str) -> float:
+    """查询 n-gram 在 chunk 文本中的覆盖率（0..1）。精确词命中（尤其短中文查询）提权。"""
+    if not query_grams:
+        return 0.0
+    chunk_grams = _n_grams(chunk_text)
+    return len(query_grams & chunk_grams) / len(query_grams)
+
+
 def local_embed(text: str, dim: int = LOCAL_EMBED_DIM) -> list[float]:
     vec = [0.0] * dim
     t = re.sub(r"\s+", " ", str(text or "").lower()).strip()
@@ -115,8 +180,10 @@ def local_embed(text: str, dim: int = LOCAL_EMBED_DIM) -> list[float]:
     for n in (2, 3):
         for i in range(max(0, len(t) - n + 1)):
             gram = t[i : i + n]
-            h = hash(gram) % dim
+            h = _stable_hash(gram) % dim
             vec[h] += 1.0
+    # 次线性词频：log1p 压住高频 n-gram 的支配，让稀有特征更有区分度
+    vec = [math.log1p(v) for v in vec]
     norm = math.sqrt(sum(x * x for x in vec)) or 1.0
     return [x / norm for x in vec]
 
@@ -250,6 +317,7 @@ async def ingest_document(filename: str, content: str, root: Path | None = None)
                 "INSERT INTO chunks (doc_id, chunk_index, text, embedding) VALUES (?, ?, ?, ?)",
                 (doc_id, i, text, json.dumps(emb)),
             )
+        _set_embed_version(conn, EMBED_VERSION)
         conn.commit()
         return {
             "id": doc_id,
@@ -297,6 +365,8 @@ async def search(query: str, top_k: int = 5, doc_id: str | None = None) -> dict[
 
     conn = _connect()
     try:
+        if _embed_version(conn) != EMBED_VERSION:
+            await _reembed_all(conn)
         if doc_id:
             rows = conn.execute(
                 "SELECT c.doc_id, c.chunk_index, c.text, c.embedding, d.name "
@@ -313,10 +383,14 @@ async def search(query: str, top_k: int = 5, doc_id: str | None = None) -> dict[
 
         q_vecs, mode = await embed_texts([q])
         q_vec = q_vecs[0] if q_vecs else local_embed(q)
+        q_grams = _n_grams(q)
         scored: list[tuple[float, dict[str, Any]]] = []
         for row in rows:
             emb = json.loads(str(row["embedding"]))
-            score = cosine(q_vec, emb)
+            vec_score = cosine(q_vec, emb)
+            # 词面覆盖 + 向量：精确词命中（尤其短中文查询）提权
+            lex = _lexical_overlap(q_grams, str(row["text"]))
+            score = vec_score * 0.6 + lex * 0.4
             scored.append(
                 (
                     score,
