@@ -38,7 +38,7 @@
     },
     {
       "name": "write_to_sheet",
-      "description": "Create a NEW sheet with data starting at A1. Do NOT use this to simulate reconciliation; use reconcile_tables.",
+      "description": "Create a NEW sheet with data starting at A1. Used for 取数 results, small user-requested samples, and 全表校验 result tables (name it <表名>_校验). Do NOT use this to simulate reconciliation; use reconcile_tables.",
       "input_schema": {
         "type": "object",
         "properties": {
