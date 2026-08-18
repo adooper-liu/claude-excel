@@ -33,6 +33,7 @@ export const HANDLED_TOOLS: ReadonlySet<string> = new Set([
   "write_inputs",
   "web_fetch",
   "search_knowledge",
+  "run_flow",
 ]);
 
 export function missingExecutors(toolNames: string[]): string[] {

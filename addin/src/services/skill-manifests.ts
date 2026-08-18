@@ -14,6 +14,7 @@ import sortFilter from "../../skills/core/sort-filter/manifest.json";
 import table from "../../skills/core/table/manifest.json";
 import web from "../../skills/core/web/manifest.json";
 import knowledge from "../../skills/core/knowledge/manifest.json";
+import flows from "../../skills/core/flows/manifest.json";
 
 export type ManifestTool = { name: string; description?: string };
 export type CoreSkillManifest = {
@@ -37,4 +38,5 @@ export const CORE_SKILL_MANIFESTS: CoreSkillManifest[] = [
   navigation,
   web,
   knowledge,
+  flows,
 ] as CoreSkillManifest[];

@@ -344,6 +344,25 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const body = await r.text();
         return body || JSON.stringify({ error: 'empty knowledge search response' });
       }
+      case 'run_flow': {
+        const flow = String(input.flow || '').trim();
+        const text = String(input.text || '').trim();
+        if (!text) return 'Error: run_flow 需要 text（用户原话），流程要从中解析键列/参数。';
+        const flows: Record<string, (t: string, s?: (m: string) => void) => Promise<string>> = {
+          reconcile: E.runReconcileIntent,
+          extract: E.runExtractIntent,
+          project: E.runProjectReshapeIntent,
+          flatten_header: E.runFlattenHeaderIntent,
+          reshape: E.runReshapeIntent,
+          calculate: E.runCalculateIntent,
+          finance: E.runFinanceIntent,
+        };
+        const run = flows[flow];
+        if (!run) {
+          return 'Error: run_flow 需要 flow ∈ reconcile|extract|project|flatten_header|reshape|calculate|finance。';
+        }
+        return await run(text, ctx.showMessage);
+      }
       default: return `Unknown tool: ${tool.name}`;
     }
   } catch (err) {

@@ -112,6 +112,9 @@ inspect_formulas 后 format_range：输入蓝 #0000FF，同表公式黑，跨表
 ## 加速器判定
 用户意图明显属于另一加速器时，明示跳转并说明原因，不要悄悄用错工具链：规范时发现该算汇总 → 明说走 /计算；拆解时遇到外部核实 → 标 🔴 分流 /调研；要两张表核对 → 明说走 /对账；要网页表进簿 → 明说走 /取数。
 
+## 流程执行（run_flow）
+明确属于流程类的请求，先调 run_flow 选流程：reconcile 对账 / extract 提取列 / project 规整列 / flatten_header 拍平表头 / reshape 整形（去重/反透视/拆列/转数字）/ calculate 计算（活公式）/ finance 业财。流程内部按固定步骤执行（inspect→ensure→算子→新表），源表不覆盖，text 传用户原话供其解析参数。拿不准或非流程类请求，直接用算子，不要硬套流程。run_flow 报错时按报错调整（补全 text、换算子或问用户），不要重复硬调同参。
+
 ## 输出
 用用户的语言，短。对账报四类计数和新表名。透视/取数报新表名。改假设报改了哪些格子、下游是否还报错。`;
 
@@ -266,23 +269,9 @@ export default function App(): JSX.Element {
         return;
       }
       if (!slash) {
-        if (Excel.isFinanceRequest(workText)) {
-          const final = await Excel.runFinanceIntent(workText, ctx.showMessage);
-          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
-          return;
-        }
-        if (Excel.isReconcileRequest(workText)) {
-          const final = await Excel.runReconcileIntent(workText, ctx.showMessage);
-          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
-          return;
-        }
+        // 保留精确、低代价的正则快捷：只对明确命令词触发（提取X列/大小写、拍平表头），产新结果表不改源表。
         if (Excel.isExtractRequest(workText)) {
           const final = await Excel.runExtractIntent(workText, ctx.showMessage);
-          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
-          return;
-        }
-        if (Excel.isProjectReshapeRequest(workText)) {
-          const final = await Excel.runProjectReshapeIntent(workText, ctx.showMessage);
           setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
@@ -291,16 +280,7 @@ export default function App(): JSX.Element {
           setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
-        if (Excel.isReshapeRequest(workText)) {
-          const final = await Excel.runReshapeIntent(workText, ctx.showMessage);
-          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
-          return;
-        }
-        if (Excel.isCalculateRequest(workText)) {
-          const final = await Excel.runCalculateIntent(workText, ctx.showMessage);
-          setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
-          return;
-        }
+        // 其余流程（对账/整形/规整/计算/业财）不预抢答：LLM 判定后用 run_flow 或算子执行
       }
       let userText = slash ? skillAsk(slash.id, slash.extra) : workText;
       if (slash?.id === "skill-creator") {

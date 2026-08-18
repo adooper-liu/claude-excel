@@ -32,6 +32,7 @@ const MODULE_LABELS: Record<string, string> = {
   navigation: "导航",
   web: "取数",
   knowledge: "知识库",
+  flows: "流程",
 };
 
 /** One-line Chinese hints; manifest description is fallback. */
@@ -71,6 +72,7 @@ const USER_SKILL_EXCLUDE = new Set([
   "read_range",
   "write_to_range",
   "get_sheet_names",
+  "run_flow",
 ]);
 
 function shortDescription(text: string): string {
