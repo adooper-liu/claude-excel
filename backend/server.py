@@ -31,6 +31,7 @@ from user_fn_runner import run_user_fn
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
 from knowledge_store import delete_document, ingest_document, ingest_document_from_path, list_documents, search, status
+from table_structure_store import get_notes as get_table_structure_notes, save_notes as save_table_structure_notes
 from fetch_recipe import (
     export_recipe,
     host_from_sheet_name,
@@ -174,6 +175,27 @@ async def api_knowledge_search(req: dict, request: Request):
         return await search(query, int(top_k), doc_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@ingest_router.get("/api/table-structure")
+async def api_table_structure_get(request: Request, fileKey: str = "", sheet: str = ""):
+    require_loopback(request)
+    if not fileKey or not sheet:
+        raise HTTPException(400, "fileKey + sheet required")
+    note = get_table_structure_notes(fileKey, sheet)
+    return note or {}
+
+
+@ingest_router.post("/api/table-structure")
+async def api_table_structure_post(req: dict, request: Request):
+    require_loopback(request)
+    fileKey = str((req or {}).get("fileKey") or "")
+    sheet = str((req or {}).get("sheet") or "")
+    try:
+        entry = save_table_structure_notes(fileKey, sheet, req or {})
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return entry
 
 
 @ingest_router.delete("/api/knowledge/{doc_id}")

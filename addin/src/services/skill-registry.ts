@@ -35,6 +35,8 @@ export const HANDLED_TOOLS: ReadonlySet<string> = new Set([
   "search_knowledge",
   "run_flow",
   "complete",
+  "save_structure_note",
+  "load_structure_notes",
 ]);
 
 export function missingExecutors(toolNames: string[]): string[] {

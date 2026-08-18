@@ -1,0 +1,64 @@
+{
+  "name": "structure",
+  "version": "1.0.0",
+  "description": "Table structure notes — persist semantic understanding of workbook tables across sessions. Trust tiers separated: schema (deterministic) / inferences (must carry evidence) / advisories (user corrections)",
+  "tools": [
+    {
+      "name": "save_structure_note",
+      "description": "把对一张表的理解落盘，供后续会话复用。schema 必须来自本会话 inspect 的结果（cols/rows/headers，headers 按列字母→列名），不要凭记忆写；inferences（你的推断）必须带 confidence(low|medium|high) + evidence（样本值/计数），无证据的不存；advisories（用户修正/读法要点）带 source。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheet": { "type": "string", "description": "工作表名，如 Sheet1_规范" },
+          "schema": {
+            "type": "object",
+            "description": "来自 inspect 的确定性结构：cols 列数、rows 行数（含表头）、headers {列字母: 列名}",
+            "properties": {
+              "cols": { "type": "integer" },
+              "rows": { "type": "integer" },
+              "headers": { "type": "object" }
+            },
+            "required": ["cols", "headers"]
+          },
+          "inferences": {
+            "type": "array",
+            "description": "可选。推断：claim 声明 + confidence + evidence（样本值/计数），无 evidence 的推断会被丢弃",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claim": { "type": "string" },
+                "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+                "evidence": { "type": "string" }
+              },
+              "required": ["claim", "confidence", "evidence"]
+            }
+          },
+          "advisories": {
+            "type": "array",
+            "description": "可选。读法要点/用户修正：note + source（如 user_correction）",
+            "items": {
+              "type": "object",
+              "properties": {
+                "note": { "type": "string" },
+                "source": { "type": "string" }
+              },
+              "required": ["note", "source"]
+            }
+          }
+        },
+        "required": ["sheet", "schema"]
+      }
+    },
+    {
+      "name": "load_structure_notes",
+      "description": "取回之前保存的某张表的结构笔记。返回是假设不是真相：拿到后必须 inspect 实际表，对比 cols/rows/headers 验证，一致才信任；不一致标 stale 只信一致部分；没有笔记就正常 inspect。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sheet": { "type": "string", "description": "工作表名" }
+        },
+        "required": ["sheet"]
+      }
+    }
+  ]
+}

@@ -95,6 +95,8 @@ ADDIN_HANDLERS: dict[str, str] = {
     "search_knowledge": "skill-handlers.ts",
     "run_flow": "skill-handlers.ts",
     "complete": "skill-handlers.ts",
+    "save_structure_note": "skill-handlers.ts",
+    "load_structure_notes": "skill-handlers.ts",
 }
 
 

@@ -33,6 +33,7 @@ const MODULE_LABELS: Record<string, string> = {
   web: "取数",
   knowledge: "知识库",
   flows: "流程",
+  structure: "结构笔记",
 };
 
 /** One-line Chinese hints; manifest description is fallback. */
@@ -74,6 +75,8 @@ const USER_SKILL_EXCLUDE = new Set([
   "get_sheet_names",
   "run_flow",
   "complete",
+  "save_structure_note",
+  "load_structure_notes",
 ]);
 
 function shortDescription(text: string): string {

@@ -15,6 +15,7 @@ import table from "../../skills/core/table/manifest.json";
 import web from "../../skills/core/web/manifest.json";
 import knowledge from "../../skills/core/knowledge/manifest.json";
 import flows from "../../skills/core/flows/manifest.json";
+import structure from "../../skills/core/structure/manifest.json";
 
 export type ManifestTool = { name: string; description?: string };
 export type CoreSkillManifest = {
@@ -39,4 +40,5 @@ export const CORE_SKILL_MANIFESTS: CoreSkillManifest[] = [
   web,
   knowledge,
   flows,
+  structure,
 ] as CoreSkillManifest[];
