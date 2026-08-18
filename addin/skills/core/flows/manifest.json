@@ -21,6 +21,20 @@
         },
         "required": ["flow", "text"]
       }
+    },
+    {
+      "name": "complete",
+      "description": "任务型回合结束时必须调用：表示所有工具操作已完成，本轮结束。不执行任何 Office 操作，只是结束信号。普通问答（本回合未使用任何工具）不要调用。",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "description": "任务执行结论，将作为本轮最终回复展示给用户"
+          }
+        },
+        "required": ["result"]
+      }
     }
   ]
 }

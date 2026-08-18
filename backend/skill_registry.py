@@ -94,6 +94,7 @@ ADDIN_HANDLERS: dict[str, str] = {
     "web_fetch": "skill-handlers.ts",
     "search_knowledge": "skill-handlers.ts",
     "run_flow": "skill-handlers.ts",
+    "complete": "skill-handlers.ts",
 }
 
 

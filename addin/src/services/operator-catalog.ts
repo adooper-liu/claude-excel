@@ -73,6 +73,7 @@ const USER_SKILL_EXCLUDE = new Set([
   "write_to_range",
   "get_sheet_names",
   "run_flow",
+  "complete",
 ]);
 
 function shortDescription(text: string): string {

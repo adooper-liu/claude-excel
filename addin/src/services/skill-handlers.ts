@@ -365,6 +365,10 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         ctx.showMessage('🔧 run_flow(flow=' + flow + ') 用户原话：' + text.slice(0, 80));
         return await run(text, ctx.showMessage);
       }
+      case 'complete': {
+        // 正常由 chatWithTools 拦截；这里是兜底（若绕过循环直接调用）
+        return String(input.result || 'done');
+      }
       default: return `Unknown tool: ${tool.name}`;
     }
   } catch (err) {

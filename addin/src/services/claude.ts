@@ -329,7 +329,11 @@ async function completeOnce(
 }
 
 export async function chatWithTools(
-  systemPrompt: string, userMessage: string, tools: ToolDef[], cb: AgentCallbacks,
+  systemPrompt: string,
+  userMessage: string,
+  tools: ToolDef[],
+  cb: AgentCallbacks,
+  completeOnceImpl: typeof completeOnce = completeOnce,
 ): Promise<string> {
   const prior = (cb.history || []).filter((m) => m && m.content);
   const messages: Array<{ role: string; content: unknown }> = prior
@@ -338,8 +342,11 @@ export async function chatWithTools(
   let text = '';
   const digest: string[] = [];
   const maxIter = 20;
+  const MAX_CONTINUATION = 2; // 任务型回合纯文字自动续的上限，超了 fail-visible 强制终止
+  let continuationCount = 0;
+  let usedToolThisTurn = false;
   for (let i = 0; i < maxIter; i++) {
-    const data = await completeOnce(messages, systemPrompt, tools, cb.signal);
+    const data = await completeOnceImpl(messages, systemPrompt, tools, cb.signal);
     cb.onUsage?.({
       model: providerConfig.model,
       tokens: estimateTokens(JSON.stringify({ systemPrompt, messages, tools, content: data.content })),
@@ -350,16 +357,20 @@ export async function chatWithTools(
       cb.onToken?.(parsed.text);
     }
     if (parsed.toolUses.length === 0) {
-      // 模型停在"汇报进度/计划"式文字上：本回合已执行过工具且文字像中途暂停 → 自动续，不用用户手动点「继续执行」
-      if (
-        digest.length &&
-        /还没|尚未|未写完|未完成|未写出|还缺|还差|已执行.{0,8}步|第.{0,4}步|我这就继续|请回复|接着(做|执行|来)/.test(parsed.text)
-      ) {
+      if (usedToolThisTurn) {
+        // 任务型回合：不看措辞，只看「没调 complete 就不算完」——自动续，最多 MAX_CONTINUATION 次
+        continuationCount++;
+        if (continuationCount > MAX_CONTINUATION) {
+          const warn = '⚠️ 模型未能正常结束任务（多次未调用 complete）。请重试或检查工具执行结果。';
+          text = (text ? text + '\n' : '') + warn;
+          cb.onToken?.(warn);
+          break;
+        }
         messages.push({ role: 'assistant', content: data.content });
         messages.push({
           role: 'user',
           content:
-            '你刚才只输出了中间状态，任务还没完成。不要再输出状态/计划文字，直接调用下一个工具继续执行（如 write_to_sheet 建校验表、write_formula 写公式、read_range 读回），全部做完后再一次性汇报结论。',
+            '你在本轮已使用工具，但回复既没有调用 complete 也没有继续调工具。请调用 complete({result: "执行结论"}) 结束本轮，或继续调用工具完成任务；不要用纯文字汇报进度。',
         });
         continue;
       }
@@ -367,8 +378,19 @@ export async function chatWithTools(
     }
     messages.push({ role: 'assistant', content: data.content });
     const results: Array<{ type: string; tool_use_id: string; content: string }> = [];
+    let completed = false;
+    let completeResult = '';
     for (const raw of parsed.toolUses) {
       const tc = { ...raw, name: fromApiToolName(raw.name) };
+      if (tc.name === 'complete') {
+        // complete 是回合结束信号：不执行 Office 操作，设置结果并结束
+        completed = true;
+        completeResult = String((tc.input && tc.input.result) || '');
+        results.push({ type: 'tool_result', tool_use_id: tc.id, content: completeResult || 'done' });
+        continue;
+      }
+      usedToolThisTurn = true;
+      continuationCount = 0; // 模型主动行动了，重置续轮计数
       const t0 = Date.now();
       cb.onToolStep?.({ phase: 'start', name: tc.name, input: tc.input });
       if (!cb.onToolStep) cb.onThinking?.(toolPreview(tc.name, tc.input));
@@ -388,12 +410,17 @@ export async function chatWithTools(
         if (!cb.onToolStep) cb.onThinking?.('   ' + err);
       }
     }
+    if (completed) {
+      text = completeResult || text;
+      cb.onToken?.(completeResult);
+      break;
+    }
     messages.push({ role: 'user', content: results });
   }
   if (!text && digest.length) {
     appendSummaryNudge(messages);
     try {
-      const data = await completeOnce(messages, systemPrompt, undefined, cb.signal);
+      const data = await completeOnceImpl(messages, systemPrompt, undefined, cb.signal);
       cb.onUsage?.({
         model: providerConfig.model,
         tokens: estimateTokens(JSON.stringify({ systemPrompt, messages, content: data.content })),
