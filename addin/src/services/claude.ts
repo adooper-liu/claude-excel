@@ -350,10 +350,17 @@ export async function chatWithTools(
       cb.onToken?.(parsed.text);
     }
     if (parsed.toolUses.length === 0) {
-      // 模型停在"汇报计划"式文字上：本回合已执行过工具且文字像中途暂停 → 自动续一次，不用用户手动点「继续执行」
-      if (digest.length && /还没|还缺|还差|我这就继续|接下来.*(执行|做)|下一步.*(执行|做)/.test(parsed.text)) {
+      // 模型停在"汇报进度/计划"式文字上：本回合已执行过工具且文字像中途暂停 → 自动续，不用用户手动点「继续执行」
+      if (
+        digest.length &&
+        /还没|尚未|未写完|未完成|未写出|还缺|还差|已执行.{0,8}步|第.{0,4}步|我这就继续|请回复|接着(做|执行|来)/.test(parsed.text)
+      ) {
         messages.push({ role: 'assistant', content: data.content });
-        messages.push({ role: 'user', content: '继续执行到完成，不要再停下汇报计划；全部做完后一次性汇报结论。' });
+        messages.push({
+          role: 'user',
+          content:
+            '你刚才只输出了中间状态，任务还没完成。不要再输出状态/计划文字，直接调用下一个工具继续执行（如 write_to_sheet 建校验表、write_formula 写公式、read_range 读回），全部做完后再一次性汇报结论。',
+        });
         continue;
       }
       break;
