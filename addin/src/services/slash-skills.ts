@@ -13,7 +13,7 @@ export type SlashSkill = {
 export const TALK_EXAMPLES = [
   "提取选中列，去空格并去重",
   "把两张表按键对账，结果写新表",
-  "按当前表头做透视",
+  "根据费率表生成计算器，新建 sheet",
   "只改假设数字，不要覆盖公式",
 ];
 
@@ -21,6 +21,7 @@ export const SLASH_SKILLS: SlashSkill[] = [
   { id: "reconcile", slash: "对账", title: "两表精确对账，只写新表" },
   { id: "reshape", slash: "整形", title: "洗表：去重 / 拆列 / 宽表转长表 / 转数字" },
   { id: "calculate", slash: "计算", title: "按条件求和 / 匹配数据 / 修 #REF!，公式活的" },
+  { id: "calculator", slash: "计算器", title: "根据费率/参数表新建 sheet，输入即算（活公式）" },
   { id: "pivot", slash: "透视", title: "按表头做透视表" },
   { id: "assume", slash: "假设", title: "改参数或假设数字，公式自动重算，不覆盖公式" },
   { id: "fetch", slash: "取数", title: "从网址取表；登录用本机取数栏" },
@@ -40,6 +41,10 @@ const ALIAS: Record<string, { id: SkillId; extra: string }> = {
   反透视: { id: "reshape", extra: "反透视" },
   calculate: { id: "calculate", extra: "" },
   计算: { id: "calculate", extra: "" },
+  calculator: { id: "calculator", extra: "" },
+  计算器: { id: "calculator", extra: "" },
+  费用测算: { id: "calculator", extra: "" },
+  运费计算: { id: "calculator", extra: "" },
   求和: { id: "calculate", extra: "求和" },
   匹配: { id: "calculate", extra: "匹配过来" },
   修公式: { id: "calculate", extra: "修复 #REF!" },
@@ -75,6 +80,8 @@ const ASK: Record<string, string> = {
     "对当前工作簿做整形。先 inspect，按实际表头选择去重、反透视、拆列或转数字，不要假设列名。结果只写新表。",
   calculate:
     "对当前工作簿写活公式。先 inspect，按实际表头选择 lookup、sumifs 或 fix_ref，不要假设列名。禁止把汇总值写死。要透视表时用 create_pivot。",
+  calculator:
+    "在当前工作簿**新建一张计算器 sheet**（write_to_sheet），按费率/参数长表写输入区与活公式（write_formula），源表只读。按「解读→建模→适配→验证」走：先读懂定价逻辑（键列、附加费触发/概率、权重/下限、燃油、单调性），再定输入与中间量，然后写活公式，最后扫错/抽验并 complete。用户补充说明（如快递费、FBA、关税）只影响输入项与公式口径，不改变「解读先行 + 新建 sheet + 活公式」流程。",
   pivot:
     "对当前工作簿做透视表。先 inspect_workbook，按实际表头选行字段和值字段，不要猜列名。用 create_pivot，不要手写汇总表。",
   assume:

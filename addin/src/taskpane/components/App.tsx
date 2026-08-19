@@ -13,7 +13,7 @@ import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
 import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, fetchSampleSkills, installSampleSkill, deleteUserSkill, importPackZip, removeImportedPack, type InstalledSkill, type Pack, type SampleSkill } from '../../services/user-skills';
-import { calculateSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
+import { calculateSkill, calculatorSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
 import HistoryPanel from './HistoryPanel';
 import SessionList from './SessionList';
@@ -68,6 +68,14 @@ const SYSTEM_PROMPT = `你是 Excel 里的通用 AI 助手（Office JS 加载项
 改表、洗表、去重、对账、透视、格式、公式、改假设、筛选、填充、查找替换、数据验证一律调用对应 Office JS 工具。inspect 只取表头和少量样本。禁止把整列/整表读进对话再 write_to_sheet。不要在回复里手算格子或粘贴表体。
 填充用 fill_range，替换用 find_replace（values 模式不碰公式格），下拉用 data_validation，筛选用 sort_filter 的 filterBy，不要自己读列再写回。
 
+## 解读先行（强制，所有任务）
+任何任务都按 **解读 → 建模 → 适配 → 验证** 走，不要跳过解读直接套公式/算子：
+1. **解读** — 先读懂表的结构与业务逻辑（键列 / 档位 / 触发条件 / 概率·权重·比例项 / 单调性），确认用户要算什么。要便宜：inspect + 写检查公式 + 小样本，不把表体载进对话。
+2. **建模** — 把解读转成方案结构：哪些输入/假设格、中间量、费用项、警示、批量区。
+3. **适配** — 按建模结果选 Office JS 算子或写活公式（INDEX/MATCH、SUMIFS、SUMPRODUCT），禁止心算贴数字。
+4. **验证** — scan_formula_errors / read_range 抽验，生成新表对账，无错再 complete。
+解读是执行的一部分，不是停下来问用户；只有口径真没定才列选项。解读结论要能一句话讲清（如「基础费按 计费重+ZONE 查表，附加费含概率折算，燃油只按基础」）。
+
 ## 改表模式
 - 对账、整形：源表只读，结果只写新表。用 reconcile_tables / reshape_table，不要用 write_to_sheet 伪造结果。
 - 规整列 / 按位置映射 / 多列合并成新列（如取数表 25 列收成 9 列）：inspect_workbook → ensure_table → inspect_table（看 columns 的 index/letter 与 sampleRows）→ reshape_table op=project headerless:true（取数_* 且 likelyHeaderless 时必开）。columns 示例：{as:"售价",merge:[5,6,7],separator:"",coerce:"number"}。禁止只用 read_range 探路就停；必须写出新表（默认 sheet 映射结果 或 outputSheet 带 _规范）。
@@ -87,6 +95,14 @@ const SYSTEM_PROMPT = `你是 Excel 里的通用 AI 助手（Office JS 加载项
 4. 读回验证：read_range 读校验表，确认每项求出了数值；读到 #DIV/0!、#N/A 等错误值说明公式写错，修正后重试，不要拿错误值当真结果。
 5. 报结论：每项「校验名 + 结果值 + 是否全过」+ 校验表名；异常项说清含义（倒挂行数、低于最低价行数）。不要只凭样本行或手算下结论。
 空白格按 0 处理；分母为空/0 时比例留空，不算异常。校验表独立，不写进被校验的表本体。
+
+## 计算器（新建 sheet，标准配方）
+用户要**生成计算器 / 费用测算 / 任意尺寸算运费**时，走 /计算器 或自然语言，**必须新建 sheet 并写活公式，读完费率表就停不算完成**。按全局「解读先行」执行：
+1. **解读**：inspect_workbook（有笔记则 load_structure_notes）+ inspect_table——键列（计费重+ZONE？）、附加费触发/概率列、权重列/折后下限、燃油、单调性（写检查公式只读 flag）；先讲一句定价模型。
+2. **建模**：定输入/假设格（体积系数、分区含加权平均、地址类型、燃油费率%）、中间量（计费重=CEILING(MAX(实重,体积重),1)）、费用项、警示。
+3. **适配**：write_to_sheet 建「<主题>计算器」（data 只放标签，不抄费率表体）→ write_formula 中间量+查表（INDEX/MATCH、SUMIFS、SUMPRODUCT；加权取 MAX 下限；概率×金额；燃油只按基础）→ format_range 输入黄底/倒挂红字 → data_validation 给 ZONE 等键列下拉。
+4. **验证**：read_range 抽 1 个结果格非 #N/A 或 scan_formula_errors；倒挂/超限红字提醒不改费率表；complete 报 sheet 名、公式引用与解读结论。
+费率源表只读。具体业务（UPS/FBA/关税）只改输入项与公式口径，不改此流程。
 
 ## 数据解读（先读再讲，不要先问方向）
 用户要看懂/解读/分析一张表时：先只读 inspect_workbook → inspect_table / read_range 看清表头、列分布、行块边界，再给解读（数据规模、维度、字段语义、异常）。**不要还没读就先问用户要哪个方向**，也不要把它当整形/拆列/规整来执行——除非用户明确说要把列拆开或规整成新表。解读完才列可选的深化方向（概览汇总 / 规整长表 / 成本测算等）。
@@ -144,6 +160,7 @@ const SKILL_BODY: Record<string, string> = {
   reconcile: reconcileSkill,
   reshape: reshapeSkill,
   calculate: calculateSkill,
+  calculator: calculatorSkill,
   pivot: pivotSkill,
   assume: assumeSkill,
   fetch: fetchSkill,

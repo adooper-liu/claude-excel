@@ -307,4 +307,89 @@ describe("reconcile-core", function () {
       });
     }, /leftDateKey/);
   });
+
+  it("compareTolerance absorbs float drift inside ±tolerance", function () {
+    const result = reconcile({
+      leftHeaders: ["id", "amt"],
+      leftRows: [
+        ["A", 10.005],
+        ["B", 20],
+      ],
+      rightHeaders: ["id", "amt"],
+      rightRows: [
+        ["A", 10.01],
+        ["B", 20],
+      ],
+      keys: ["id"],
+      compareColumns: ["amt"],
+      compareTolerance: 0.01,
+    });
+    assert.strictEqual(result.counts.conflict, 0);
+    assert.strictEqual(result.counts.matched, 2);
+    assert.strictEqual(result.rows[0].status, "matched");
+  });
+
+  it("compareTolerance does not merge genuinely different values", function () {
+    const result = reconcile({
+      leftHeaders: ["id", "amt"],
+      leftRows: [["A", 10]],
+      rightHeaders: ["id", "amt"],
+      rightRows: [["A", 10.1]],
+      keys: ["id"],
+      compareColumns: ["amt"],
+      compareTolerance: 0.01,
+    });
+    assert.strictEqual(result.counts.conflict, 1);
+    assert.strictEqual(result.counts.matched, 0);
+  });
+
+  it("compareTolerance treats numeric strings within tolerance as equal", function () {
+    const result = reconcile({
+      leftHeaders: ["id", "amt"],
+      leftRows: [["A", 1]],
+      rightHeaders: ["id", "amt"],
+      rightRows: [["A", "1.00"]],
+      keys: ["id"],
+      compareColumns: ["amt"],
+      compareTolerance: 0.01,
+    });
+    assert.strictEqual(result.counts.matched, 1);
+    assert.strictEqual(result.counts.conflict, 0);
+  });
+
+  it("compareTolerance leaves non-numeric compare columns on string equality", function () {
+    const result = reconcile({
+      leftHeaders: ["id", "note"],
+      leftRows: [["A", "abc"]],
+      rightHeaders: ["id", "note"],
+      rightRows: [["A", "abd"]],
+      keys: ["id"],
+      compareColumns: ["note"],
+      compareTolerance: 0.01,
+    });
+    assert.strictEqual(result.counts.conflict, 1);
+  });
+
+  it("compareTolerance defaults to exact (0) and never touches key columns", function () {
+    const drift = reconcile({
+      leftHeaders: ["id", "amt"],
+      leftRows: [["A", 10]],
+      rightHeaders: ["id", "amt"],
+      rightRows: [["A", 10.01]],
+      keys: ["id"],
+      compareColumns: ["amt"],
+    });
+    assert.strictEqual(drift.counts.conflict, 1, "no tolerance given → exact");
+    const keyed = reconcile({
+      leftHeaders: ["id", "amt"],
+      leftRows: [["1.00", 10]],
+      rightHeaders: ["id", "amt"],
+      rightRows: [["1", 10]],
+      keys: ["id"],
+      compareColumns: ["amt"],
+      compareTolerance: 0.5,
+    });
+    assert.strictEqual(keyed.counts.matched, 0, "tolerance never applies to keys");
+    assert.strictEqual(keyed.counts.conflict, 0, "numeric keys just differ → not conflict on amt");
+  });
 });

@@ -203,6 +203,10 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
             : undefined;
         const auditColumns =
           input.auditColumns === true ? true : input.auditColumns === false ? false : undefined;
+        const compareTolerance =
+          typeof input.compareTolerance === 'number' && input.compareTolerance > 0
+            ? input.compareTolerance
+            : undefined;
         const r = await E.reconcileTables({
           leftTable: input.leftTable as string,
           rightTable: input.rightTable as string,
@@ -215,6 +219,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           leftDateKey: input.leftDateKey as string | undefined,
           rightDateKey: input.rightDateKey as string | undefined,
           auditColumns,
+          compareTolerance,
         });
         return JSON.stringify(r);
       }

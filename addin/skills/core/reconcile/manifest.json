@@ -46,6 +46,10 @@
           "auditColumns": {
             "type": "boolean",
             "description": "输出行级审计列 __match_mode / __match_score / __review；非 exact 默认 true"
+          },
+          "compareTolerance": {
+            "type": "number",
+            "description": "数值容差：compareColumns 中两数值差异 ≤ 容差视为相等（吸收浮点/舍入尾差，如金额 0.01）。0=精确（默认）。只作用于值列，不作用于键列。"
           }
         },
         "required": ["leftTable", "rightTable", "keys"]

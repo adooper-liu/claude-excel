@@ -30,6 +30,8 @@ export interface ReconcileTablesInput {
   rightDateKey?: string;
   /** Append __match_mode / __match_score / __review. Default: true when matchMode !== "exact". */
   auditColumns?: boolean;
+  /** Numeric tolerance for compareColumns conflict comparison (not keys). 0 = exact (default). */
+  compareTolerance?: number;
 }
 
 export async function reconcileTables(input: ReconcileTablesInput): Promise<{
@@ -54,6 +56,7 @@ export async function reconcileTables(input: ReconcileTablesInput): Promise<{
     leftDateKey: input.leftDateKey,
     rightDateKey: input.rightDateKey,
     auditColumns: input.auditColumns,
+    compareTolerance: input.compareTolerance,
   });
 
   const outputSheet = await uniqueWorkbookSheetName(input.outputSheet || "对账结果");

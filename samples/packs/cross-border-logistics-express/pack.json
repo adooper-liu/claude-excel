@@ -1,0 +1,11 @@
+{
+  "id": "cross-border-logistics-express",
+  "category": "cross-border-logistics",
+  "title": "跨境物流快递费计算器",
+  "version": "0.2.0",
+  "gate": "express-fee",
+  "description": "基于已规范的基础运费/尺寸超标/操作超标三张价目表，在本簿生成可算任意尺寸的活公式计算器。",
+  "skills": ["express-fee-calculator"],
+  "knowledge": ["fee-calculator-appendix.md"],
+  "deps": {}
+}

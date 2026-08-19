@@ -124,6 +124,27 @@ describe("selectToolsForRequest", function () {
     ]);
   });
 
+  it("keeps write_to_sheet and write_formula for /计算器", function () {
+    const withCalc = tools.concat([
+      { name: "write_formula" },
+      { name: "format_range" },
+      { name: "data_validation" },
+      { name: "load_structure_notes" },
+      { name: "complete" },
+    ]);
+    const names = selectToolsForRequest("生成快递费计算器", withCalc, "calculator").map((t) => t.name);
+    assert.ok(names.indexOf("write_to_sheet") >= 0);
+    assert.ok(names.indexOf("write_formula") >= 0);
+    assert.ok(names.indexOf("reconcile_tables") < 0);
+  });
+
+  it("keeps write tools for natural-language calculator asks", function () {
+    const withCalc = tools.concat([{ name: "write_formula" }, { name: "format_range" }]);
+    const names = selectToolsForRequest("根据费率表生成计算器新建sheet", withCalc).map((t) => t.name);
+    assert.ok(names.indexOf("write_to_sheet") >= 0);
+    assert.ok(names.indexOf("write_formula") >= 0);
+  });
+
   it("limits /拆解 to inspect so mapping a workflow cannot rewrite the workbook", function () {
     const withInspect = tools.concat([
       { name: "inspect_table" },

@@ -28,6 +28,8 @@ export interface ReconcileInput {
   rightDateKey?: string;
   /** Append __match_mode / __match_score / __review. Default: true when matchMode !== "exact". */
   auditColumns?: boolean;
+  /** Numeric tolerance for compareColumns conflict comparison (not keys): two numeric cells within ±tolerance count as equal. Absorbs float/rounding drift. 0 = exact (default). */
+  compareTolerance?: number;
 }
 
 export interface ReconcileRow {
@@ -75,12 +77,27 @@ function isBlankKey(key: string): boolean {
   return key.length === 0 || key.split("\x1f").every((p) => p === "");
 }
 
-function cellEqual(a: Cell, b: Cell): boolean {
+/** Parse a cell as a finite number, or null when not numeric. Empty string / boolean / null → null. */
+function numericValue(v: Cell): number | null {
+  if (v === null || v === undefined || typeof v === "boolean") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function cellEqual(a: Cell, b: Cell, tolerance: number): boolean {
+  if (tolerance > 0) {
+    const na = numericValue(a);
+    const nb = numericValue(b);
+    if (na !== null && nb !== null) return Math.abs(na - nb) <= tolerance;
+  }
   return normalizeKeyPart(a) === normalizeKeyPart(b);
 }
 
-function compareRow(left: Row, right: Row, columns: string[]): string[] {
-  return columns.filter((c) => !cellEqual(left[c] ?? null, right[c] ?? null));
+function compareRow(left: Row, right: Row, columns: string[], tolerance: number): string[] {
+  return columns.filter((c) => !cellEqual(left[c] ?? null, right[c] ?? null, tolerance));
 }
 
 /** Unified date-cell parsing: Excel serial / yyyymmdd / ISO string → Excel day number. */
@@ -108,6 +125,7 @@ function hashPairPhase(
   keys: string[],
   normalizeMode: KeyNormalizeMode,
   compareColumns: string[],
+  compareTolerance: number,
   rows: ReconcileRow[],
   opts: HashPhaseOptions
 ): PhaseResult {
@@ -155,7 +173,7 @@ function hashPairPhase(
       let hit = -1;
       for (let j = 0; j < R.length; j++) {
         if (usedR[j]) continue;
-        if (compareRow(L[i], R[j], compareColumns).length === 0) {
+        if (compareRow(L[i], R[j], compareColumns, compareTolerance).length === 0) {
           hit = j;
           break;
         }
@@ -178,7 +196,7 @@ function hashPairPhase(
     const unmatchedR = R.filter((_row, j) => !usedR[j]);
     const n = Math.min(unmatchedL.length, unmatchedR.length);
     for (let i = 0; i < n; i++) {
-      const conflicts = compareRow(unmatchedL[i], unmatchedR[i], compareColumns);
+      const conflicts = compareRow(unmatchedL[i], unmatchedR[i], compareColumns, compareTolerance);
       rows.push({
         status: conflicts.length ? "conflict" : "matched",
         key: k,
@@ -239,6 +257,7 @@ function dateWindowPhase(
   keys: string[],
   normalizeMode: KeyNormalizeMode,
   compareColumns: string[],
+  compareTolerance: number,
   leftDateKey: string,
   rightDateKey: string,
   windowDays: number,
@@ -312,7 +331,7 @@ function dateWindowPhase(
         continue;
       }
       usedRight.add(best.row);
-      const conflicts = compareRow(l.row, best.row, compareColumns);
+      const conflicts = compareRow(l.row, best.row, compareColumns, compareTolerance);
       if (tie) {
         rows.push({
           status: "conflict",
@@ -359,6 +378,7 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
   const keyNormalize = input.keyNormalize ?? "trim";
   const dateWindowDays = input.dateWindowDays ?? 0;
   const auditColumns = input.auditColumns ?? matchMode !== "exact";
+  const compareTolerance = Math.max(0, input.compareTolerance ?? 0);
 
   if (matchMode === "date_window") {
     if (!(dateWindowDays > 0)) {
@@ -399,18 +419,32 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
 
   // Stage A — exact (trim) hash pairing; always runs. For plain exact mode the
   // remainder is emitted inline so the output order matches the previous release.
-  let phase = hashPairPhase(pendingLeft, pendingRight, keys, "trim", compareColumns, rows, {
-    emitRemainder: matchMode === "exact",
-  });
+  let phase = hashPairPhase(
+    pendingLeft,
+    pendingRight,
+    keys,
+    "trim",
+    compareColumns,
+    compareTolerance,
+    rows,
+    { emitRemainder: matchMode === "exact" }
+  );
   let unmatchedLeft = phase.left;
   let unmatchedRight = phase.right;
 
   // Stage B — normalized-key hash pairing; only normalize / date_window and only
   // when the requested normalization differs from the default trim.
   if ((matchMode === "normalize" || matchMode === "date_window") && keyNormalize !== "trim") {
-    phase = hashPairPhase(unmatchedLeft, unmatchedRight, keys, keyNormalize, compareColumns, rows, {
-      emitRemainder: matchMode === "normalize",
-    });
+    phase = hashPairPhase(
+      unmatchedLeft,
+      unmatchedRight,
+      keys,
+      keyNormalize,
+      compareColumns,
+      compareTolerance,
+      rows,
+      { emitRemainder: matchMode === "normalize" }
+    );
     unmatchedLeft = phase.left;
     unmatchedRight = phase.right;
   }
@@ -423,6 +457,7 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
       keys,
       keyNormalize,
       compareColumns,
+      compareTolerance,
       input.leftDateKey!,
       input.rightDateKey!,
       dateWindowDays,

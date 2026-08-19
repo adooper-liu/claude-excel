@@ -12,7 +12,7 @@ const {
 describe("slash-skills", function () {
   it("lists product skills plus /skill-creator", function () {
     const names = SLASH_SKILLS.map((s) => s.slash);
-    assert.deepStrictEqual(names, ["对账", "整形", "计算", "透视", "假设", "取数", "调研", "知识", "规范", "拆解", "skill-creator"]);
+    assert.deepStrictEqual(names, ["对账", "整形", "计算", "计算器", "透视", "假设", "取数", "调研", "知识", "规范", "拆解", "skill-creator"]);
   });
 
   it("treats a leading slash with no space as a query", function () {

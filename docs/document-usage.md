@@ -41,6 +41,7 @@
 | `docs/product-vision.md` | 人 | 架构 + 商业价值 + 路线图总览（随时回顾） |
 | `docs/file-structure.md` | 人 | 每个目录/文件干什么（快速定位） |
 | `docs/pain-points.md` | 人 | 跨境数据处理痛点 · 来源 + 解法映射（对外话术底稿 + Pack 接法，同一页查） |
+| `docs/domain/dirty-data-patterns.md` | 人 · pack 作者 · Claude Code | 脏数据坑典（已证实 / 候选 + 解决层 + 证据）：写 pack knowledge、定算子参数、评审 pack 覆盖度时查表 |
 | `docs/document-usage.md` | 人 | 本文——每份文档的消费者清单 |
 | `docs/coordination.md` | Claude Code · Cursor | 完整协同规则（主目录/分支/阶段/交接/串行化/会话生命周期） |
 | `docs/harness-guide.md` | 人 · Claude Code | Harness 六层框架摘要 + 本项目对照（参考文档；来源 liziran.com 长文） |
