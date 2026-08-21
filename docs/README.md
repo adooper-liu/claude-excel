@@ -9,5 +9,6 @@
 | [pain-points.md](pain-points.md) | **跨境数据处理痛点 · 来源 + 解法映射** | 可追溯 URL |
 | [user-packs.md](user-packs.md) | **P0** 场景包（Pack）：目录、schema、API、与核心的关系 | 已定，代码已落地 |
 | [user-extensions-security.md](user-extensions-security.md) | **P1** `user.*` 本地函数：威胁模型、子进程、信任门 | 已落地 |
+| [glossary.md](glossary.md) | **术语对照表**：文档里的术语翻译成人话，读不懂时查 | 随核心文档更新 |
 
-改代码前先看 **CLAUDE.md** 的「底层 vs 用户侧」边界；加 Pack 看 **user-packs.md**；动 `user.*` 必须先过 **user-extensions-security.md** review。
+读文档被术语卡住 → 先查 **glossary.md**；改代码前先看 **CLAUDE.md** 的「底层 vs 用户侧」边界；加 Pack 看 **user-packs.md**；动 `user.*` 必须先过 **user-extensions-security.md** review。

@@ -14,9 +14,14 @@ export type PackAuditEntry = {
   sourceHashOrders?: string;
   sourceHashAds?: string;
   note?: string;
+  /** JSON string of assumption cells at run time (e.g. {"B2":7.2,"B4":0.08}). */
+  assumptionSnapshot?: string;
+  /** matched / (matched+left_only+right_only+conflict); 0–1. */
+  matchRate?: number;
 };
 
-function auditHeaders(): string[] {
+/** Header row for `_pack_audit`. New columns append at end for backward compatibility. */
+export function auditHeaders(): string[] {
   return [
     "timestamp",
     "packId",
@@ -30,11 +35,18 @@ function auditHeaders(): string[] {
     "sourceHash_orders",
     "sourceHash_ads",
     "note",
+    "assumption_snapshot",
+    "match_rate",
   ];
 }
 
-function entryToRow(entry: PackAuditEntry): (string | number)[] {
-  const ts = new Date().toISOString();
+/** Pure row builder (unit-testable). Timestamp injected for determinism in tests. */
+export function entryToRow(entry: PackAuditEntry, timestampIso?: string): (string | number)[] {
+  const ts = timestampIso || new Date().toISOString();
+  const rate =
+    entry.matchRate == null || Number.isNaN(Number(entry.matchRate))
+      ? ""
+      : Number(entry.matchRate);
   return [
     ts,
     entry.packId || "",
@@ -48,12 +60,21 @@ function entryToRow(entry: PackAuditEntry): (string | number)[] {
     entry.sourceHashOrders ?? "",
     entry.sourceHashAds ?? "",
     entry.note ?? "",
+    entry.assumptionSnapshot ?? "",
+    rate,
   ];
 }
 
 /** Append one audit row to `_pack_audit` (creates sheet + header if missing). */
-export async function appendPackAudit(entry: PackAuditEntry): Promise<void> {
+export async function appendPackAudit(entry: PackAuditEntry): Promise<{ sheet: string; row: number }> {
+  if (!String(entry.packId || "").trim()) {
+    throw new Error("append_pack_audit 需要 packId");
+  }
+  if (!String(entry.runType || "").trim()) {
+    throw new Error("append_pack_audit 需要 runType");
+  }
   const row = entryToRow(entry);
+  let writtenAt = 0;
   await Excel.run(async (context) => {
     const sheets = context.workbook.worksheets;
     sheets.load("items/name");
@@ -73,6 +94,8 @@ export async function appendPackAudit(entry: PackAuditEntry): Promise<void> {
     await context.sync();
     const nextRow = used.isNullObject ? 1 : used.rowCount;
     sheet.getRangeByIndexes(nextRow, 0, 1, row.length).values = [row];
+    writtenAt = nextRow + 1; // 1-based Excel row for humans
     await context.sync();
   });
+  return { sheet: AUDIT_SHEET, row: writtenAt };
 }

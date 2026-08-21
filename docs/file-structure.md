@@ -52,9 +52,8 @@
 | **写格/范围** | `write.ts` |
 | **意图守卫** | `intent-guard.ts` |
 
-新增（Gate 1b）：
-- `finance-run.ts` — **业财预编排**：`connector → reshape(project) → reconcile_tables → write_inputs → calculate_table → create_pivot → _pack_audit`
-- `pack-audit.ts` — **`_pack_audit`** 审计写入
+新增（Gate 1b / Pack 审计）：
+- `pack-audit.ts` — **`append_pack_audit`** 通用审计算子（写 `_pack_audit`）；业财编排在 Pack `SKILL.md`，不在核心 TS
 
 其他：`index.ts`（总导出）· `project-infer-core.ts` · `range-chunk.ts` · `recipe-project.ts` · `sheet-history.ts` · `style-core.ts` · `table-name.ts` · `append-rows.ts` · `data-ops.ts` · `read.ts` · `sheet.ts` · `table.ts` · `sheet-name.ts`
 

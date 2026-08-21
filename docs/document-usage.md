@@ -13,9 +13,8 @@
 | `extensions/*/handler.py` | `backend/user_fn_runner.run_user_fn()` | 每次调用 `user.*` 时 | 子进程执行，stdin JSON → stdout JSON |
 | `connector/feeds/*.schema.json` | `handler.py` `_load_schema()` | 每次调 `user.connector_load_feed` 时 | 读 canonical 列名，决定输出 header |
 | `connector/fixtures/*.csv` | `handler.py` `load_feed()` | 同上 | 读 fixture CSV → 编码探测 → 列映射 → 归一 → 返回 canonical rows |
-| `addin/src/excel/finance-run.ts` | `App.tsx` `runFinanceIntent()` | 用户发 `/跨境业财` 时 | 硬编码流水线：load → write → ensure → reconcile → assume → pivot → audit |
-| `addin/src/excel/pack-audit.ts` | `finance-run.ts` `appendPackAudit()` | 同上 | Office JS 直写 `_pack_audit` sheet |
-| `addin/src/services/user-fn.ts` | `finance-run.ts` `loadConnectorFeed()` | 同上（Step 1） | `fetch POST /api/user-fn/user.connector_load_feed`，解析 envelope |
+| `addin/src/excel/pack-audit.ts` | `skill-handlers` `append_pack_audit` | Pack 技能跑完写审计时 | Office JS 直写 `_pack_audit` sheet |
+| `addin/src/services/user-fn.ts` | LLM 调 `user.connector_load_feed` 时 | Pack SKILL 步骤 1（缺表时） | `fetch POST /api/user-fn/user.connector_load_feed`，解析 envelope |
 | `backend/server.py` | 全部路由 | 每次 HTTP 请求 | `require_loopback`，代理 LLM / 取数 / RAG / Pack / user.* |
 | `backend/user_packs_store.py` | `server.py` | 安装/卸载/列 Pack 时 | `install_pack()` / `uninstall_pack()` / `list_packs()` |
 | `backend/user_extension_registry.py` | `server.py` / `user_fn_runner.py` | `/api/user-fn` 每次调用时扫描 | 扫 manifest，注册工具，计算能力哈希，判定授权 |
@@ -62,8 +61,7 @@
 对话时：SKILL.md（prompt）→ LLM 选工具 → 核心算子（Office JS）或 user.*（子进程）
          └─ knowledge/*.md → 知栏上传 → RAG 检索 → LLM 查片段
 
-执行时（业财闭环快捷键）：finance-run.ts → loadConnectorFeed（读 schema + fixture）
-         → reconcileTables → writeFormula → createPivot → appendPackAudit
+执行时（业财）：已装 Pack 的 SKILL.md → LLM 逐步调算子（connector_load_feed / reconcile / write_inputs / calculate / pivot / append_pack_audit）
 
 参考时：人读 docs/*.md → 定位 / 边界 / 痛点 / 来源 / 路线图 / 文件用途
 ```

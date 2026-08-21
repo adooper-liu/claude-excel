@@ -360,11 +360,10 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           flatten_header: E.runFlattenHeaderIntent,
           reshape: E.runReshapeIntent,
           calculate: E.runCalculateIntent,
-          finance: E.runFinanceIntent,
         };
         const run = flows[flow];
         if (!run) {
-          return 'Error: run_flow 需要 flow ∈ reconcile|extract|project|flatten_header|reshape|calculate|finance。';
+          return 'Error: run_flow 需要 flow ∈ reconcile|extract|project|flatten_header|reshape|calculate。业财走已装 Pack 的 /跨境业财（SKILL 编排），不走 run_flow。';
         }
         // 明示选中的流程，让选错可见（B 类错误 fail-visible）
         ctx.showMessage('🔧 run_flow(flow=' + flow + ') 用户原话：' + text.slice(0, 80));
@@ -416,6 +415,34 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const body = await r.text();
         if (!r.ok) return 'Error: load_structure_notes 失败（HTTP ' + r.status + '）：' + body;
         return body || '{}';
+      }
+      case 'append_pack_audit': {
+        const packId = String(input.packId || '').trim();
+        const runType = String(input.runType || '').trim();
+        if (!packId) return 'Error: append_pack_audit 需要 packId。';
+        if (!runType) return 'Error: append_pack_audit 需要 runType。';
+        const numOrUndef = (v: unknown): number | undefined => {
+          if (v == null || v === '') return undefined;
+          const n = Number(v);
+          return Number.isFinite(n) ? n : undefined;
+        };
+        const r = await E.appendPackAudit({
+          packId,
+          packVersion: input.packVersion != null ? String(input.packVersion) : undefined,
+          runType,
+          matched: numOrUndef(input.matched),
+          leftOnly: numOrUndef(input.leftOnly),
+          rightOnly: numOrUndef(input.rightOnly),
+          conflict: numOrUndef(input.conflict),
+          reviewPending: numOrUndef(input.reviewPending),
+          sourceHashOrders: input.sourceHashOrders != null ? String(input.sourceHashOrders) : undefined,
+          sourceHashAds: input.sourceHashAds != null ? String(input.sourceHashAds) : undefined,
+          note: input.note != null ? String(input.note) : undefined,
+          assumptionSnapshot:
+            input.assumptionSnapshot != null ? String(input.assumptionSnapshot) : undefined,
+          matchRate: numOrUndef(input.matchRate),
+        });
+        return JSON.stringify(r);
       }
       default: return `Unknown tool: ${tool.name}`;
     }

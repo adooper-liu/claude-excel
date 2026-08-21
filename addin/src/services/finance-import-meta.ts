@@ -1,5 +1,4 @@
-/** In-memory meta from CSV import — consumed by runFinanceIntent when Pack sheets exist. */
-
+/** In-memory meta from CSV import — optional provenance for Pack skills (sourceHash). */
 export type FinanceImportMeta = {
   ordersHash: string;
   adsHash: string;
@@ -7,14 +6,15 @@ export type FinanceImportMeta = {
   adsRows: number;
 };
 
-let pending: FinanceImportMeta | null = null;
+let lastMeta: FinanceImportMeta | null = null;
 
 export function setFinanceImportMeta(meta: FinanceImportMeta): void {
-  pending = meta;
+  lastMeta = meta;
 }
 
+/** Read once; clears after consume so a later run does not reuse stale hashes. */
 export function consumeFinanceImportMeta(): FinanceImportMeta | null {
-  const m = pending;
-  pending = null;
+  const m = lastMeta;
+  lastMeta = null;
   return m;
 }

@@ -160,7 +160,7 @@
 
 | # | 用户痛点（已验证） | Pack 接法 | 对应文件 |
 |---|---|---|---|
-| 1 | 月底三表对不上，人工 3–5 天（智立方/McKinsey） | Phase 1 订单×广告 30min 出毛利假设 | `finance-run.ts` |
+| 1 | 月底三表对不上，人工 3–5 天（智立方/McKinsey） | Phase 1 订单×广告 30min 出毛利假设 | Pack `/跨境业财` SKILL |
 | 2 | 手工核算误差 5%–12%（McKinsey 12% / 安永 6.3%） | 核心算子算，LLM 不碰数值；参数 sheet 存默认值 | `reconcile_tables` + `write_formula` + `profit_formula.md` |
 | 3 | 汇率报价≠到账，汇损黑箱（PayPal 4.4%+$0.49） | 参数 sheet 锁汇率来源，审计行声明锁价类型 | `假设参数` + `settlement.schema.json` 预留 |
 | 4 | SKU 命名不一，JOIN 漏单 | connector 内 trim+lower+归一，recipe 只认内部列 | `handler.py` + `platform_fields.md` + `dirty_patterns.md` |

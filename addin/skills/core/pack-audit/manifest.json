@@ -1,0 +1,48 @@
+{
+  "name": "pack-audit",
+  "version": "1.0.0",
+  "description": "Pack run audit — append one row to _pack_audit for any Pack. Generic cross-Pack mechanism (not industry-specific).",
+  "tools": [
+    {
+      "name": "append_pack_audit",
+      "description": "Append one audit row to sheet _pack_audit (create sheet+header if missing). Use after a Pack skill finishes reconcile/calculate/pivot. Records packId, counts, optional assumptionSnapshot (JSON of param cells) and matchRate (0–1). Do NOT invent numbers — pass counts returned by reconcile_tables.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "packId": {
+            "type": "string",
+            "description": "Installed pack id, e.g. cross-border-ecommerce-finance"
+          },
+          "packVersion": {
+            "type": "string",
+            "description": "Optional semver from pack.json"
+          },
+          "runType": {
+            "type": "string",
+            "description": "Skill/run label, e.g. finance-reconciliation"
+          },
+          "matched": { "type": "number" },
+          "leftOnly": { "type": "number" },
+          "rightOnly": { "type": "number" },
+          "conflict": { "type": "number" },
+          "reviewPending": { "type": "number" },
+          "sourceHashOrders": { "type": "string" },
+          "sourceHashAds": { "type": "string" },
+          "note": {
+            "type": "string",
+            "description": "Human-readable run note (归因说明、matchRate 警示等)"
+          },
+          "assumptionSnapshot": {
+            "type": "string",
+            "description": "JSON string of assumption cells at run time, e.g. {\"B2\":7.2,\"B3\":0.15,\"B4\":0.08}"
+          },
+          "matchRate": {
+            "type": "number",
+            "description": "matched / total (0–1). Prefer computing from reconcile counts."
+          }
+        },
+        "required": ["packId", "runType"]
+      }
+    }
+  ]
+}

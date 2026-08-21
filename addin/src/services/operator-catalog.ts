@@ -34,6 +34,7 @@ const MODULE_LABELS: Record<string, string> = {
   knowledge: "知识库",
   flows: "流程",
   structure: "结构笔记",
+  "pack-audit": "Pack 审计",
 };
 
 /** One-line Chinese hints; manifest description is fallback. */
@@ -65,6 +66,7 @@ const OPERATOR_HINTS: Record<string, string> = {
   set_active_sheet: "切到结果表给用户看。",
   web_fetch: "公开 https。密码不准进参数。",
   search_knowledge: "检索本机 ~/.claude-excel-web/knowledge/ 已上传文档。",
+  append_pack_audit: "向 _pack_audit 追加一行：Pack 运行留痕（匹配计数/假设快照/匹配率）。",
 };
 
 /** Not recommended in user SKILL.md steps (low-level / easy to dump grid). */

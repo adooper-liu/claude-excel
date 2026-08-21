@@ -146,7 +146,7 @@ keys 用能唯一标识行的列（如 方案编号+计价重+ZONE），拿不�
 用户意图明显属于另一加速器时，明示跳转并说明原因，不要悄悄用错工具链：规范时发现该算汇总 → 明说走 /计算；拆解时遇到外部核实 → 标 🔴 分流 /调研；要两张表核对 → 明说走 /对账；要网页表进簿 → 明说走 /取数。
 
 ## 流程执行（run_flow）
-明确属于流程类的请求，先调 run_flow 选流程：reconcile 对账 / extract 提取列 / project 规整列 / flatten_header 拍平表头 / reshape 整形（去重/反透视/拆列/转数字）/ calculate 计算（活公式）/ finance 业财。流程内部按固定步骤执行（inspect→ensure→算子→新表），源表不覆盖，text 传用户原话供其解析参数。拿不准或非流程类请求，直接用算子，不要硬套流程。run_flow 报错时按报错调整（补全 text、换算子或问用户），不要重复硬调同参。
+明确属于流程类的请求，先调 run_flow 选流程：reconcile 对账 / extract 提取列 / project 规整列 / flatten_header 拍平表头 / reshape 整形（去重/反透视/拆列/转数字）/ calculate 计算（活公式）。流程内部按固定步骤执行（inspect→ensure→算子→新表），源表不覆盖，text 传用户原话供其解析参数。业财等行业场景走已装 Pack 的斜杠（如 /跨境业财），按 SKILL.md 逐步调算子（含 append_pack_audit），不要用 run_flow(finance)。拿不准或非流程类请求，直接用算子，不要硬套流程。run_flow 报错时按报错调整（补全 text、换算子或问用户），不要重复硬调同参。
 
 歧义前置（防选错流程的静默错误）：请求可能对应多个流程时（如「拆分」可指拆列或拆结构、「整理」可指规整列或清洗、「算一下」可指求和或修公式），**先列出候选流程和各自将做什么，让用户选，确认后才 run_flow**——不要直接按猜的那个跑。请求明确时才直接 run_flow，执行前用一句话说明选了哪个流程、会写新表不改源表。
 
@@ -351,11 +351,6 @@ export default function App(): JSX.Element {
         setIf(prev => prev.map(m => m.id === aid ? { ...m, content: SKIP_SAMPLE_REPLY } : m));
         return;
       }
-      if (slash?.id === "finance-reconciliation") {
-        const final = await Excel.runFinanceIntent(workText, ctx.showMessage);
-        setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
-        return;
-      }
       if (!slash) {
         // 保留精确、低代价的正则快捷：只对明确命令词触发（提取X列/大小写、拍平表头），产新结果表不改源表。
         if (Excel.isExtractRequest(workText)) {
@@ -368,7 +363,7 @@ export default function App(): JSX.Element {
           setIf(prev => prev.map(m => m.id === aid ? { ...m, ...withSamplePrompt(final, workText) } : m));
           return;
         }
-        // 其余流程（对账/整形/规整/计算/业财）不预抢答：LLM 判定后用 run_flow 或算子执行
+        // 其余流程（对账/整形/规整/计算）不预抢答：LLM 判定后用 run_flow 或算子执行；业财走已装 Pack SKILL
       }
       let userText = slash ? skillAsk(slash.id, slash.extra) : workText;
       if (slash?.id === "skill-creator") {

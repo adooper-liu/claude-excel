@@ -1,7 +1,7 @@
 # csv_local connector (Phase 1 / Gate 1b)
 
 **实现**：`extensions/connector-csv-local/` → `user.connector_load_feed`  
-读 `~/.claude-excel-web/packs/{packId}/connector/fixtures/*.csv`，按 `feeds/*.schema.json` 映射 canonical 列，由加载项 `runFinanceIntent` 写 `Pack_*` sheet。
+读 `~/.claude-excel-web/packs/{packId}/connector/fixtures/*.csv`，按 `feeds/*.schema.json` 映射 canonical 列；由 Pack SKILL（`/跨境业财`）编排 `user.connector_load_feed` + `write_to_sheet` 写入 `Pack_*` sheet（或场景包菜单「导入 CSV」先写表）。
 
 Fixtures（脱敏，含三类异常）：
 

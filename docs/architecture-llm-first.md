@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 斜杠命令 | `/对账` 等（用户显式选择） | 确定性直接派路径 | 用户已拍板，无歧义 |
 | 读/低代价操作 | 提取选中列、拍平表头 | **轻量正则保留** | P(错)≈0、代价≈0，不需要 LLM |
-| 写/流程类 | 对账、整形、规整、计算、业财 | **LLM 唯一裁判** → `run_flow` | P(错) 有地板，代价高，必须语义理解 + 提交门 |
+| 写/流程类 | 对账、整形、规整、计算 | **LLM 唯一裁判** → `run_flow`；行业场景（业财）→ 已装 Pack SKILL | P(错) 有地板，代价高，必须语义理解 + 提交门 |
 
 **分工依据是期望损失不等式，不是"谁更纯粹"：**
 - 读操作：正则抢答的期望损失（≈0）< LLM 先行的成本（延迟+token）→ 留正则
@@ -22,8 +22,8 @@
 
 ## 已落地（2026-08-18）
 
-- `run_flow` 工具（`addin/skills/core/flows/manifest.json`）：LLM 选流程，流程内部按固定步骤执行（inspect→ensure→算子→新表），源表不覆盖。流程：reconcile / extract / project / flatten_header / reshape / calculate / finance。
-- 拆掉写路径预抢答：`isReconcileRequest` / `isReshapeRequest` / `isProjectReshapeRequest` / `isCalculateRequest` / `isFinanceRequest` 不再在 LLM 前路由。
+- `run_flow` 工具（`addin/skills/core/flows/manifest.json`）：LLM 选流程，流程内部按固定步骤执行（inspect→ensure→算子→新表），源表不覆盖。流程：reconcile / extract / project / flatten_header / reshape / calculate（**不含** finance——业财走 Pack SKILL）。
+- 拆掉写路径预抢答：`isReconcileRequest` / `isReshapeRequest` / `isProjectReshapeRequest` / `isCalculateRequest` 不再在 LLM 前路由；`isFinanceRequest` / `finance-run.ts` 已删除（Pack 化）。
 - 保留精确低代价正则：`isExtractRequest`（提取X列/大小写）、`isFlattenHeaderRequest`（拍平表头）。
 - 系统提示加「流程执行（run_flow）」引导。
 

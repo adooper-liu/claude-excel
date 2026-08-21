@@ -16,7 +16,6 @@ export { listPalettes } from './style-core';
 export { ensureTable, readTable, listTableNames } from './table';
 export { reconcileTables } from './reconcile';
 export { runReconcileIntent } from './reconcile-run';
-export { runFinanceIntent, isFinanceRequest } from './finance-run';
 export { appendPackAudit } from './pack-audit';
 export { isReconcileRequest } from './reconcile-intent';
 export { fetchRecipeProject, fetchRecipeTargets } from './recipe-project';

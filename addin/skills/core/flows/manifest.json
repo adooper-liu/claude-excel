@@ -1,18 +1,18 @@
 {
   "name": "flows",
   "version": "1.0.0",
-  "description": "Deterministic multi-step flows (对账/整形/计算/提取/规整/拍平/业财). LLM 决定走哪个流程，流程保证执行可靠",
+  "description": "Deterministic multi-step flows (对账/整形/计算/提取/规整/拍平). LLM 决定走哪个流程，流程保证执行可靠。行业场景（如业财）走已装 Pack 的 SKILL，不注册进 run_flow。",
   "tools": [
     {
       "name": "run_flow",
-      "description": "按名字执行确定性流程。LLM 判定请求明确属于某流程时调用（reconcile 对账 / extract 提取列 / project 规整列 / flatten_header 拍平表头 / reshape 整形 / calculate 计算 / finance 业财）。内部按 inspect→ensure→算子→新表 的固定步骤执行，源表不覆盖。text 传用户原话，流程从中解析键列/参数。拿不准或非流程类请求，直接用算子，不要硬套流程。",
+      "description": "按名字执行确定性流程。LLM 判定请求明确属于某流程时调用（reconcile 对账 / extract 提取列 / project 规整列 / flatten_header 拍平表头 / reshape 整形 / calculate 计算）。内部按 inspect→ensure→算子→新表 的固定步骤执行，源表不覆盖。text 传用户原话，流程从中解析键列/参数。业财等行业场景用已装 Pack 的 /跨境业财（SKILL 编排），不要用 run_flow。拿不准或非流程类请求，直接用算子，不要硬套流程。",
       "input_schema": {
         "type": "object",
         "properties": {
           "flow": {
             "type": "string",
-            "enum": ["reconcile", "extract", "project", "flatten_header", "reshape", "calculate", "finance"],
-            "description": "要执行的流程：reconcile 两表对账 | extract 提取选中列（去空格/大小写/去重） | project 规整列映射 | flatten_header 拍平双层表头 | reshape 去重/反透视/拆列/转数字 | calculate 活公式（求和/匹配/修公式） | finance 业财闭环"
+            "enum": ["reconcile", "extract", "project", "flatten_header", "reshape", "calculate"],
+            "description": "要执行的流程：reconcile 两表对账 | extract 提取选中列（去空格/大小写/去重） | project 规整列映射 | flatten_header 拍平双层表头 | reshape 去重/反透视/拆列/转数字 | calculate 活公式（求和/匹配/修公式）"
           },
           "text": {
             "type": "string",
