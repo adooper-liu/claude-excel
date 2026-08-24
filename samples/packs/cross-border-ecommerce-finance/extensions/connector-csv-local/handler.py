@@ -32,7 +32,7 @@ HEADER_ALIASES: dict[str, list[str]] = {
     "spend": ["spend", "cost", "广告费"],
     "impressions": ["impressions", "展示"],
     "clicks": ["clicks", "点击"],
-    "on_hand": ["on_hand", "qty", "库存"],
+    "on_hand": ["on_hand", "on_hand_qty", "可用库存", "库存"],
     "warehouse": ["warehouse", "仓"],
 }
 

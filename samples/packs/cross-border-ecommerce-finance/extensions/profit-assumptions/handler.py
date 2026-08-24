@@ -1,23 +1,25 @@
-"""user.profit_assumptions — pure calculation, no network, no secrets."""
+"""user.profit_assumptions — pure calculation, no network, no secrets.
+
+Fallback defaults when 假设参数 sheet has not been created yet.
+Canonical source of truth: SKILL.md Appendix A / 假设参数.csv.
+"""
 
 from __future__ import annotations
 
 import json
 import sys
 
-# Default assumption rates (user-provided / illustrative; not market benchmarks).
+# Aligned with SKILL.md Appendix A and 假设参数.csv (2026-08 revision).
 DEFAULTS = {
+    "fx_rate_usd": 7.2,
     "referral_rate": 0.15,
-    "fba_fee_rate": 0.12,
-    "return_rate": 0.03,
-    "ad_rate": 0.08,
-    "cogs_rate": 0.35,
-    "inbound_rate": 0.02,
-    "storage_rate": 0.01,
-    "fx_loss_rate": 0.01,
-    "vat_rate": 0.0,
-    "duty_rate": 0.0,
-    "other_rate": 0.02,
+    "return_rate": 0.08,
+    "fba_base_usd": 3.22,
+    "fba_fuel_surcharge_rate": 0.035,
+    "storage_usd": 1.50,
+    "payment_fee_rate": 0.025,
+    "target_margin_rate": 0.10,
+    "ad_tacos_ref": 0.08,
 }
 
 
