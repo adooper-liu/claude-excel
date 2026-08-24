@@ -52,6 +52,110 @@ describe("calculate-core", function () {
     assert.ok(result.rows[0][1] !== 15);
   });
 
+  it("sumifs supports multi groupBy and fixed criteria", function () {
+    const result = calculate({
+      op: "sumifs_multi",
+      tableName: "T_订单",
+      headers: ["sku", "month", "channel", "amount"],
+      rows: [
+        ["a", "01", "web", 10],
+        ["a", "01", "web", 5],
+        ["a", "02", "web", 3],
+        ["b", "01", "store", 8],
+      ],
+      groupBy: ["sku", "month"],
+      valueColumn: "amount",
+      criteria: [{ column: "channel", value: "web" }],
+    });
+    assert.deepStrictEqual(result.headers, ["sku", "month", "合计"]);
+    assert.strictEqual(result.rows.length, 2);
+    assert.strictEqual(
+      result.rows[0][2],
+      '=SUMIFS(\'T_订单\'[amount],\'T_订单\'[sku],[@sku],\'T_订单\'[month],[@month],\'T_订单\'[channel],"web")'
+    );
+  });
+
+  it("sumifs throws when criteria column missing", function () {
+    assert.throws(function () {
+      calculate({
+        op: "sumifs",
+        tableName: "T",
+        headers: ["a", "b"],
+        rows: [["x", 1]],
+        groupBy: "a",
+        valueColumn: "b",
+        criteria: [{ column: "nope", value: 1 }],
+      });
+    }, /nope/);
+  });
+
+  it("arithmetic writes declarative row formulas", function () {
+    const result = calculate({
+      op: "arithmetic",
+      tableName: "T_利润",
+      headers: ["收入", "佣金", "广告"],
+      rows: [
+        [100, 15, 10],
+        [200, 30, 20],
+      ],
+      outputColumn: "净利",
+      expression: {
+        terms: [
+          { column: "收入" },
+          { op: "-", column: "佣金" },
+          { op: "-", column: "广告" },
+        ],
+      },
+    });
+    assert.deepStrictEqual(result.headers, ["收入", "佣金", "广告", "净利"]);
+    assert.strictEqual(result.rows[0][3], "=[@[收入]]-[@[佣金]]-[@[广告]]");
+    assert.strictEqual(result.rows[1][3], result.rows[0][3]);
+  });
+
+  it("arithmetic rejects free-form mixed term fields", function () {
+    assert.throws(function () {
+      calculate({
+        op: "arithmetic",
+        tableName: "T",
+        headers: ["a"],
+        rows: [[1]],
+        expression: { terms: [{ column: "a", literal: 1 }] },
+      });
+    }, /之一/);
+  });
+
+  it("conditional_column writes IF formulas", function () {
+    const result = calculate({
+      op: "conditional_column",
+      tableName: "T",
+      headers: ["净利率"],
+      rows: [[0.05], [0.2]],
+      column: "净利率",
+      operator: "lt",
+      value: 0.1,
+      outputColumn: "风险",
+      trueExpr: { literal: "高风险" },
+      falseExpr: { literal: "正常" },
+    });
+    assert.strictEqual(result.rows[0][1], '=IF([@[净利率]]<0.1,"高风险","正常")');
+  });
+
+  it("conditional_column between needs valueTo", function () {
+    assert.throws(function () {
+      calculate({
+        op: "conditional_column",
+        tableName: "T",
+        headers: ["x"],
+        rows: [[1]],
+        column: "x",
+        operator: "between",
+        value: 1,
+        trueExpr: { literal: 1 },
+        falseExpr: { literal: 0 },
+      });
+    }, /valueTo/);
+  });
+
   it("writes sheet-based SUMIFS when sourceSheet is set", function () {
     const result = calculate({
       op: "sumifs",

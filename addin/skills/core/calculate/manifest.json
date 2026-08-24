@@ -1,24 +1,49 @@
 {
   "name": "calculate",
-  "version": "1.0.0",
-  "description": "Write live Excel formulas (INDEX/MATCH / SUMIFS / #REF! repair) onto a new sheet; never paste dead totals",
+  "version": "1.1.0",
+  "description": "Write live Excel formulas (INDEX/MATCH / SUMIFS / arithmetic / conditional IF / #REF! repair) onto a new sheet; never paste dead totals",
   "tools": [
     {
       "name": "calculate_table",
-      "description": "Write LIVE formulas to a NEW sheet (never overwrite sources, never paste computed totals). op lookup: INDEX/MATCH from rightTable into leftTable by key (exact match; works without XLOOKUP). op sumifs: unique groupBy + SUMIFS on valueColumn. op fix_ref: copy a sheet with #REF! arguments dropped. Tables must already exist (use ensure_table first).",
+      "description": "Write LIVE formulas to a NEW sheet (never overwrite sources, never paste computed totals). op lookup: INDEX/MATCH. op sumifs|sumifs_multi: unique groupBy (one or many columns) + optional fixed criteria[] + SUMIFS. op arithmetic: declarative column math via expression.terms (column|literal|sheetCell). op conditional_column: one IF column (eq|neq|gt|gte|lt|lte|between). op fix_ref: copy sheet dropping #REF!. Tables must exist (ensure_table first).",
       "input_schema": {
         "type": "object",
         "properties": {
-          "op": { "type": "string", "description": "lookup | sumifs | fix_ref" },
-          "tableName": { "type": "string", "description": "sumifs: source Excel Table name" },
+          "op": {
+            "type": "string",
+            "description": "lookup | sumifs | sumifs_multi | arithmetic | conditional_column | fix_ref"
+          },
+          "tableName": { "type": "string", "description": "sumifs/arithmetic/conditional_column: source Excel Table name" },
           "leftTable": { "type": "string", "description": "lookup: left Excel Table name" },
           "rightTable": { "type": "string", "description": "lookup: right Excel Table name" },
           "key": { "type": "string", "description": "lookup: join column header" },
           "bringColumns": { "type": "string", "description": "lookup: columns to fetch from right, comma-separated" },
-          "groupBy": { "type": "string", "description": "sumifs: category column" },
+          "groupBy": {
+            "type": "string",
+            "description": "sumifs: category column, or comma-separated / array for multi-column groups"
+          },
           "valueColumn": { "type": "string", "description": "sumifs: numeric column to sum" },
+          "criteria": {
+            "type": "array",
+            "description": "sumifs: fixed filters [{column, value}]",
+            "items": { "type": "object" }
+          },
+          "outputColumn": { "type": "string", "description": "arithmetic/conditional_column: new column name" },
+          "expression": {
+            "type": "object",
+            "description": "arithmetic: { terms: [{op?, column?, literal?, sheetCell?}] }"
+          },
+          "column": { "type": "string", "description": "conditional_column: condition column" },
+          "operator": {
+            "type": "string",
+            "description": "conditional_column: eq|neq|gt|gte|lt|lte|between"
+          },
+          "value": { "description": "conditional_column: compare value" },
+          "valueTo": { "description": "conditional_column between: upper bound" },
+          "trueExpr": { "type": "object", "description": "conditional_column: {column?} or {literal?}" },
+          "falseExpr": { "type": "object", "description": "conditional_column: {column?} or {literal?}" },
           "sheetName": { "type": "string", "description": "fix_ref: sheet to copy from" },
-          "outputSheet": { "type": "string", "description": "New sheet name. Default 查找结果 / 汇总结果 / 公式修复" }
+          "outputSheet": { "type": "string", "description": "New sheet name" }
         },
         "required": ["op"]
       }

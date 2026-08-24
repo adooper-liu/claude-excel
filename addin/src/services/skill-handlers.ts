@@ -230,7 +230,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           return String(v).split(',').map((s) => s.trim()).filter(Boolean);
         };
         const op = String(input.op || '').trim();
-        if (!op) return 'Error: op required (dedupe|unpivot|split|coerce|coerce_columns|project|flatten_header)';
+        if (!op) return 'Error: op required (dedupe|unpivot|split|coerce|coerce_columns|project|flatten_header|flatten_reconcile)';
         const parseColumns = (v: unknown) => {
           if (Array.isArray(v)) return v;
           if (v == null || v === '') return undefined;
@@ -284,7 +284,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           sheetName: input.sheetName as string | undefined,
           range: input.range as string | undefined,
           headerRows: Number.isFinite(headerRows) ? headerRows : undefined,
-          op: op as 'dedupe' | 'unpivot' | 'split' | 'coerce' | 'coerce_columns' | 'project' | 'flatten_header',
+          op: op as 'dedupe' | 'unpivot' | 'split' | 'coerce' | 'coerce_columns' | 'project' | 'flatten_header' | 'flatten_reconcile',
           keys: splitCsv(input.keys),
           idColumns: splitCsv(input.idColumns),
           valueColumns: splitCsv(input.valueColumns),
@@ -308,17 +308,98 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           if (v == null || v === '') return undefined;
           return String(v).split(',').map((s) => s.trim()).filter(Boolean);
         };
+        const parseObj = (v: unknown): Record<string, unknown> | undefined => {
+          if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+          if (v == null || v === '') return undefined;
+          try {
+            const parsed = JSON.parse(String(v));
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+              ? (parsed as Record<string, unknown>)
+              : undefined;
+          } catch {
+            return undefined;
+          }
+        };
+        const parseCriteria = (v: unknown) => {
+          const raw = Array.isArray(v)
+            ? v
+            : (() => {
+                try {
+                  const p = JSON.parse(String(v || ''));
+                  return Array.isArray(p) ? p : null;
+                } catch {
+                  return null;
+                }
+              })();
+          if (!raw) return undefined;
+          return raw
+            .map(function (item) {
+              if (!item || typeof item !== 'object') return null;
+              const o = item as Record<string, unknown>;
+              const column = String(o.column || '').trim();
+              if (!column || o.value === undefined || o.value === null) return null;
+              return { column, value: o.value as string | number };
+            })
+            .filter(Boolean) as Array<{ column: string; value: string | number }>;
+        };
+        const parseExprSide = (v: unknown) => {
+          const o = parseObj(v);
+          if (!o) return undefined;
+          if (o.column != null && String(o.column).trim()) return { column: String(o.column).trim() };
+          if (o.literal !== undefined && o.literal !== null) {
+            return { literal: o.literal as string | number | boolean };
+          }
+          return undefined;
+        };
         const op = String(input.op || '').trim();
-        if (!op) return 'Error: op required (lookup|sumifs|fix_ref)';
+        if (!op) {
+          return 'Error: op required (lookup|sumifs|sumifs_multi|arithmetic|conditional_column|fix_ref)';
+        }
+        const groupByRaw = input.groupBy;
+        const groupBy =
+          Array.isArray(groupByRaw) ? splitCsv(groupByRaw) : (groupByRaw as string | undefined);
+        const expressionObj = parseObj(input.expression);
+        const termsRaw = expressionObj && Array.isArray(expressionObj.terms) ? expressionObj.terms : undefined;
+        const expression = termsRaw
+          ? {
+              terms: termsRaw
+                .map(function (t) {
+                  if (!t || typeof t !== 'object') return null;
+                  const o = t as Record<string, unknown>;
+                  return {
+                    op: o.op as '+' | '-' | '*' | '/' | undefined,
+                    column: o.column != null ? String(o.column) : undefined,
+                    literal: typeof o.literal === 'number' ? o.literal : undefined,
+                    sheetCell: o.sheetCell != null ? String(o.sheetCell) : undefined,
+                  };
+                })
+                .filter(Boolean),
+            }
+          : undefined;
         const r = await E.calculateTable({
-          op: op as 'lookup' | 'sumifs' | 'fix_ref',
+          op: op as
+            | 'lookup'
+            | 'sumifs'
+            | 'sumifs_multi'
+            | 'arithmetic'
+            | 'conditional_column'
+            | 'fix_ref',
           tableName: input.tableName as string | undefined,
           leftTable: input.leftTable as string | undefined,
           rightTable: input.rightTable as string | undefined,
           key: input.key as string | undefined,
           bringColumns: splitCsv(input.bringColumns),
-          groupBy: input.groupBy as string | undefined,
+          groupBy: groupBy,
           valueColumn: input.valueColumn as string | undefined,
+          criteria: parseCriteria(input.criteria),
+          outputColumn: input.outputColumn as string | undefined,
+          expression: expression as { terms: import('../excel/calculate-core').ArithTerm[] } | undefined,
+          column: input.column as string | undefined,
+          operator: input.operator as import('../excel/calculate-core').CondOperator | undefined,
+          value: input.value as string | number | undefined,
+          valueTo: input.valueTo as string | number | undefined,
+          trueExpr: parseExprSide(input.trueExpr),
+          falseExpr: parseExprSide(input.falseExpr),
           sheetName: input.sheetName as string | undefined,
           outputSheet: input.outputSheet as string | undefined,
         });

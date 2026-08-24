@@ -5,7 +5,7 @@
   "tools": [
     {
       "name": "reshape_table",
-      "description": "Reshape one Excel Table and WRITE A NEW SHEET only (never overwrite the source). op: dedupe, unpivot, split, coerce (single column), coerce_columns (apply inspect columnHints / format:auto), project, flatten_header. Table must already exist for most ops; flatten_header uses sheetName+range.",
+      "description": "Reshape one Excel Table and WRITE A NEW SHEET only (never overwrite the source). op: dedupe, unpivot, split, coerce (single column), coerce_columns (apply inspect columnHints / format:auto), project, flatten_header, flatten_reconcile (collapse left_/right_ recon columns). Table must already exist for most ops; flatten_header uses sheetName+range.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -13,7 +13,7 @@
           "sheetName": { "type": "string", "description": "flatten_header: worksheet name from inspect_workbook" },
           "range": { "type": "string", "description": "flatten_header: used range including all header rows and data, e.g. A1:Z500" },
           "headerRows": { "type": "number", "description": "flatten_header: number of header rows (default 2). Handles merged cells via fill-forward." },
-          "op": { "type": "string", "description": "dedupe | unpivot | split | coerce | coerce_columns | project | flatten_header" },
+          "op": { "type": "string", "description": "dedupe | unpivot | split | coerce | coerce_columns | project | flatten_header | flatten_reconcile" },
           "keys": { "type": "string", "description": "dedupe: uniqueness column(s), comma-separated" },
           "idColumns": { "type": "string", "description": "unpivot: columns that stay. Default: first column" },
           "valueColumns": { "type": "string", "description": "unpivot: columns to melt. Default: all except idColumns" },

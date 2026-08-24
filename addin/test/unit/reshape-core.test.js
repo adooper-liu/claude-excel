@@ -160,4 +160,40 @@ describe("reshape-core", function () {
       ["2", "bar", 20],
     ]);
   });
+
+  it("flatten_reconcile collapses left_/right_ by status", function () {
+    const result = reshape({
+      headers: [
+        "status",
+        "left_sku",
+        "right_sku",
+        "left_amt",
+        "right_amt",
+        "__match_mode",
+      ],
+      rows: [
+        ["matched", "A", "A", 10, 10, "exact"],
+        ["left_only", "B", "", 5, "", "left_only"],
+        ["right_only", "", "C", "", 7, "right_only"],
+        ["conflict", "D", "D2", 1, 2, "conflict"],
+      ],
+      op: "flatten_reconcile",
+    });
+    assert.deepStrictEqual(result.headers, ["sku", "amt", "status", "__match_mode"]);
+    assert.deepStrictEqual(result.rows[0], ["A", 10, "matched", "exact"]);
+    assert.deepStrictEqual(result.rows[1], ["B", 5, "left_only", "left_only"]);
+    assert.deepStrictEqual(result.rows[2], ["C", 7, "right_only", "right_only"]);
+    assert.deepStrictEqual(result.rows[3], ["D", 1, "conflict", "conflict"]);
+    assert.ok(
+      result.headers.every(function (h) {
+        return !/^left_/i.test(h) && !/^right_/i.test(h);
+      })
+    );
+  });
+
+  it("flatten_reconcile throws without headers", function () {
+    assert.throws(function () {
+      reshape({ headers: [], rows: [], op: "flatten_reconcile" });
+    }, /表头/);
+  });
 });

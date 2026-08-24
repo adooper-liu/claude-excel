@@ -11,7 +11,8 @@ export function selectToolsForRequest(
   tools: ToolDef[],
   skillId?: string
 ): ToolDef[] {
-  if (isSetupRequest(userText)) return tools;
+  // Active slash skill owns tool selection; do not treat「生成…」as sample-setup.
+  if (!skillId && isSetupRequest(userText)) return tools;
   if (skillId === "skill-creator" || skillId === "deconstruct") {
     const allow = new Set(["inspect_workbook", "inspect_table", "inspect_formulas", "scan_formula_errors"]);
     return tools.filter((t) => allow.has(t.name));

@@ -3,8 +3,12 @@
 import {
   calculate as calculateCore,
   fixRefFormula,
+  type ArithTerm,
   type CalculateOp,
   type Cell,
+  type CondExpr,
+  type CondOperator,
+  type SumifsCriterion,
 } from "./calculate-core";
 import { formulaColumnRuns, valuesWithoutFormulas, CHUNK_ROWS, chunkRanges } from "./range-chunk";
 import { readTable, ensureTable } from "./table";
@@ -20,18 +24,29 @@ export interface CalculateTableInput {
   rightTable?: string;
   key?: string;
   bringColumns?: string[];
-  groupBy?: string;
+  groupBy?: string | string[];
   valueColumn?: string;
+  criteria?: SumifsCriterion[];
   sheetName?: string;
   outputSheet?: string;
-  /** Excel ListObject name for the formula result sheet. */
   outputTable?: string;
+  outputColumn?: string;
+  expression?: { terms: ArithTerm[] };
+  column?: string;
+  operator?: CondOperator;
+  value?: string | number;
+  valueTo?: string | number;
+  trueExpr?: CondExpr;
+  falseExpr?: CondExpr;
 }
 
 const DEFAULT_SHEET: Record<CalculateOp, string> = {
   lookup: "查找结果",
   sumifs: "汇总结果",
+  sumifs_multi: "汇总结果",
   fix_ref: "公式修复",
+  arithmetic: "算术结果",
+  conditional_column: "条件列",
 };
 
 async function writeFormulaGrid(
@@ -137,25 +152,49 @@ export async function calculateTable(input: CalculateTableInput): Promise<{
     return { outputSheet, op: "lookup", rows: result.rows.length };
   }
 
-  if (input.op === "sumifs") {
+  if (input.op === "sumifs" || input.op === "sumifs_multi") {
     if (!input.tableName || !input.groupBy || !input.valueColumn) {
       throw new Error("sumifs 需要 tableName、groupBy、valueColumn");
     }
     const table = await readTable(input.tableName);
     const result = calculateCore({
-      op: "sumifs",
+      op: input.op,
       tableName: table.name,
       sourceSheet: table.sheet,
       headers: table.headers,
       rows: table.rows as Cell[][],
       groupBy: input.groupBy,
       valueColumn: input.valueColumn,
+      criteria: input.criteria,
     });
     const outputSheet = await writeFormulaGrid(requestedSheet, result.outputRows, {
       tableBase: input.outputTable || requestedSheet,
       tableBeforeFormulas: false,
     });
-    return { outputSheet, op: "sumifs", rows: result.rows.length };
+    return { outputSheet, op: input.op, rows: result.rows.length };
+  }
+
+  if (input.op === "arithmetic" || input.op === "conditional_column") {
+    if (!input.tableName) throw new Error(input.op + " 需要 tableName");
+    const table = await readTable(input.tableName);
+    const result = calculateCore({
+      op: input.op,
+      tableName: table.name,
+      headers: table.headers,
+      rows: table.rows as Cell[][],
+      outputColumn: input.outputColumn,
+      expression: input.expression,
+      column: input.column,
+      operator: input.operator,
+      value: input.value,
+      valueTo: input.valueTo,
+      trueExpr: input.trueExpr,
+      falseExpr: input.falseExpr,
+    });
+    const outputSheet = await writeFormulaGrid(requestedSheet, result.outputRows, {
+      tableBase: input.outputTable || requestedSheet,
+    });
+    return { outputSheet, op: input.op, rows: result.rows.length };
   }
 
   throw new Error("Unknown calculate op");

@@ -10,7 +10,15 @@ import {
 import { dayToIso, parseDateCell } from "./date-cell";
 
 export type Cell = string | number | boolean | null;
-export type ReshapeOp = "dedupe" | "unpivot" | "split" | "coerce" | "project" | "flatten_header" | "coerce_columns";
+export type ReshapeOp =
+  | "dedupe"
+  | "unpivot"
+  | "split"
+  | "coerce"
+  | "project"
+  | "flatten_header"
+  | "coerce_columns"
+  | "flatten_reconcile";
 export type CoerceType = "number" | "text" | "date";
 
 export interface ProjectColumnSpec {
@@ -368,5 +376,95 @@ export function reshape(input: ReshapeInput): ReshapeResult {
   if (input.op === "coerce") return coerce(input);
   if (input.op === "project") return project(input);
   if (input.op === "coerce_columns") return coerceColumns(input);
+  if (input.op === "flatten_reconcile") return flattenReconcile(input);
   throw new Error("Unknown reshape op");
+}
+
+function cellEmpty(v: Cell): boolean {
+  return v === null || v === undefined || String(v).trim() === "";
+}
+
+/** Collapse left_/right_ recon columns into one flat table for chained reconcile. */
+export function flattenReconcile(input: ReshapeInput): ReshapeResult {
+  const headers = input.headers || [];
+  const rows = input.rows || [];
+  if (!headers.length) throw new Error("flatten_reconcile 需要表头");
+
+  const statusIdx = headers.findIndex(function (h) {
+    return String(h).toLowerCase() === "status";
+  });
+
+  type ColPlan =
+    | { kind: "keep"; name: string; idx: number }
+    | { kind: "merge"; name: string; leftIdx: number; rightIdx: number };
+
+  const used = new Set<number>();
+  const plan: ColPlan[] = [];
+  const mergeNames: string[] = [];
+
+  headers.forEach(function (h) {
+    const name = String(h || "");
+    if (/^left_/i.test(name)) {
+      const stem = name.replace(/^left_/i, "");
+      if (!stem || mergeNames.indexOf(stem) >= 0) return;
+      mergeNames.push(stem);
+    } else if (/^right_/i.test(name)) {
+      const stem = name.replace(/^right_/i, "");
+      if (!stem || mergeNames.indexOf(stem) >= 0) return;
+      mergeNames.push(stem);
+    }
+  });
+
+  mergeNames.forEach(function (stem) {
+    const leftIdx = headers.findIndex(function (h) {
+      return String(h).toLowerCase() === ("left_" + stem).toLowerCase();
+    });
+    const rightIdx = headers.findIndex(function (h) {
+      return String(h).toLowerCase() === ("right_" + stem).toLowerCase();
+    });
+    if (leftIdx < 0 && rightIdx < 0) return;
+    plan.push({
+      kind: "merge",
+      name: stem,
+      leftIdx: leftIdx,
+      rightIdx: rightIdx,
+    });
+    if (leftIdx >= 0) used.add(leftIdx);
+    if (rightIdx >= 0) used.add(rightIdx);
+  });
+
+  headers.forEach(function (h, i) {
+    if (used.has(i)) return;
+    const name = String(h || "");
+    if (/^left_/i.test(name) || /^right_/i.test(name)) return;
+    plan.push({ kind: "keep", name: name, idx: i });
+    used.add(i);
+  });
+
+  const outHeaders = plan.map(function (p) {
+    return p.name;
+  });
+
+  const outRows = rows.map(function (row) {
+    const statusRaw = statusIdx >= 0 ? row[statusIdx] : "";
+    const status = String(statusRaw == null ? "" : statusRaw)
+      .trim()
+      .toLowerCase();
+    return plan.map(function (p) {
+      if (p.kind === "keep") {
+        const v = row[p.idx];
+        return v === undefined ? null : v;
+      }
+      const leftV = p.leftIdx >= 0 ? row[p.leftIdx] : null;
+      const rightV = p.rightIdx >= 0 ? row[p.rightIdx] : null;
+      if (status === "left_only") return cellEmpty(leftV) ? null : leftV;
+      if (status === "right_only") return cellEmpty(rightV) ? null : rightV;
+      // matched / conflict / unknown: prefer left, else right
+      if (!cellEmpty(leftV)) return leftV;
+      if (!cellEmpty(rightV)) return rightV;
+      return null;
+    });
+  });
+
+  return pack(outHeaders, outRows);
 }

@@ -50,6 +50,7 @@ const DEFAULT_SHEET: Record<ReshapeOp, string> = {
   project: "映射结果",
   flatten_header: "拍平结果",
   coerce_columns: "格式结果",
+  flatten_reconcile: "对账压平",
 };
 
 function asWriteGrid(rows: Cell[][]): (string | number)[][] {
