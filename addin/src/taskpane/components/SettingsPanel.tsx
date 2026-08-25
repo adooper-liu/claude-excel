@@ -26,7 +26,7 @@ const PRESETS: Record<string, ProviderPreset> = {
   deepseek: {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/anthropic',
-    model: 'deepseek-v4-pro[1m]',
+    model: 'deepseek-v4-flash[1m]',
     smallFastModel: 'deepseek-v4-flash',
   },
   qwen: {
@@ -112,9 +112,11 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       <h3>API Configuration</h3>
 
       <label>Provider</label>
-      <select value={preset} onChange={e => handlePresetChange(e.target.value)}>
+      <select value={preset} onChange={(e) => handlePresetChange(e.target.value)}>
         {Object.entries(PRESETS).map(([key, p]) => (
-          <option key={key} value={key}>{p.name}</option>
+          <option key={key} value={key}>
+            {p.name}
+          </option>
         ))}
       </select>
 
@@ -122,7 +124,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       <input
         type="password"
         value={apiKey}
-        onChange={e => setApiKey(e.target.value)}
+        onChange={(e) => setApiKey(e.target.value)}
         placeholder="sk-..."
       />
 
@@ -130,7 +132,10 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       <input
         type="text"
         value={baseUrl}
-        onChange={e => { setBaseUrlState(e.target.value); setPreset('custom'); }}
+        onChange={(e) => {
+          setBaseUrlState(e.target.value);
+          setPreset('custom');
+        }}
         placeholder="https://api.deepseek.com/anthropic"
       />
 
@@ -138,7 +143,10 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       <input
         type="text"
         value={model}
-        onChange={e => { setModelState(e.target.value); setPreset('custom'); }}
+        onChange={(e) => {
+          setModelState(e.target.value);
+          setPreset('custom');
+        }}
         placeholder="deepseek-v4-pro[1m]"
       />
 
@@ -146,12 +154,15 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       <input
         type="text"
         value={smallFastModel}
-        onChange={e => { setSmallFastModelState(e.target.value); setPreset('custom'); }}
+        onChange={(e) => {
+          setSmallFastModelState(e.target.value);
+          setPreset('custom');
+        }}
         placeholder="deepseek-v4-flash"
       />
 
       <label>Connection Mode</label>
-      <select value={mode} onChange={e => setModeState(e.target.value as ApiMode)}>
+      <select value={mode} onChange={(e) => setModeState(e.target.value as ApiMode)}>
         <option value="proxy">Proxy (Backend Server)</option>
         <option value="direct">Direct (BYOK)</option>
       </select>
@@ -162,7 +173,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
           <input
             type="text"
             value={proxyUrl}
-            onChange={e => setProxyUrl(e.target.value)}
+            onChange={(e) => setProxyUrl(e.target.value)}
             placeholder={API_BASE}
           />
           <div style={{ fontSize: 10, color: '#999', marginBottom: 8 }}>
@@ -183,9 +194,9 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
         <button onClick={handleConnect} disabled={loading}>
           {loading ? 'Connecting...' : 'Connect'}
         </button>
-        {status.type === 'validating' && <span style={{ fontSize: 11, color: '#999' }}>Validating...</span>}
-        {status.type === 'error' && <span style={{ fontSize: 11, color: '#dc2626' }}>{status.msg}</span>}
-        {status.type === 'ready' && <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Connected</span>}
+        {status.type === 'validating' && <span style={{ fontSize: 11, color: '#999' }}> Validating...</span>}
+        {status.type === 'error' && <span style={{ fontSize: 11, color: '#dc2626' }}> {status.msg} </span>}
+        {status.type === 'ready' && <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Connected </span>}
       </div>
     </div>
   );
