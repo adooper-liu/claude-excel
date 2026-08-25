@@ -63,14 +63,29 @@ def _payload(
     return body
 
 
-async def validate_key(api_key: str, base_url: Optional[str] = None) -> bool:
-    """Validate an API key against the provider's models endpoint."""
+async def validate_key(
+    api_key: str, base_url: Optional[str] = None, model: Optional[str] = None
+) -> bool:
+    """Validate an API key against the provider's messages endpoint.
+
+    GET /v1/models 对部分供应商（如智谱）不校验 key（假 key 也 200），
+    必须用 /v1/messages 才真实校验。
+    """
     url = base_url or get_base_url()
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                f"{url}/v1/models",
-                headers={"x-api-key": api_key, "anthropic-version": API_VERSION},
+            resp = await client.post(
+                f"{url}/v1/messages",
+                headers={
+                    "content-type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": API_VERSION,
+                },
+                json={
+                    "model": model or get_model(),
+                    "max_tokens": 1,
+                    "messages": [{"role": "user", "content": "ping"}],
+                },
             )
             return resp.status_code == 200
     except Exception:

@@ -14,7 +14,7 @@ from fastapi.routing import APIRouter
 import uvicorn
 
 from ai_proxy import chat_complete, chat_stream, validate_key
-from config_store import save_config, get_config
+from config_store import get_config, get_provider_status, save_provider, set_active_provider, get_active_provider
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
 from user_packs_store import (
@@ -378,7 +378,7 @@ async def api_validate_key(req: dict):
     base_url = req.get("baseUrl")
     if not api_key:
         return {"valid": False, "error": "apiKey required"}
-    valid = await validate_key(api_key, base_url)
+    valid = await validate_key(api_key, base_url, req.get("model"))
     return {"valid": valid}
 
 
@@ -386,19 +386,49 @@ async def api_validate_key(req: dict):
 async def api_set_key(req: dict, request: Request):
     require_loopback(request)
     api_key = req.get("apiKey", "")
+    provider_id = req.get("provider", "") or "custom"
     if not api_key:
         raise HTTPException(400, "apiKey required")
-    valid = await validate_key(api_key.strip(), req.get("baseUrl"))
+    valid = await validate_key(api_key.strip(), req.get("baseUrl"), req.get("model"))
     if not valid:
         raise HTTPException(400, "Key 校验失败。请确认 Key 和 Base URL。")
-    save_config(
+    save_provider(
+        provider_id,
         {
             k: v
             for k, v in req.items()
             if v and k in ("apiKey", "baseUrl", "model", "smallFastModel")
-        }
+        },
     )
-    return {"ok": True}
+    set_active_provider(provider_id)
+    providers = get_config().get("providers", {})
+    p = providers.get(provider_id, {})
+    return {
+        "ok": True,
+        "activeProvider": provider_id,
+        "baseUrl": p.get("baseUrl", ""),
+        "model": p.get("model", ""),
+        "smallFastModel": p.get("smallFastModel", ""),
+    }
+
+
+@app.post("/api/provider/switch")
+async def api_provider_switch(req: dict, request: Request):
+    require_loopback(request)
+    provider_id = req.get("provider", "")
+    if not provider_id:
+        raise HTTPException(400, "provider required")
+    if not set_active_provider(provider_id):
+        raise HTTPException(404, f"provider {provider_id} 未配置")
+    providers = get_config().get("providers", {})
+    p = providers.get(provider_id, {})
+    return {
+        "ok": True,
+        "activeProvider": provider_id,
+        "baseUrl": p.get("baseUrl", ""),
+        "model": p.get("model", ""),
+        "smallFastModel": p.get("smallFastModel", ""),
+    }
 
 
 @app.get("/api/skills")
@@ -410,9 +440,14 @@ async def api_get_skills():
 @app.get("/api/config")
 async def api_get_config():
     cfg = get_config()
-    pub = {k: v for k, v in cfg.items() if k != "apiKey"}
-    pub["hasKey"] = bool(cfg.get("apiKey"))
-    return pub
+    active = get_active_provider()
+    providers = get_provider_status()
+    return {
+        "activeProvider": active,
+        "providers": providers,
+        "hasKey": bool(providers.get(active, {}).get("hasKey")),
+        "embeddingModel": cfg.get("embeddingModel", ""),
+    }
 
 
 @app.get("/api/templates")

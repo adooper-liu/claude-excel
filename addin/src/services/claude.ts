@@ -78,15 +78,23 @@ export function setSmallFastModel(model: string): void { providerConfig.smallFas
 // ── API Key Validation ────────────────────────────────────────
 
 /**
- * Validate an API key against the configured provider's models endpoint.
+ * Validate an API key against the configured provider's messages endpoint.
+ * (GET /v1/models 对部分供应商如智谱不校验 key，必须用 /v1/messages。)
  */
 export async function validateApiKey(key: string): Promise<boolean> {
   try {
-    const resp = await fetch(`${providerConfig.baseUrl}/v1/models`, {
+    const resp = await fetch(`${providerConfig.baseUrl}/v1/messages`, {
+      method: 'POST',
       headers: {
+        'content-type': 'application/json',
         'x-api-key': key,
         'anthropic-version': API_VERSION,
       },
+      body: JSON.stringify({
+        model: providerConfig.model,
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'ping' }],
+      }),
     });
     return resp.ok;
   } catch {

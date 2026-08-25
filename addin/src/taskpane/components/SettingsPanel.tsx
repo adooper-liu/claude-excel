@@ -8,7 +8,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import type { ApiMode } from '../../services/claude';
 import { setMode, setBaseUrl, setModel, setSmallFastModel, setProviderConfig } from '../../services/claude';
-import { setupDirectMode, setupProxyMode, AuthStatus } from '../../services/auth';
+import { setupDirectMode, setupProxyMode, switchProvider, AuthStatus } from '../../services/auth';
 import { API_BASE } from '../../services/api-config';
 
 interface Props {
@@ -65,6 +65,8 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
   const [smallFastModel, setSmallFastModelState] = useState(PRESETS.deepseek.smallFastModel);
   const [status, setStatus] = useState<{ type: AuthStatus; msg?: string }>({ type: 'unconfigured' });
   const [loading, setLoading] = useState(false);
+  const [configuredProviders, setConfiguredProviders] = useState<Record<string, { hasKey: boolean; baseUrl: string; model: string }>>({});
+  const [activeProvider, setActiveProvider] = useState('deepseek');
 
   // When preset changes, update fields
   const handlePresetChange = useCallback((key: string) => {
@@ -76,6 +78,27 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       if (p.smallFastModel) setSmallFastModelState(p.smallFastModel);
     }
   }, []);
+
+  // 拉取后端已配置的 provider 状态（不含 key），用于切换展示
+  const loadConfiguredProviders = useCallback(async () => {
+    try {
+      const r = await fetch(`${proxyUrl}/api/config`);
+      if (r.ok) {
+        const c = (await r.json()) as {
+          providers?: Record<string, { hasKey: boolean; baseUrl: string; model: string }>;
+          activeProvider?: string;
+        };
+        if (c.providers) setConfiguredProviders(c.providers);
+        if (c.activeProvider) setActiveProvider(c.activeProvider);
+      }
+    } catch {
+      /* backend down */
+    }
+  }, [proxyUrl]);
+
+  useEffect(() => {
+    void loadConfiguredProviders();
+  }, [loadConfiguredProviders]);
 
   const handleConnect = useCallback(async () => {
     setLoading(true);
@@ -91,11 +114,12 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       if (mode === 'direct') {
         result = await setupDirectMode(apiKey);
       } else {
-        result = await setupProxyMode(proxyUrl, apiKey);
+        result = await setupProxyMode(proxyUrl, apiKey, preset);
       }
 
       if (result.status === 'ready') {
         setStatus({ type: 'ready' });
+        await loadConfiguredProviders();
         onReady();
       } else {
         setStatus({ type: 'error', msg: result.error || 'Configuration failed.' });
@@ -105,7 +129,32 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [mode, apiKey, proxyUrl, baseUrl, model, smallFastModel, onReady]);
+  }, [mode, apiKey, proxyUrl, baseUrl, model, smallFastModel, preset, loadConfiguredProviders, onReady]);
+
+  const handleSwitchProvider = useCallback(
+    async (pid: string) => {
+      setLoading(true);
+      setStatus({ type: 'validating' });
+      const res = await switchProvider(proxyUrl, pid);
+      setLoading(false);
+      if (res.status === 'ready') {
+        if (res.baseUrl) setBaseUrlState(res.baseUrl);
+        if (res.model) setModelState(res.model);
+        if (res.smallFastModel) setSmallFastModelState(res.smallFastModel);
+        setProviderConfig({
+          baseUrl: res.baseUrl || '',
+          model: res.model || '',
+          smallFastModel: res.smallFastModel || '',
+        });
+        if (PRESETS[pid]) setPreset(pid);
+        setActiveProvider(pid);
+        setStatus({ type: 'ready' });
+      } else {
+        setStatus({ type: 'error', msg: res.error || '切换失败' });
+      }
+    },
+    [proxyUrl]
+  );
 
   return (
     <div className="settings-panel">
@@ -198,6 +247,31 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
         {status.type === 'error' && <span style={{ fontSize: 11, color: '#dc2626' }}> {status.msg} </span>}
         {status.type === 'ready' && <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Connected </span>}
       </div>
+
+      {Object.keys(configuredProviders).some((pid) => configuredProviders[pid].hasKey) && (
+        <div className="settings-providers">
+          <label>已配置 Provider（点击切换）</label>
+          <div>
+            {Object.entries(configuredProviders)
+              .filter(([, p]) => p.hasKey)
+              .map(([pid]) => (
+                <button
+                  key={pid}
+                  onClick={() => handleSwitchProvider(pid)}
+                  disabled={loading}
+                  style={{
+                    marginRight: 6,
+                    marginBottom: 6,
+                    fontWeight: activeProvider === pid ? 700 : 400,
+                  }}
+                >
+                  {PRESETS[pid]?.name || pid}
+                  {activeProvider === pid ? ' ✓' : ''}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

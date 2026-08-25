@@ -35,7 +35,7 @@ export async function setupDirectMode(key: string): Promise<AuthState> {
  * Set up proxy mode: send API key + provider config to backend for server-side storage.
  * The backend holds the key and proxies all AI API calls.
  */
-export async function setupProxyMode(url: string, apiKey: string): Promise<AuthState> {
+export async function setupProxyMode(url: string, apiKey: string, provider = 'custom'): Promise<AuthState> {
   const trimmedUrl = url.trim();
   if (!trimmedUrl) return { status: 'error', error: 'Proxy URL is empty.' };
   if (!apiKey.trim()) return { status: 'error', error: 'API key is empty.' };
@@ -49,6 +49,7 @@ export async function setupProxyMode(url: string, apiKey: string): Promise<AuthS
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        provider,
         apiKey: apiKey.trim(),
         baseUrl: config.baseUrl,
         model: config.model,
@@ -64,4 +65,39 @@ export async function setupProxyMode(url: string, apiKey: string): Promise<AuthS
   }
 
   return { status: 'ready' };
+}
+
+export interface SwitchResult extends AuthState {
+  baseUrl?: string;
+  model?: string;
+  smallFastModel?: string;
+}
+
+/** 切换当前生效的 provider（后端按 activeProvider 路由所有 AI 请求）。 */
+export async function switchProvider(proxyUrl: string, provider: string): Promise<SwitchResult> {
+  try {
+    const resp = await fetch(`${proxyUrl}/api/provider/switch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      return { status: 'error', error: `切换失败：${resp.status} ${err}` };
+    }
+    const data = (await resp.json()) as {
+      activeProvider?: string;
+      baseUrl?: string;
+      model?: string;
+      smallFastModel?: string;
+    };
+    return {
+      status: 'ready',
+      baseUrl: data.baseUrl,
+      model: data.model,
+      smallFastModel: data.smallFastModel,
+    };
+  } catch {
+    return { status: 'error', error: 'Cannot connect to backend. Check the URL and ensure the server is running.' };
+  }
 }
