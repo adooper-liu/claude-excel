@@ -22,13 +22,15 @@ if errorlevel 1 (
 )
 
 echo [2/5] Checking certificates...
-if not exist "backend\cert.pem" (
-    if not exist "%USERPROFILE%\.office-addin-dev-certs\localhost.crt" (
-        echo Installing Office dev certificates...
-        pushd addin
-        call npx --yes office-addin-dev-certs install
-        popd
-    )
+set "CERT_OK="
+if exist "backend\cert.pem" (
+    for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try{$c=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new('backend\cert.pem');$ch=New-Object System.Security.Cryptography.X509Certificates.X509Chain;$ch.ChainPolicy.RevocationMode='NoCheck';$ok=$ch.Build($c);if($ok -and $c.NotAfter -gt (Get-Date).AddDays(7)){'YES'}}catch{}"`) do set "CERT_OK=%%i"
+)
+if not defined CERT_OK (
+    echo Refreshing expiring/untrusted certificates...
+    pushd addin
+    call npx --yes office-addin-dev-certs install
+    popd
     if exist "%USERPROFILE%\.office-addin-dev-certs\localhost.crt" (
         copy /Y "%USERPROFILE%\.office-addin-dev-certs\localhost.crt" "backend\cert.pem" >nul
         copy /Y "%USERPROFILE%\.office-addin-dev-certs\localhost.key" "backend\key.pem" >nul
