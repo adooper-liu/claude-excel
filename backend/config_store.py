@@ -15,7 +15,7 @@ DEFAULT_PROVIDERS = {
     "deepseek": {
         "apiKey": "",
         "baseUrl": "https://api.deepseek.com/anthropic",
-        "model": "deepseek-v4-flash",
+        "model": "deepseek-v4-flash[1m]",
         "smallFastModel": "deepseek-v4-flash",
     },
     "qwen": {

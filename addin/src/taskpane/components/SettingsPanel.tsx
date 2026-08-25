@@ -26,7 +26,7 @@ const PRESETS: Record<string, ProviderPreset> = {
   deepseek: {
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/anthropic',
-    model: 'deepseek-v4-flash',
+    model: 'deepseek-v4-flash[1m]',
     smallFastModel: 'deepseek-v4-flash',
   },
   qwen: {
