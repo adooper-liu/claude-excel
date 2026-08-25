@@ -388,8 +388,6 @@ async def api_set_key(req: dict, request: Request):
     api_key = req.get("apiKey", "")
     if not api_key:
         raise HTTPException(400, "apiKey required")
-    if not api_key.strip().startswith("sk-"):
-        raise HTTPException(400, "Invalid key format")
     valid = await validate_key(api_key.strip(), req.get("baseUrl"))
     if not valid:
         raise HTTPException(400, "Key 校验失败。请确认 Key 和 Base URL。")

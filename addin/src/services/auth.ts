@@ -24,9 +24,6 @@ export interface AuthState {
 export async function setupDirectMode(key: string): Promise<AuthState> {
   const trimmed = key.trim();
   if (!trimmed) return { status: 'error', error: 'API key is empty.' };
-  if (!trimmed.startsWith('sk-')) {
-    return { status: 'error', error: 'Invalid key format. DeepSeek keys start with "sk-".' };
-  }
 
   const ok = await validateApiKey(trimmed);
   if (!ok) return { status: 'error', error: 'Key 校验失败。请确认 Key 和供应商。' };
@@ -42,9 +39,6 @@ export async function setupProxyMode(url: string, apiKey: string): Promise<AuthS
   const trimmedUrl = url.trim();
   if (!trimmedUrl) return { status: 'error', error: 'Proxy URL is empty.' };
   if (!apiKey.trim()) return { status: 'error', error: 'API key is empty.' };
-  if (!apiKey.trim().startsWith('sk-')) {
-    return { status: 'error', error: 'Invalid key format. API keys start with "sk-".' };
-  }
 
   // In proxy mode, let the backend validate the key (avoids CORS issues)
   setProxyUrl(trimmedUrl);

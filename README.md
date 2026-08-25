@@ -67,7 +67,7 @@ claude-excel/
 A: 管理员运行一次 `npx office-addin-dev-certs install`。
 
 **Q: Key 验证失败？**  
-A: Key 应以 `sk-` 开头，并确认能访问供应商 API。
+A: Key 格式因供应商而异（DeepSeek 以 `sk-` 开头；智谱 GLM / 通义 Qwen 等无前缀），确认填的是对应供应商的 API Key 且能访问。
 
 **Q: 如何加新工具？**  
 A: 见 `skills/README.md`。manifest 没有 executor 时后端会拒绝启动。
