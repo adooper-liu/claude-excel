@@ -17,6 +17,7 @@ addin/dist/
 config.json
 data.db
 uploads/
+.workbuddy/
 
 # IDE
 .vscode/
