@@ -450,7 +450,7 @@ async def fetch_url_content(
                     return {"error": f"invalid or blocked url: {current!r}"}
                 resp = await client.get(
                     hop,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; ClaudeExcel/1.0)"},
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; SheetWise/1.0)"},
                     auth=auth,
                 )
                 if resp.status_code in (301, 302, 303, 307, 308):

@@ -1,4 +1,4 @@
-# Claude Excel
+# SheetWise
 
 AI 驱动的**独立** Excel 加载项——不绑 Claude 付费账号，填自己的 API Key 即可用。在工作簿侧边栏用自然语言读写、清洗、格式化、做图、透视、对账，结果直接写回单元格。
 

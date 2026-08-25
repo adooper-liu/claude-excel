@@ -5,9 +5,9 @@
   xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="TaskPaneApp">
   <Id>05c2e1c9-3e1d-406e-9a91-e9ac64854143</Id>
   <Version>1.0.5.0</Version>
-  <ProviderName>Mind for Sheet</ProviderName>
+  <ProviderName>SheetWise</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Mind for Sheet"/>
+  <DisplayName DefaultValue="SheetWise"/>
   <Description DefaultValue="Spreadsheet craftsman AI — reconcile, reshape, and talk to the live workbook."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
@@ -193,13 +193,13 @@
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html" />
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Mind for Sheet" />
-        <bt:String id="CommandsGroup.Label" DefaultValue="Mind for Sheet" />
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Mind for Sheet" />
+        <bt:String id="GetStarted.Title" DefaultValue="SheetWise" />
+        <bt:String id="CommandsGroup.Label" DefaultValue="SheetWise" />
+        <bt:String id="TaskpaneButton.Label" DefaultValue="SheetWise" />
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="AI assistant loaded. Configure your API key in Settings, then select data and ask questions." />
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open Mind for Sheet" />
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open SheetWise" />
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

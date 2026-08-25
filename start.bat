@@ -1,6 +1,6 @@
 @echo off
 echo ==========================================
-echo   Claude Excel
+echo   SheetWise
 echo ==========================================
 echo.
 cd /d "%~dp0backend"

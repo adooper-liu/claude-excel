@@ -706,7 +706,7 @@ export default function App(): JSX.Element {
 
   return <>
     <div className="app-header">
-      <img className="header-logo" src="/assets/icon-32.png" alt="Mind for Sheet" width={22} height={22} />
+      <img className="header-logo" src="/assets/icon-32.png" alt="SheetWise" width={22} height={22} />
       <SelectionBadge
         address={selection?.address}
         rows={selection?.rows}

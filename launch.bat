@@ -1,10 +1,10 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Mind for Sheet
+title SheetWise
 
 echo ====================================================
-echo       Mind for Sheet launcher
+echo       SheetWise launcher
 echo ====================================================
 
 echo [1/5] Checking environment...
@@ -46,7 +46,7 @@ echo OK: Certificates ready.
 
 echo [3/5] Starting backend...
 rem Use cmd /k so backend window stays open on failure (no flash-close).
-start "Mind-for-Sheet-Backend" /D "%~dp0" cmd /k "python backend\server.py"
+start "SheetWise-Backend" /D "%~dp0" cmd /k "python backend\server.py"
 
 echo [4/5] Waiting for backend...
 set /a count=0
@@ -54,7 +54,7 @@ set /a count=0
 set /a count+=1
 if %count% gtr 25 (
     echo Error: Backend did not respond in time.
-    echo Check the Mind-for-Sheet-Backend window.
+    echo Check the SheetWise-Backend window.
     pause
     exit /b 1
 )

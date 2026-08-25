@@ -9,7 +9,7 @@
 平台 (Amazon/…) → ERP 水厂 (清洗/鉴权) → [connector 拉数] → 本机 Excel 临时表 → Skill recipe → 新结果 sheet
 ```
 
-Claude Excel **不重建水厂**；connector 从 ERP OpenAPI 或 Phase 1 的 CSV fixture **取同构表**。
+SheetWise **不重建水厂**；connector 从 ERP OpenAPI 或 Phase 1 的 CSV fixture **取同构表**。
 
 ## 输出契约（recipe 只读这一层）
 

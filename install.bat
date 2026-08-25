@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ==========================================
-echo   Claude Excel - 首次安装
+echo   SheetWise - 首次安装
 echo ==========================================
 echo.
 

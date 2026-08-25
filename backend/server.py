@@ -266,7 +266,7 @@ async def lifespan(_app: FastAPI):
     await close_all_sessions()
 
 
-app = FastAPI(title="Claude Excel", version="3.0.0", lifespan=lifespan)
+app = FastAPI(title="SheetWise", version="3.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -281,7 +281,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ingest_app = FastAPI(title="Claude Excel ingest")
+ingest_app = FastAPI(title="SheetWise ingest")
 ingest_app.add_middleware(
     CORSMiddleware,
     allow_origins=[],
@@ -805,7 +805,7 @@ if __name__ == "__main__":
     use_ssl = CERT.exists() and KEY.exists()
     proto = "https" if use_ssl else "http"
     print("=" * 50)
-    print("  Claude Excel (Excel add-in backend)")
+    print("  SheetWise (Excel add-in backend)")
     print(f"  {proto}://localhost:8765")
     print("  extension ingest http://127.0.0.1:8766")
     print("=" * 50)

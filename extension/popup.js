@@ -6,7 +6,7 @@ const titleEl = document.getElementById("title");
 
 try {
   const ver = chrome.runtime.getManifest().version;
-  if (titleEl && ver) titleEl.textContent = "Claude Excel 取数 v" + ver;
+  if (titleEl && ver) titleEl.textContent = "SheetWise 取数 v" + ver;
 } catch (e) {
   /* ignore */
 }

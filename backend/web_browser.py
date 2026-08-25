@@ -81,7 +81,7 @@ BANNER_JS = """() => {
     );
     (document.body || document.documentElement).appendChild(b);
   }
-  b.textContent = "Claude Excel 跟手取数：点选/框选和写入都在本窗口完成，不必回到 Excel。翻页请先点「浏览/翻页」。";
+  b.textContent = "SheetWise 跟手取数：点选/框选和写入都在本窗口完成，不必回到 Excel。翻页请先点「浏览/翻页」。";
 }"""
 
 HIGHLIGHT_JS = """(i) => {
