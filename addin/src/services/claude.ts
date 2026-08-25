@@ -9,6 +9,7 @@
  */
 
 import { appendSummaryNudge, compactToolDigest, parseAssistantContent } from './agent-finish';
+import { API_BASE } from './api-config';
 import { fromApiToolName, mapToolsForApi } from './tool-name-api';
 
 export type ApiMode = 'direct' | 'proxy';
@@ -44,7 +45,7 @@ const DEFAULT_CONFIG: ProviderConfig = {
 
 let apiMode: ApiMode = 'proxy';
 let directApiKey = '';
-let proxyBaseUrl = 'https://localhost:8765';
+let proxyBaseUrl = API_BASE;
 let providerConfig: ProviderConfig = { ...DEFAULT_CONFIG };
 
 // ── Mode ──────────────────────────────────────────────────────

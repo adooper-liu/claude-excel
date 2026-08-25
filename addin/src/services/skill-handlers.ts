@@ -3,6 +3,7 @@ import { selectionToMarkdown } from './context';
 import type { ToolCall } from './claude';
 import { HANDLED_TOOLS } from './skill-registry';
 import { parseFormatInput } from '../excel/format-core';
+import { API_BASE } from './api-config';
 
 export interface HandlerContext {
   excel: typeof Excel;
@@ -408,7 +409,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
       case 'web_fetch': {
         const url = String(input.url || '').trim();
         if (!url) return JSON.stringify({ error: 'url required' });
-        const r = await fetch('https://localhost:8765/api/web-fetch', {
+        const r = await fetch(API_BASE + '/api/web-fetch', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ url }),
@@ -422,7 +423,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const payload: Record<string, unknown> = { query };
         if (input.topK != null) payload.topK = input.topK;
         if (input.docId != null) payload.docId = input.docId;
-        const r = await fetch('https://localhost:8765/api/knowledge/search', {
+        const r = await fetch(API_BASE + '/api/knowledge/search', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(payload),
@@ -460,7 +461,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const fileKey = await E.workbookFileKey();
         let r: Response;
         try {
-          r = await fetch('https://localhost:8765/api/table-structure', {
+          r = await fetch(API_BASE + '/api/table-structure', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -485,7 +486,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         let r: Response;
         try {
           r = await fetch(
-            'https://localhost:8765/api/table-structure?fileKey=' +
+            API_BASE + '/api/table-structure?fileKey=' +
               encodeURIComponent(fileKey) +
               '&sheet=' +
               encodeURIComponent(sheet)

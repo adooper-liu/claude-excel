@@ -1,6 +1,5 @@
 import type { ProjectColumnSpec } from "./reshape-core";
-
-const API = "https://localhost:8765";
+import { API_BASE } from "../services/api-config";
 
 export interface RecipeProjectHit {
   columns: ProjectColumnSpec[];
@@ -60,7 +59,7 @@ export async function fetchRecipeProject(opts: {
   if (opts.sheetName) params.set("sheet", opts.sheetName);
   if (opts.targets && opts.targets.length) params.set("targets", opts.targets.join("/"));
   try {
-    const r = await fetch(API + "/api/fetch-recipe/project?" + params.toString());
+    const r = await fetch(API_BASE + "/api/fetch-recipe/project?" + params.toString());
     if (!r.ok) return null;
     const data = (await r.json()) as {
       project?: { columns?: unknown[]; headerless?: boolean } | null;
@@ -85,7 +84,7 @@ export async function fetchRecipeTargets(sheetName: string): Promise<string[]> {
   const params = new URLSearchParams();
   params.set("sheet", sheetName);
   try {
-    const r = await fetch(API + "/api/fetch-recipe/project?" + params.toString());
+    const r = await fetch(API_BASE + "/api/fetch-recipe/project?" + params.toString());
     if (!r.ok) return [];
     const data = (await r.json()) as { targets?: string[] };
     return Array.isArray(data.targets) ? data.targets.filter(Boolean) : [];

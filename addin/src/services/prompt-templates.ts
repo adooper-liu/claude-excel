@@ -1,7 +1,9 @@
+import { API_BASE } from "./api-config";
+
 export type PromptTemplate = { id: string; title: string; prompt: string; custom?: boolean };
 
 export const CUSTOM_PROMPTS_LS_KEY = "claude_excel_custom_prompts";
-export const TEMPLATES_API = "https://localhost:8765/api/templates";
+export const TEMPLATES_API = API_BASE + "/api/templates";
 
 export const BUILTIN_PROMPTS: PromptTemplate[] = [
   {

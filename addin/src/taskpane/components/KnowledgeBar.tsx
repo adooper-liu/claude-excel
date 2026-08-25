@@ -3,8 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-
-const API = "https://localhost:8765";
+import { API_BASE } from "../../services/api-config";
 
 export type KnowledgeDoc = {
   id: string;
@@ -36,7 +35,7 @@ async function readJson(r: Response): Promise<Record<string, unknown>> {
 }
 
 async function getJson(path: string): Promise<Record<string, unknown>> {
-  const r = await fetch(API + path);
+  const r = await fetch(API_BASE + path);
   const data = await readJson(r);
   if (!r.ok) {
     const detail = (data as { detail?: string }).detail;
@@ -49,7 +48,7 @@ async function getJson(path: string): Promise<Record<string, unknown>> {
 }
 
 async function postJson(path: string, body: object): Promise<Record<string, unknown>> {
-  const r = await fetch(API + path, {
+  const r = await fetch(API_BASE + path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -66,7 +65,7 @@ async function postJson(path: string, body: object): Promise<Record<string, unkn
 }
 
 async function del(path: string): Promise<void> {
-  const r = await fetch(API + path, { method: "DELETE" });
+  const r = await fetch(API_BASE + path, { method: "DELETE" });
   if (!r.ok) {
     const data = await readJson(r);
     const err = (data as { detail?: string }).detail || r.statusText;

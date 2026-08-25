@@ -20,6 +20,7 @@ import HistoryPanel from './HistoryPanel';
 import SessionList from './SessionList';
 import PackMenu from './PackMenu';
 import TokenBadge from './TokenBadge';
+import { API_BASE } from '../../services/api-config';
 import {
   bootChat,
   hasChatContent,
@@ -188,7 +189,7 @@ async function knownTableMarkerLine(): Promise<string> {
   try {
     const fileKey = await Excel.workbookFileKey();
     const r = await fetch(
-      'https://localhost:8765/api/table-structure/all?fileKey=' + encodeURIComponent(fileKey)
+      API_BASE + '/api/table-structure/all?fileKey=' + encodeURIComponent(fileKey)
     );
     const data = (await r.json()) as {
       tables?: Array<{
@@ -279,14 +280,14 @@ export default function App(): JSX.Element {
       const wasConnected = localStorage.getItem('claude_excel_configured');
       if (wasConnected === 'true') {
         try {
-          const r = await fetch('https://localhost:8765/api/config');
+          const r = await fetch(API_BASE + '/api/config');
           const c = await r.json();
           if (c.hasKey) { setAuthStatus('ready'); setCheckingConfig(false); return; }
         } catch { /* fall through */ }
         setAuthStatus('ready'); setCheckingConfig(false); return;
       }
       try {
-        const r = await fetch('https://localhost:8765/api/config');
+        const r = await fetch(API_BASE + '/api/config');
         const c = await r.json();
         if (c.hasKey) { localStorage.setItem('claude_excel_configured', 'true'); setAuthStatus('ready'); setCheckingConfig(false); return; }
       } catch { /* no backend */ }
@@ -471,7 +472,7 @@ export default function App(): JSX.Element {
       if ((err as Error)?.name === 'AbortError') return;
       const msg = err instanceof Error ? err.message : String(err);
       const hint = /Failed to fetch|NetworkError|Load failed/i.test(msg)
-        ? '后端连不上（https://localhost:8765）。请先运行 launch.bat，或单独执行：python backend/server.py'
+        ? `后端连不上（${API_BASE}）。请先运行 launch.bat，或单独执行：python backend/server.py`
         : msg;
       setIf(prev => prev.map(m => m.id === aid ? { ...m, content: `Error: ${hint}` } : m));
     } finally {
@@ -567,7 +568,7 @@ export default function App(): JSX.Element {
       if (!ingestBusy.current) {
         ingestBusy.current = true;
         try {
-          const r = await fetch("https://localhost:8765/api/web-ingest/pending");
+          const r = await fetch(API_BASE + "/api/web-ingest/pending");
           const data = await r.json();
           const job = data && data.job;
           if (job && Array.isArray(job.rows) && job.rows.length) {
@@ -612,7 +613,7 @@ export default function App(): JSX.Element {
                 content: msg,
               }));
             }
-            await fetch("https://localhost:8765/api/web-ingest/ack", {
+            await fetch(API_BASE + "/api/web-ingest/ack", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ id: job.id }),

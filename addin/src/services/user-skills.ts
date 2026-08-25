@@ -1,4 +1,5 @@
 import type { ToolDef } from "./claude";
+import { API_BASE } from "./api-config";
 
 export type InstalledSkill = {
   id: string;
@@ -44,8 +45,8 @@ export type Pack = {
   installed: boolean;
 };
 
-const API = "https://localhost:8765/api/user-skills";
-const USER_FN_API = "https://localhost:8765/api/user-fn";
+const API = API_BASE + "/api/user-skills";
+const USER_FN_API = API_BASE + "/api/user-fn";
 
 function asList(data: unknown): InstalledSkill[] {
   const skills = data && typeof data === "object" ? (data as { skills?: unknown }).skills : null;

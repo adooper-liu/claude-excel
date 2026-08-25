@@ -9,6 +9,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import type { ApiMode } from '../../services/claude';
 import { setMode, setBaseUrl, setModel, setSmallFastModel, setProviderConfig } from '../../services/claude';
 import { setupDirectMode, setupProxyMode, AuthStatus } from '../../services/auth';
+import { API_BASE } from '../../services/api-config';
 
 interface Props {
   onReady: () => void;
@@ -57,7 +58,7 @@ const PRESETS: Record<string, ProviderPreset> = {
 export default function SettingsPanel({ onReady }: Props): JSX.Element {
   const [mode, setModeState] = useState<ApiMode>('proxy');
   const [apiKey, setApiKey] = useState('');
-  const [proxyUrl, setProxyUrl] = useState('https://localhost:8765');
+  const [proxyUrl, setProxyUrl] = useState(API_BASE);
   const [preset, setPreset] = useState('deepseek');
   const [baseUrl, setBaseUrlState] = useState(PRESETS.deepseek.baseUrl);
   const [model, setModelState] = useState(PRESETS.deepseek.model);
@@ -162,7 +163,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
             type="text"
             value={proxyUrl}
             onChange={e => setProxyUrl(e.target.value)}
-            placeholder="https://localhost:8765"
+            placeholder={API_BASE}
           />
           <div style={{ fontSize: 10, color: '#999', marginBottom: 8 }}>
             Config is sent to the backend and stored server-side.

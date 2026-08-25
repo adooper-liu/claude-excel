@@ -9,6 +9,7 @@ import {
   presetShortLabel,
   type FetchUrlPreset,
 } from "../../services/fetch-url-presets";
+import { API_BASE } from "../../services/api-config";
 
 export type FetchRows = (string | number)[][];
 
@@ -19,10 +20,8 @@ interface Props {
 
 type Phase = "idle" | "opening" | "picking";
 
-const API = "https://localhost:8765";
-
 async function postJson(path: string, body: object, signal?: AbortSignal): Promise<Record<string, unknown>> {
-  const r = await fetch(API + path, {
+  const r = await fetch(API_BASE + path, {
     method: "POST",
     headers: { "content-type": "application/json" },
     signal,
@@ -109,7 +108,7 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
     setPathLoading(true);
     setPathErr("");
     try {
-      const r = await fetch(API + "/api/fetch-recipe?url=" + encodeURIComponent(target));
+      const r = await fetch(API_BASE + "/api/fetch-recipe?url=" + encodeURIComponent(target));
       const data = (await r.json()) as Record<string, unknown>;
       const steps = String(data.stepsMarkdown || "").trim();
       const disk = String(data.path || "").trim();
@@ -191,7 +190,7 @@ export default function FetchBar({ disabled, onFetched }: Props): JSX.Element {
             setNote(data.append ? `已追加到「${name}」。可在网页翻页后再追加。` : `已写入「${name}」。翻页后在网页点追加。`);
             setErr("");
             if (url.trim()) {
-              void fetch(API + "/api/fetch-recipe?url=" + encodeURIComponent(url.trim()))
+              void fetch(API_BASE + "/api/fetch-recipe?url=" + encodeURIComponent(url.trim()))
                 .then(function (r) {
                   return r.json();
                 })

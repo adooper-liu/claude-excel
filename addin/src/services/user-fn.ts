@@ -1,6 +1,7 @@
 import type { ToolCall } from "./claude";
+import { API_BASE } from "./api-config";
 
-const API = "https://localhost:8765/api/user-fn";
+const API = API_BASE + "/api/user-fn";
 
 export type ConnectorFeedPayload = {
   feed: string;
