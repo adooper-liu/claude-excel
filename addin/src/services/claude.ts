@@ -39,7 +39,7 @@ const API_VERSION = '2023-06-01';
 // Default config (DeepSeek)
 const DEFAULT_CONFIG: ProviderConfig = {
   baseUrl: 'https://api.deepseek.com/anthropic',
-  model: 'deepseek-v4-pro[1m]',
+  model: 'deepseek-v4-pro',
   smallFastModel: 'deepseek-v4-flash',
 };
 
