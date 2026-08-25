@@ -44,6 +44,7 @@
 | `docs/document-usage.md` | 人 | 本文——每份文档的消费者清单 |
 | `docs/coordination.md` | Claude Code · Cursor | 完整协同规则（主目录/分支/阶段/交接/串行化/会话生命周期） |
 | `docs/harness-guide.md` | 人 · Claude Code | Harness 六层框架摘要 + 本项目对照（参考文档；来源 liziran.com 长文） |
+| `docs/migration.md` | 人 | 换机台 / 新机台部署时对照执行（README 快速启动的增量：带数据走 + 重建机台相关项） |
 | `docs/tasks/*.md` | Claude Code · Cursor | 任务 brief（目标/边界/验收/方案/Review notes/进度 log） |
 | `docs/user-packs.md` | 人 · Cursor | P0 Pack 设计（目录/schema/API/禁令/checklist） |
 | `docs/user-extensions-security.md` | 人 · Cursor | P1 `user.*` 安全边界（威胁模型/子进程/信任门/能力声明） |
