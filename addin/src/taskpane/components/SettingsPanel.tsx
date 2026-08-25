@@ -38,7 +38,7 @@ const PRESETS: Record<string, ProviderPreset> = {
   glm: {
     name: '智谱 GLM',
     baseUrl: 'https://open.bigmodel.cn/api/anthropic',
-    model: 'glm-4-plus',
+    model: 'glm-4.7',
     smallFastModel: 'glm-4-flash',
   },
   minimax: {
