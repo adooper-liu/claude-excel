@@ -169,4 +169,37 @@
 | 7 | ERP 报表不能调假设（领星/积加假设固定） | 参数 sheet 活调汇率/退款率/ACOS，假设归用户 | `假设参数` + `write_inputs` |
 | 8 | 大文件 Excel 卡崩（10 万行+） | 本机 `user.*` 子进程算，Excel 只承载结果 | `handler.py` subprocess |
 | 9 | 多平台格式不同（Amazon/TikTok/Shopee 各一套） | connector 抽象，每平台一个实现，输出统一 schema | `connector/base.py` + `implementations/` |
-| 10 | 编码打开即乱，无法批量处理 | 编码检测 fallback（UTF-8 → GBK → Latin1） | `handler.py` + `dirty_patterns.md` |", "file_path": "d:\\claude-excel\\docs\\pain-points.md"}
+| 10 | 编码打开即乱，无法批量处理 | 编码检测 fallback（UTF-8 → GBK → Latin1） | `handler.py` + `dirty_patterns.md` |
+
+---
+
+## H. 知无不言痛点矿实证（2026-08-25 抓取，A 级=直接抓取观察）
+
+> 数据源：`tmp/wearesellers-scraper/wearesellers.db`。Amazon 板块全量 437 页扫描，关键词（对账/结算/回款/ACOS/退款/退货，含英文）预过滤入库，命中矿 **1268 条**。标题级信号，未抓正文；引用前点链接核对语境。完整聚类见 `painpoints_report_mine.md`。
+
+### H1. 六类关键词矿规模（Amazon 板块内，一帖可多词）
+
+| 关键词 | 命中 | 高热度(回复≥50) | 对应痛点/场景 |
+|---|---|---|---|
+| 退货 | 450 | 6 | H3 退货率敏感性（高退货率标签焦虑） |
+| ACOS | 364 | 22 | H1 净利核算（广告占比失控） |
+| 退款 | 253 | 6 | H3 退款/政策焦虑 |
+| 对账 | 160 | 1 | H1/H2 对账 |
+| 回款 | 99 | 6 | H2 结算回款（报税口径之争） |
+| 结算 | 20 | 0 | H2 结算拆解 |
+
+### H2. 实证的高热度种子帖（可直接做对外钩子）
+
+| 画像 | 实证帖（回复/浏览） |
+|---|---|
+| ACOS 失控 | [acos 上升，单量下降，做了两年的老品越来越差](https://www.wearesellers.com/question/63706)（127/21296）；[广告预算加了 ACOS 飙升不出单](https://www.wearesellers.com/question/116482)（110/17242） |
+| 毛利/回款口径扯皮 | [提成怎么算？毛利，纯利，回款，我到现在还不明白毛利到底要减去哪些玩意](https://www.wearesellers.com/question/48340)（103/20895） |
+| 单干回款核算 | [总回款 62 万+，每人分钱 4.6W，附回款表和近一年利润表](https://www.wearesellers.com/question/102797)（107/41851） |
+| 退货政策焦虑 | [高退货率标签移到标题下方，转化率疯狂下降](https://www.wearesellers.com/question/104185)（51/8848）；[退货率 23% 的产品踩坑](https://www.wearesellers.com/question/66119)（32/12302） |
+| 结算口径困惑 | [亚马逊报送按销售额还是回款？我们收到了税务电话](https://www.wearesellers.com/question/111616)（76/34116） |
+
+### H3. 对发布策略的含义
+
+- 种子用户画像由假设升级为实证（对应 `docs/competitive-landscape.md` §5.1）；Top 50 种子帖清单见 `amazon_mine_stats.json`。
+- 新发现画像：**毛利/回款口径扯皮**（老板 vs 运营提成口径之争）——比"算不准"更痛的入口是"口径说不清"，正好打「口径透明 + 假设可改 + 可复核」三条差异。
+- 抓取脚本可复用：`scrape_wearesellers.py --keywords "..."`（关键词模式全量翻页、命中才入库）；`analyze_painpoints.py --keywords "..."` 出矿报告。", "file_path": "d:\\claude-excel\\docs\\pain-points.md"}
