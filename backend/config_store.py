@@ -15,26 +15,18 @@ DEFAULT_PROVIDERS = {
     "deepseek": {
         "apiKey": "",
         "baseUrl": "https://api.deepseek.com/anthropic",
-        "model": "deepseek-v4-flash[1m]",
-        "smallFastModel": "deepseek-v4-flash",
     },
     "qwen": {
         "apiKey": "",
         "baseUrl": "https://dashscope.aliyuncs.com/apps/anthropic",
-        "model": "qwen3-coder-plus",
-        "smallFastModel": "qwen-flash",
     },
     "glm": {
         "apiKey": "",
         "baseUrl": "https://open.bigmodel.cn/api/anthropic",
-        "model": "glm-4.7",
-        "smallFastModel": "glm-4.7",
     },
     "minimax": {
         "apiKey": "",
         "baseUrl": "https://api.minimax.chat/anthropic",
-        "model": "minimax-m1",
-        "smallFastModel": "minimax-m1",
     },
 }
 
@@ -149,14 +141,14 @@ def get_model() -> str:
     env_model = os.getenv("ANTHROPIC_MODEL") or ""
     if env_model:
         return env_model
-    return _active_provider().get("model", DEFAULT_PROVIDERS["deepseek"]["model"])
+    return _active_provider().get("model", "")
 
 
 def get_small_fast_model() -> str:
     env_model = os.getenv("ANTHROPIC_SMALL_FAST_MODEL") or ""
     if env_model:
         return env_model
-    return _active_provider().get("smallFastModel", DEFAULT_PROVIDERS["deepseek"]["smallFastModel"])
+    return _active_provider().get("smallFastModel", "")
 
 
 def save_provider(provider_id: str, data: dict):

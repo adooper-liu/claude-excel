@@ -2,12 +2,12 @@
  * SettingsPanel.tsx — Multi-provider API configuration.
  *
  * Supports any Anthropic-compatible API: DeepSeek, Qwen (Alibaba), GLM (Zhipu),
- * MiniMax, or custom endpoint. Provider presets auto-fill Base URL + Model.
+ * MiniMax, or custom endpoint. 模型名不从代码预设——填 key 后从云端获取选择。
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
 import type { ApiMode } from '../../services/claude';
-import { setMode, setBaseUrl, setModel, setSmallFastModel, setProviderConfig } from '../../services/claude';
+import { setMode, setProviderConfig } from '../../services/claude';
 import { setupDirectMode, setupProxyMode, switchProvider, AuthStatus } from '../../services/auth';
 import { API_BASE } from '../../services/api-config';
 
@@ -18,41 +18,14 @@ interface Props {
 interface ProviderPreset {
   name: string;
   baseUrl: string;
-  model: string;
-  smallFastModel: string;
 }
 
 const PRESETS: Record<string, ProviderPreset> = {
-  deepseek: {
-    name: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/anthropic',
-    model: 'deepseek-v4-flash[1m]',
-    smallFastModel: 'deepseek-v4-flash',
-  },
-  qwen: {
-    name: '阿里百炼 (通义千问)',
-    baseUrl: 'https://dashscope.aliyuncs.com/apps/anthropic',
-    model: 'qwen3-coder-plus',
-    smallFastModel: 'qwen-flash',
-  },
-  glm: {
-    name: '智谱 GLM',
-    baseUrl: 'https://open.bigmodel.cn/api/anthropic',
-    model: 'glm-4.7',
-    smallFastModel: 'glm-4.7',
-  },
-  minimax: {
-    name: 'MiniMax',
-    baseUrl: 'https://api.minimax.chat/anthropic',
-    model: 'minimax-m1',
-    smallFastModel: 'minimax-m1',
-  },
-  custom: {
-    name: 'Custom (手动输入)',
-    baseUrl: '',
-    model: '',
-    smallFastModel: '',
-  },
+  deepseek: { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/anthropic' },
+  qwen: { name: '阿里百炼 (通义千问)', baseUrl: 'https://dashscope.aliyuncs.com/apps/anthropic' },
+  glm: { name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/anthropic' },
+  minimax: { name: 'MiniMax', baseUrl: 'https://api.minimax.chat/anthropic' },
+  custom: { name: 'Custom (手动输入)', baseUrl: '' },
 };
 
 export default function SettingsPanel({ onReady }: Props): JSX.Element {
@@ -61,22 +34,23 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
   const [proxyUrl, setProxyUrl] = useState(API_BASE);
   const [preset, setPreset] = useState('deepseek');
   const [baseUrl, setBaseUrlState] = useState(PRESETS.deepseek.baseUrl);
-  const [model, setModelState] = useState(PRESETS.deepseek.model);
-  const [smallFastModel, setSmallFastModelState] = useState(PRESETS.deepseek.smallFastModel);
+  const [model, setModelState] = useState('');
+  const [smallFastModel, setSmallFastModelState] = useState('');
+  const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [status, setStatus] = useState<{ type: AuthStatus; msg?: string }>({ type: 'unconfigured' });
   const [loading, setLoading] = useState(false);
   const [configuredProviders, setConfiguredProviders] = useState<Record<string, { hasKey: boolean; baseUrl: string; model: string }>>({});
   const [activeProvider, setActiveProvider] = useState('deepseek');
 
-  // When preset changes, update fields
+  // 切换 preset 只填 baseUrl，模型清空待重新获取
   const handlePresetChange = useCallback((key: string) => {
     setPreset(key);
     const p = PRESETS[key];
-    if (p) {
-      if (p.baseUrl) setBaseUrlState(p.baseUrl);
-      if (p.model) setModelState(p.model);
-      if (p.smallFastModel) setSmallFastModelState(p.smallFastModel);
-    }
+    if (p && p.baseUrl) setBaseUrlState(p.baseUrl);
+    setModelState('');
+    setSmallFastModelState('');
+    setModels([]);
   }, []);
 
   // 拉取后端已配置的 provider 状态（不含 key），用于切换展示
@@ -100,7 +74,41 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
     void loadConfiguredProviders();
   }, [loadConfiguredProviders]);
 
+  // 用 key 从云端拉取该 provider 的模型列表
+  const handleFetchModels = useCallback(async () => {
+    if (!baseUrl.trim() || !apiKey.trim()) {
+      setStatus({ type: 'error', msg: '请先填 baseUrl 和 API Key' });
+      return;
+    }
+    setLoadingModels(true);
+    try {
+      const r = await fetch(`${proxyUrl}/api/models/list`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ baseUrl, apiKey }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        setStatus({ type: 'error', msg: `获取模型失败：${r.status} ${err}` });
+        return;
+      }
+      const data = (await r.json()) as { models?: Array<{ id: string; name: string }> };
+      setModels(data.models || []);
+      if (!data.models?.length) {
+        setStatus({ type: 'error', msg: '该 provider 未返回模型列表，请确认 key 与 baseUrl' });
+      }
+    } catch {
+      setStatus({ type: 'error', msg: '获取模型列表失败：无法连接后端' });
+    } finally {
+      setLoadingModels(false);
+    }
+  }, [baseUrl, apiKey, proxyUrl]);
+
   const handleConnect = useCallback(async () => {
+    if (!model.trim()) {
+      setStatus({ type: 'error', msg: '请先获取模型列表并选择主模型' });
+      return;
+    }
     setLoading(true);
     setStatus({ type: 'validating' });
 
@@ -174,7 +182,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
         type="password"
         value={apiKey}
         onChange={(e) => setApiKey(e.target.value)}
-        placeholder="sk-..."
+        placeholder="贴入该 provider 的 API key"
       />
 
       <label>Base URL (Anthropic-compatible)</label>
@@ -189,26 +197,29 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       />
 
       <label>Model</label>
-      <input
-        type="text"
-        value={model}
-        onChange={(e) => {
-          setModelState(e.target.value);
-          setPreset('custom');
-        }}
-        placeholder="deepseek-v4-pro[1m]"
-      />
+      <div className="settings-model-row">
+        <select value={model} onChange={(e) => setModelState(e.target.value)}>
+          <option value="">— 先获取模型列表 —</option>
+          {models.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+        <button onClick={handleFetchModels} disabled={loadingModels || !apiKey.trim()}>
+          {loadingModels ? '获取中...' : '获取模型列表'}
+        </button>
+      </div>
 
       <label>Small / Fast Model</label>
-      <input
-        type="text"
-        value={smallFastModel}
-        onChange={(e) => {
-          setSmallFastModelState(e.target.value);
-          setPreset('custom');
-        }}
-        placeholder="deepseek-v4-flash"
-      />
+      <select value={smallFastModel} onChange={(e) => setSmallFastModelState(e.target.value)}>
+        <option value="">— 不指定 —</option>
+        {models.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.name}
+          </option>
+        ))}
+      </select>
 
       <label>Connection Mode</label>
       <select value={mode} onChange={(e) => setModeState(e.target.value as ApiMode)}>

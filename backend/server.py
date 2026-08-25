@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import httpx
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.routing import APIRouter
 import uvicorn
 
-from ai_proxy import chat_complete, chat_stream, validate_key
+from ai_proxy import chat_complete, chat_stream, validate_key, fetch_models
 from config_store import get_config, get_provider_status, save_provider, set_active_provider, get_active_provider
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
@@ -380,6 +381,23 @@ async def api_validate_key(req: dict):
         return {"valid": False, "error": "apiKey required"}
     valid = await validate_key(api_key, base_url, req.get("model"))
     return {"valid": valid}
+
+
+@app.post("/api/models/list")
+async def api_models_list(req: dict):
+    base_url = (req.get("baseUrl") or "").strip()
+    api_key = (req.get("apiKey") or "").strip()
+    if not base_url or not api_key:
+        raise HTTPException(400, "baseUrl 和 apiKey 必填")
+    try:
+        models = await fetch_models(base_url, api_key)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            502, f"获取模型列表失败（HTTP {exc.response.status_code}）。请确认 key 与 baseUrl。"
+        )
+    except Exception as exc:
+        raise HTTPException(502, f"获取模型列表失败：{exc}")
+    return {"ok": True, "models": models}
 
 
 @app.post("/api/key/set")

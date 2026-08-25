@@ -92,6 +92,22 @@ async def validate_key(
         return False
 
 
+async def fetch_models(base_url: str, api_key: str) -> list[dict]:
+    """拉取 provider 的模型列表（GET {base_url}/v1/models，需有效 key）。"""
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"{base_url}/v1/models",
+            headers={"x-api-key": api_key, "anthropic-version": API_VERSION},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return [
+            {"id": m.get("id"), "name": m.get("display_name") or m.get("id")}
+            for m in data.get("data", [])
+            if m.get("id")
+        ]
+
+
 async def chat_complete(
     messages: list[dict],
     system_prompt: Optional[Any] = None,
