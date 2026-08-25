@@ -216,6 +216,11 @@ select:focus-visible {
   color: var(--muted);
   margin-bottom: 6px;
 }
+.flyout-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .flyout-empty {
   font-size: var(--fs-ui);
   color: var(--muted);
@@ -937,6 +942,30 @@ select:focus-visible {
   background: var(--cell);
   border-top: 1px solid var(--rule);
   position: relative;
+}
+.finance-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px 0;
+}
+.finance-quick-btn {
+  font: inherit;
+  font-size: var(--fs-meta);
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--cell);
+  color: var(--ink);
+  cursor: pointer;
+}
+.finance-quick-btn:hover:not(:disabled) {
+  border-color: var(--fx);
+  background: var(--fx-fill);
+}
+.finance-quick-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .knowledge-bar {
   border-top: 1px dashed var(--rule);

@@ -91,3 +91,11 @@
 需要补一句到 §5（与 ERP 关系）：**"我们碰的是'如果…会怎样'的决策问题，不是'自动拉数据出报表'的系统问题——后者是 ERP 的活。"** 这句话把 C 类缺口的边界一次说清。
 
 > 边界：全部判断在方案层，不动代码。如要开工，从序 1（H3）起，按 `AGENTS.md` 走 `git-flow.sh check` → 开分支。
+
+---
+
+## 5. 进度 log
+
+| 日期 | 事项 | 说明 |
+|---|---|---|
+| 2026-08-24 | H3 + H2 开工 | 分支 `feat/h3-h2-sensitivity-settlement`：`/业财敏感性` SKILL + 一键按钮；`/结算对账` + settlement/bank feed；`dateWindowDays` 默认 3 可改，可选 settlement_id 精确 |

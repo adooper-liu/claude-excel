@@ -36,6 +36,14 @@ class TestAliasLookup:
         for alias in ("sku", "SKU", "seller_sku", "platform_sku"):
             assert handler.ALIAS_LOOKUP[handler._normalize_header(alias)] == "platform_sku"
 
+    def test_amount_maps_to_amount(self):
+        assert handler.ALIAS_LOOKUP[handler._normalize_header("金额")] == "amount"
+        assert handler.ALIAS_LOOKUP[handler._normalize_header("amount")] == "amount"
+
+    def test_settlement_id_aliases(self):
+        assert handler.ALIAS_LOOKUP[handler._normalize_header("settlement-id")] == "settlement_id"
+        assert handler.ALIAS_LOOKUP[handler._normalize_header("结算号")] == "settlement_id"
+
     def test_no_duplicate_canonical_for_same_alias(self):
         """Every raw alias should resolve to exactly one canonical name."""
         seen: dict[str, str] = {}

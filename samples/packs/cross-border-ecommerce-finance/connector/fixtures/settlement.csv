@@ -1,0 +1,5 @@
+settlement_id,deposit_date,fee_type,amount,currency,sku,order_id
+SET-2026-01-A,2026-01-20,Deposit,38000,USD,,
+SET-2026-01-B,2026-01-28,Deposit,12500.50,USD,,
+SET-2026-01-C,2026-02-05,Deposit,8900,USD,,
+SET-2026-01-ORPHAN,2026-02-10,Deposit,2100,USD,,

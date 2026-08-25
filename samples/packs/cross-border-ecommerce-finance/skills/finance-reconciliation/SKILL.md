@@ -7,8 +7,21 @@ slash: 跨境业财
 # 跨境业财对账（编排手册）
 
 > **强模板**：下列每步给出工具名 + 完整参数骨架。你只填上一步返回的动态值（表名、Table name、counts、hash）。
-> **禁止**：发明工具名、把表体读进对话、用手写格子伪造对账/透视结果、跳步。
+> **禁止**：发明工具名、把表体读进对话、用手写格子伪造对账/透视结果、跳步、另开平行流水线。
 > **口径权威**：数字默认值与净利公式以 Pack 内 `knowledge/profit_formula.md` 为准（与本文件附录 A/B 对齐，改口径=改文档后重装 Pack）。
+
+## 禁止分叉（本技能本回合一律不做）
+
+| 禁止 | 正确替代 |
+|---|---|
+| `user.profit_assumptions` | 步骤 4：`write_to_sheet` + `write_inputs` 写「假设参数」 |
+| `extract_selection` / 新建 `SKU_订单` `SKU_广告` | 步骤 5：`calculate_table` 对**对账结果表**按 `left_platform_sku` 分组 |
+| `calculate_table` 打在 `Pack_订单` / `Pack_广告` 上产出 `订单汇总` `广告汇总` | 同上，`tableName` = 步骤 3 的 `outputTable` |
+| 新建 `利润测算` sheet | 只写「业财利润公式」 |
+| `create_pivot` 打在对账结果表（`T_业财对账结果` / `T_finance_recon`） | 步骤 6：先 `ensure_table(业财利润公式)` 再透视该表 |
+| `read_range` 读 Pack_订单/广告表体凑 SKU 列表 | 禁止；SKU 只来自 `calculate_table` 分组列 |
+
+本回合允许的 `user.*` **仅** `user.connector_load_feed`（且仅步骤 1 缺表时）。其它 `user.*` 即使出现在工具列表里也不要调。
 
 ## 常量（本 Pack）
 
@@ -112,36 +125,73 @@ write_inputs({
 `format_range`：`假设参数!B2:B10` → `bgColor=#FFFF00`（黄底=可改输入）。
 
 ### 5. 口径表（附录 B — 算清楚 + 改得动）
-先按 SKU 拉收入骨架（活 SUMIFS，禁止写死数字）：
+先按 SKU 拉分组骨架（用件数占位即可，收入公式下一步覆盖 B 列）：
 ```
 calculate_table({
   op: "sumifs",
   tableName: "<步骤3 outputTable>",
   groupBy: "left_platform_sku",
-  valueColumn: "left_item_price",
+  valueColumn: "left_quantity",
   outputSheet: "业财利润公式"
 })
 ```
-再在同表用 `write_formula` 按附录 B 补减项列（佣金/FBA/仓储/广告/退款/净利），**全部引用 `假设参数!$B$n`**，禁止魔数。
+再在同表用 `write_formula` 按附录 B 写：**收入=数量×单价×汇率**、佣金/FBA/仓储/广告/退款/净利。  
+**硬约束**：
+- 禁止 `SUMIFS(... left_item_price ...)` 当收入（那是单价求和，丢件数）
+- 禁止死区间（`$列$2:$列$n`）；一律用表结构化引用 `T_xxx[列名]`（`T_xxx` = 步骤 3 的 `outputTable`）
+- 金额类列（收入/FBA/仓储/广告）乘 `'假设参数'!$B$2`（USD→CNY）；混币（GBP/EUR）Phase 1 仍近似，须在结论注明
+- FBA/仓储必须 × 件数（`SUMIFS(...[left_quantity]...)`）
+
+若 `write_to_range` 或 `write_formula` 在横向区间一次写入时返回「输入数组中的行数或列数与区域大小或维度不符」：
+
+1. 不重试同一横向区间写法；
+2. 立刻改为**单格写入**（如 `B1`、`C1`… 或 `D2`、`E2`… 逐格写）；
+3. 首行公式写完后，用 `fill_range` 向下填充到最后一行；
+4. 用 `read_range` + `scan_formula_errors` 抽查（至少表头 1 行 + 公式 1 行）。
+
+该回退是已验证稳定路径，优先保证可执行闭环，禁止因横向批量写失败而中断流程。
 
 COGS：若无映射表，该列写空或提示文本，`format_range` 标黄，**不阻断**净利（COGS 当 0）。
 
 退款：`is_refund` / `platform_status` 含退款的行不进收入基数；有 `refund_amount` 用实值，否则用 `收入×假设参数!$B$4`。
 
-### 6. 透视
+### 6. 透视（默认基于利润口径表）
+先把「业财利润公式」转成表再透视，确保可直接看净利/净利率：
+```
+ensure_table({ sheetName: "业财利润公式" })  → 记下返回 name（如 T_业财利润公式）
+```
 ```
 create_pivot({
-  tableName: "<步骤3 outputTable>",
-  rows: ["left_platform_sku", "left_biz_date"],
+  tableName: "<上一步利润表 Table 名>",
+  rows: ["SKU"],
   values: [
-    { field: "left_item_price", aggregation: "sum" },
-    { field: "right_spend", aggregation: "sum" }
+    { field: "收入", aggregation: "sum" },
+    { field: "净利", aggregation: "sum" },
+    { field: "净利率", aggregation: "average" }
   ],
   outputSheet: "业财利润透视"
 })
 ```
 
-### 7. 把关 + 审计
+### 7. 风险筛选（明确走 sort_filter）
+在「业财利润公式」做两次筛选（或分别输出到新 sheet）：
+```
+sort_filter({
+  sheetName: "业财利润公式",
+  range: "<覆盖表头+数据的区域>",
+  filterBy: [{ column: "净利", operator: "lte", value: "0" }]
+})
+```
+```
+sort_filter({
+  sheetName: "业财利润公式",
+  range: "<覆盖表头+数据的区域>",
+  filterBy: [{ column: "净利率", operator: "lt", value: "<假设参数!B9>" }]
+})
+```
+若工具不支持单元格引用比较值，则先读取 `假设参数!B9` 的当前数值再填入 `value`。
+
+### 8. 把关 + 审计
 组装 `assumptionSnapshot`（只读假设区当前值的 JSON 字符串，如 `{"B2":7.2,"B3":0.15,"B4":0.08,"B5":3.22,"B6":0.035,"B7":1.5,"B8":0.025,"B9":0.1}` — 数值来自上一步写入/用户已改值，**不编造**）。
 
 `note` 模板：
@@ -169,7 +219,7 @@ append_pack_audit({
 
 若 `matchRate < 0.9`：对「业财利润公式」标题行或结果提示区 `format_range` 红字（`color=#FF0000`），文案含「净利为近似口径」。
 
-### 8. 人话结论（附录 C）+ complete
+### 9. 人话结论（附录 C）+ complete
 用附录 C 三段式填空；**只填 summary 数字**（counts、matchRate、假设快照、口径表合计若已由公式算出且你只读了汇总格）。**表体行禁止进上下文**。
 最后 `complete({ result: "<三段式全文>" })`。
 
@@ -195,33 +245,35 @@ append_pack_audit({
 
 ## 附录 B — 口径表公式模板（写活公式，禁止写死）
 
-对「业财利润公式」每个 SKU 行（设 SKU 在 A 列，数据自第 2 行），列布局示例：
+对「业财利润公式」每个 SKU 行（设 SKU 在 A 列，数据自第 2 行）。  
+下面 `T_recon` = 步骤 3 返回的 `outputTable`（如 `T_业财对账结果` / `T_finance_recon`），**禁止**写成 `$列$2:$列$n` 这类死区间。
 
-| 列 | 含义 | 公式骨架（列字母以 inspect 为准） |
-|----|------|----------------------------------|
+| 列 | 含义 | 公式骨架 |
+|----|------|----------|
 | A | SKU | 来自 calculate_table 分组 |
-| B | 收入 | `=SUMIFS(T_finance_recon[left_item_price],T_finance_recon[left_platform_sku],A2)` |
+| B | 收入（CNY） | `=SUMPRODUCT((T_recon[left_platform_sku]=A2)*(T_recon[left_quantity])*(T_recon[left_item_price]))*'假设参数'!$B$2` |
 | C | COGS | 有映射则 `=…`；无则空+黄底 |
-| D | 佣金 | `=B2*假设参数!$B$3` |
-| E | FBA配送 | `=假设参数!$B$5*(1+假设参数!$B$6)`（件数列有则再 × 件数） |
-| F | 仓储 | `=假设参数!$B$7`（或 × 件数） |
-| G | 广告 | `=SUMIFS(T_finance_recon[right_spend],T_finance_recon[left_platform_sku],A2)` |
-| H | 退款 | 优先实退；否则 `=B2*假设参数!$B$4`（仅退款相关 SKU） |
-| I | 支付手续费 | `=B2*假设参数!$B$8` |
+| D | 佣金 | `=B2*'假设参数'!$B$3` |
+| E | FBA配送（CNY） | `=SUMIFS(T_recon[left_quantity],T_recon[left_platform_sku],A2)*'假设参数'!$B$5*(1+'假设参数'!$B$6)*'假设参数'!$B$2` |
+| F | 仓储（CNY） | `=SUMIFS(T_recon[left_quantity],T_recon[left_platform_sku],A2)*'假设参数'!$B$7*'假设参数'!$B$2` |
+| G | 广告（CNY） | `=SUMIFS(T_recon[right_spend],T_recon[left_platform_sku],A2)*'假设参数'!$B$2` |
+| H | 退款 | 优先实退；否则 `=B2*'假设参数'!$B$4`（仅退款相关 SKU） |
+| I | 支付手续费 | `=B2*'假设参数'!$B$8` |
 | J | 净利 | `=B2-IF(C2="",0,C2)-D2-E2-F2-G2-H2-I2` |
 | K | 净利率 | `=IF(B2=0,"",J2/B2)` |
 | L | 来源 | 文本：参数/源表/公式 |
 
-跨表名含中文时加单引号：`='假设参数'!$B$3`。
-写完 `inspect_formulas` 抽查 2–3 格，确认引用的是参数格而非魔数。
+**禁止**：`SUMIFS(T_recon[left_item_price],…)` 当收入（单价求和丢件数）；横向 `$列$2:$列$n` 死区间。  
+表名含中文时结构化引用加单引号：`='T_业财对账结果'[left_quantity]`；参数格：`='假设参数'!$B$2`。  
+写完 `inspect_formulas` / `scan_formula_errors` 抽查 2–3 格，确认：收入含 ×数量×汇率，FBA/仓储含 ×件数×汇率。
 
 ---
 
 ## 附录 C — 三段式结论模板（说清楚）
 
 ```
-① 口径：按假设（汇率 <B2>、佣金 <B3>、退款率 <B4>、FBA <B5>×(1+<B6>)）对 Pack_订单×Pack_广告 做 date_window(7) 对账后，按 SKU 活公式汇总净利（见「业财利润公式」）。
-② 近似：归因点击日≠成交日（≤7 天）；退款为预估除非有 refund_amount；匹配率 <matchRate%>（matched <m>/<total>，review_pending=<n>）。<若 <90%：净利为近似口径，请复核 __review 行。>
+① 口径：收入=数量×单价×汇率(B2)；FBA/仓储按件数×费率×汇率；佣金/退款/手续费按收入比率。对 Pack_订单×Pack_广告 做 date_window(7) 后按 SKU 活公式汇总净利（见「业财利润公式」）。
+② 近似：归因点击日≠成交日（≤7 天）；退款为预估除非有 refund_amount；混币行仍按 B2 近似换算；匹配率 <matchRate%>（matched <m>/<total>，review_pending=<n>）。<若 <90%：净利为近似口径，请复核 __review 行。>
 ③ 风险：请打开「业财利润公式」筛净利≤0 或净利率<目标（B9）的 SKU；TACOS=广告/收入，观察带见 knowledge。本结论数字均可追溯到口径表单元格，未编造。
 ```
 

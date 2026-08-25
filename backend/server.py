@@ -1,6 +1,7 @@
 """server.py — FastAPI backend for the Excel add-in (LLM proxy + static taskpane)."""
 
 import asyncio
+import base64
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,10 +19,12 @@ from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
 from user_packs_store import (
     MAX_IMPORT_BYTES,
+    create_pack,
     export_pack_zip,
     import_pack_zip,
     install_pack,
     list_packs,
+    pack_zip_from_files,
     remove_imported_pack,
     uninstall_pack,
 )
@@ -467,6 +470,55 @@ async def api_import_pack(request: Request, file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {"pack": entry}
+
+
+@app.post("/api/user-skills/create-pack")
+async def api_create_pack(request: Request):
+    """L3 S1: zip → import_pack_zip → install_pack (one call)."""
+    require_loopback(request)
+    ct = (request.headers.get("content-type") or "").lower()
+    consent = False
+    data = b""
+    try:
+        if "application/json" in ct:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise ValueError("body 须为 JSON 对象")
+            consent = body.get("consentExtensions") is True or body.get("consent_extensions") is True
+            files = body.get("files")
+            raw_b64 = body.get("zipBase64") or body.get("zip") or ""
+            if files is not None:
+                data = pack_zip_from_files(files)
+            elif str(raw_b64).strip():
+                try:
+                    data = base64.b64decode(str(raw_b64), validate=False)
+                except Exception as exc:
+                    raise ValueError("zipBase64 无法解码") from exc
+            else:
+                raise ValueError("zipBase64 或 files required")
+        elif "multipart/form-data" in ct:
+            form = await request.form()
+            consent = str(form.get("consentExtensions") or form.get("consent_extensions") or "").lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            up = form.get("file")
+            if up is None or not hasattr(up, "read"):
+                raise ValueError("file required")
+            data = await up.read()
+        else:
+            data = await request.body()
+            q = request.query_params.get("consentExtensions") or request.query_params.get("consent_extensions")
+            consent = str(q or "").lower() in ("1", "true", "yes")
+        if not data:
+            raise ValueError("zip 为空")
+        if len(data) > MAX_IMPORT_BYTES:
+            raise ValueError("zip 超过 5MB 上限")
+        result = create_pack(data, consent_extensions=consent)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"pack": result}
 
 
 @app.delete("/api/user-skills/packs/imported/{pack_id}")

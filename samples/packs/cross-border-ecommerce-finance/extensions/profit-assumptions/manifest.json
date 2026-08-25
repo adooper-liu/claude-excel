@@ -1,6 +1,6 @@
 {
   "name": "user.profit_assumptions",
-  "description": "利润 11 项假设值（参数化，不写格）",
+  "description": "按 ASIN 返回假设默认值 JSON，不写格。/跨境业财 不要调用：假设区用 write_to_sheet + write_inputs。仅当用户明确要 JSON 假设、且不要落表时使用。",
   "entry": "handler.py",
   "params": {
     "type": "object",

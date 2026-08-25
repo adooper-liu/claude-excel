@@ -7,6 +7,7 @@ const {
   parseSlashCommand,
   skillAsk,
   slashDisplay,
+  isPackCreatorExtra,
 } = require("../../src/services/slash-skills");
 
 describe("slash-skills", function () {
@@ -131,5 +132,18 @@ describe("slash-skills", function () {
     assert.ok(ask.indexOf("每月关账") >= 0);
     assert.ok(ask.indexOf("Office JS") >= 0);
     assert.ok(ask.indexOf("订单号") < 0);
+  });
+
+  it("skillAsk for /skill-creator pack enters Pack mode", function () {
+    assert.deepStrictEqual(parseSlashCommand("/skill-creator pack"), {
+      id: "skill-creator",
+      extra: "pack",
+    });
+    assert.ok(isPackCreatorExtra("pack"));
+    assert.ok(isPackCreatorExtra("做成行业包"));
+    const ask = skillAsk("skill-creator", "pack");
+    assert.ok(ask.indexOf("Pack 模式") >= 0);
+    assert.ok(ask.indexOf("pack.json") >= 0);
+    assert.ok(ask.indexOf("local-") >= 0);
   });
 });

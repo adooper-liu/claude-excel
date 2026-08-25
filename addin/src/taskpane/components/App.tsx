@@ -12,9 +12,10 @@ import SelectionBadge from './SelectionBadge';
 import ChatPanel from './ChatPanel';
 import ChatInput from './ChatInput';
 import { parseSlashCommand, skillAsk, mergeSlashSkills } from '../../services/slash-skills';
-import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, fetchSampleSkills, installSampleSkill, deleteUserSkill, importPackZip, removeImportedPack, type InstalledSkill, type Pack, type SampleSkill } from '../../services/user-skills';
+import { fetchUserSkills, fetchPacks, installPack, uninstallPack, installUserSkill, fetchSampleSkills, installSampleSkill, deleteUserSkill, importPackZip, removeImportedPack, createPackFromFiles, type InstalledSkill, type Pack, type SampleSkill } from '../../services/user-skills';
 import { calculateSkill, calculatorSkill, craftSkill, reconcileSkill, reshapeSkill, skillCreatorSkill, pivotSkill, assumeSkill, fetchSkill, researchSkill, knowledgeSkill, deconstructSkill } from '../../services/builtin-skills';
 import { extractSkillMarkdown } from '../../services/skill-md';
+import { extractPackFiles } from '../../services/pack-from-reply';
 import HistoryPanel from './HistoryPanel';
 import SessionList from './SessionList';
 import PackMenu from './PackMenu';
@@ -425,15 +426,37 @@ export default function App(): JSX.Element {
         onUsage: (info) => setUsage((u) => addUsage(u, info.model, info.tokens)),
       });
       if (slash?.id === "skill-creator") {
-        const md = extractSkillMarkdown(final);
-        if (md) {
+        const packFiles = extractPackFiles(final);
+        if (packFiles) {
           try {
-            const skill = await installUserSkill(md);
-            setInstalled((prev) => prev.filter((s) => s.id !== skill.id).concat([skill]));
-            final = String(final || "").trim() + "\n\n已安装，输入 /" + skill.slash + " 使用。";
+            const pack = await createPackFromFiles(packFiles);
+            invalidateToolsCache();
+            const freshPacks = await fetchPacks();
+            setPacks(freshPacks);
+            const freshSkills = await fetchUserSkills();
+            setInstalled(freshSkills);
+            const first = pack.skills[0];
+            final =
+              String(final || "").trim() +
+              "\n\n已创建并安装场景包「" +
+              (pack.title || pack.id) +
+              "」。" +
+              (first ? "输入 /" + first.slash + " 使用。" : "");
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            final = String(final || "").trim() + "\n\n没有安装：" + msg;
+            final = String(final || "").trim() + "\n\n没有安装场景包：" + msg;
+          }
+        } else {
+          const md = extractSkillMarkdown(final);
+          if (md) {
+            try {
+              const skill = await installUserSkill(md);
+              setInstalled((prev) => prev.filter((s) => s.id !== skill.id).concat([skill]));
+              final = String(final || "").trim() + "\n\n已安装，输入 /" + skill.slash + " 使用。";
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              final = String(final || "").trim() + "\n\n没有安装：" + msg;
+            }
           }
         }
       }
@@ -758,6 +781,10 @@ export default function App(): JSX.Element {
               onUninstallSample={handleUninstallSample}
               onImportPack={handleImportPack}
               onRemoveImportedPack={handleRemoveImportedPack}
+              onCreatePack={() => {
+                setShowPacks(false);
+                void handleSend("/skill-creator pack");
+              }}
               onClose={() => setShowPacks(false)}
             />
           )}

@@ -250,6 +250,78 @@ export async function uninstallPack(packId: string): Promise<void> {
   }
 }
 
+export async function createPackFromFiles(
+  files: Record<string, string>,
+  opts?: { consentExtensions?: boolean }
+): Promise<Pack> {
+  const r = await fetch(API + "/create-pack", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      files,
+      consentExtensions: opts?.consentExtensions === true,
+    }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "创建场景包失败";
+    throw new Error(detail);
+  }
+  const p = (data && typeof data === "object" ? (data as { pack?: unknown }).pack : null) || {};
+  return {
+    id: String((p as Pack).id || ""),
+    source: String((p as Pack).source || "third-party"),
+    category: String((p as Pack).category || ""),
+    categoryLabel: String((p as Pack).categoryLabel || ""),
+    title: String((p as Pack).title || ""),
+    description: String((p as Pack).description || ""),
+    version: String((p as Pack).version || ""),
+    skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
+    knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
+    extensions: Array.isArray((p as Pack).extensions) ? ((p as Pack).extensions as PackExtension[]) : [],
+    deps: {},
+    installed: true,
+  };
+}
+
+export async function createPack(
+  zipBytes: Uint8Array,
+  opts?: { consentExtensions?: boolean }
+): Promise<Pack> {
+  let binary = "";
+  zipBytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  const r = await fetch(API + "/create-pack", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      zipBase64: btoa(binary),
+      consentExtensions: opts?.consentExtensions === true,
+    }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "创建场景包失败";
+    throw new Error(detail);
+  }
+  const p = (data && typeof data === "object" ? (data as { pack?: unknown }).pack : null) || {};
+  return {
+    id: String((p as Pack).id || ""),
+    source: String((p as Pack).source || "third-party"),
+    category: String((p as Pack).category || ""),
+    categoryLabel: String((p as Pack).categoryLabel || ""),
+    title: String((p as Pack).title || ""),
+    description: String((p as Pack).description || ""),
+    version: String((p as Pack).version || ""),
+    skills: Array.isArray((p as Pack).skills) ? ((p as Pack).skills as PackSkill[]) : [],
+    knowledge: Array.isArray((p as Pack).knowledge) ? ((p as Pack).knowledge as string[]) : [],
+    extensions: Array.isArray((p as Pack).extensions) ? ((p as Pack).extensions as PackExtension[]) : [],
+    deps: {},
+    installed: true,
+  };
+}
+
 export async function importPackZip(file: File): Promise<Pack> {
   const fd = new FormData();
   fd.append("file", file);

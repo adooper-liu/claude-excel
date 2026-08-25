@@ -9,6 +9,7 @@ import KnowledgeBar from './KnowledgeBar';
 import { filterSlashSkills, parseSlashCommand, slashQuery, type SlashSkill } from '../../services/slash-skills';
 import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
 import { operatorCatalogByGroup } from '../../services/operator-catalog';
+import FinancePackQuickActions from './FinancePackQuickActions';
 
 interface Props {
   onSend: (text: string) => void;
@@ -188,6 +189,14 @@ export default function ChatInput({
 
   return (
     <div className="composer">
+      <FinancePackQuickActions
+        skills={installed}
+        disabled={disabled || isStreaming}
+        onRun={(t) => {
+          if (disabled || isStreaming) return;
+          onSend(t);
+        }}
+      />
       {showFetch && onFetched && (
         <FetchBar
           disabled={disabled || isStreaming}

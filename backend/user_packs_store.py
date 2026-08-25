@@ -133,6 +133,55 @@ def import_pack_zip(zip_bytes: bytes) -> dict:
         raise
 
 
+def pack_zip_from_files(files: dict) -> bytes:
+    """Assemble a pack zip from path → UTF-8 text (L3 skill-creator)."""
+    if not isinstance(files, dict) or not files:
+        raise ValueError("files 不能为空")
+    if len(files) > MAX_IMPORT_ENTRIES:
+        raise ValueError(f"文件数超过 {MAX_IMPORT_ENTRIES} 上限")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for raw_name, raw_content in files.items():
+            path = str(raw_name or "").replace("\\", "/").strip().lstrip("/")
+            if not _safe_zip_name(path) or path.endswith("/"):
+                raise ValueError("非法路径: " + str(raw_name))
+            if not isinstance(raw_content, str):
+                raise ValueError("文件内容须为文本: " + path)
+            data = raw_content.encode("utf-8")
+            if len(data) > MAX_IMPORT_BYTES:
+                raise ValueError("单文件超过 5MB 上限: " + path)
+            zf.writestr(path, data)
+    out = buf.getvalue()
+    if len(out) > MAX_IMPORT_BYTES:
+        raise ValueError("zip 超过 5MB 上限")
+    return out
+
+
+def create_pack(zip_bytes: bytes, *, consent_extensions: bool = False) -> dict:
+    """L3 S1: import zip then install. Atomic — install failure removes the imported dir."""
+    entry = import_pack_zip(zip_bytes)
+    pid = str(entry.get("id") or "").strip()
+    if not pid:
+        raise ValueError("pack.json 缺少 id")
+    try:
+        installed = install_pack(pid, consent_extensions=consent_extensions)
+    except Exception:
+        try:
+            uninstall_pack(pid)
+        except Exception:
+            pass
+        try:
+            remove_imported_pack(pid)
+        except Exception:
+            pass
+        raise
+    return {
+        **installed,
+        "imported": True,
+        "source": installed.get("source") or entry.get("source") or "third-party",
+    }
+
+
 def remove_imported_pack(pack_id: str) -> dict:
     pid = _safe_pack_id(pack_id)
     if pid in _installed_ids():

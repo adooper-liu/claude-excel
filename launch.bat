@@ -43,7 +43,8 @@ if not exist "backend\cert.pem" (
 echo OK: Certificates ready.
 
 echo [3/5] Starting backend...
-start "Mind-for-Sheet-Backend" /D "%~dp0" python backend\server.py
+rem Use cmd /k so backend window stays open on failure (no flash-close).
+start "Mind-for-Sheet-Backend" /D "%~dp0" cmd /k "python backend\server.py"
 
 echo [4/5] Waiting for backend...
 set /a count=0

@@ -1,0 +1,17 @@
+{
+  "feedId": "settlement",
+  "sheetName": "Pack_结算",
+  "description": "Amazon Settlement deposit / fee lines (canonical). Fields follow seller-central export; Phase 1 fixture only.",
+  "primaryKeys": ["settlement_id", "biz_date"],
+  "columns": [
+    { "name": "settlement_id", "type": "string", "required": true },
+    { "name": "deposit_date", "type": "date", "required": true },
+    { "name": "fee_type", "type": "string", "required": false, "note": "Deposit / Commission / FBA / etc." },
+    { "name": "amount", "type": "number", "required": true, "note": "Deposit positive for bank match rows" },
+    { "name": "currency", "type": "string", "required": true },
+    { "name": "sku", "type": "string", "required": false },
+    { "name": "order_id", "type": "string", "required": false },
+    { "name": "biz_date", "type": "date", "required": true, "note": "join key; from deposit_date" },
+    { "name": "raw_erp_status", "type": "string", "required": false }
+  ]
+}

@@ -103,6 +103,7 @@ samples/
 |---|---|---|
 | GET | `/api/user-skills/packs` | 列 `samples/packs/*` + category + 是否已装 |
 | POST | `/api/user-skills/install-pack` | `{"packId":"cross-border-ecommerce-research"}` 或 `cross-border-ecommerce-finance` |
+| POST | `/api/user-skills/create-pack` | 一次导入并安装：JSON `{ zipBase64, consentExtensions }` 或 `{ files: { "pack.json": "...", "skills/.../SKILL.md": "..." }, consentExtensions }`，或 multipart `file`；失败回滚刚导入的第三方目录 |
 | POST | `/api/user-skills/install-sample` | 遗留：装 `samples/skills/{id}` 单 skill；`amazon-research` 等找不到时回退 pack 副本 |
 
 实现：`backend/user_packs_store.py`（`install_pack` 循环 `install_skill`；失败 rollback）。

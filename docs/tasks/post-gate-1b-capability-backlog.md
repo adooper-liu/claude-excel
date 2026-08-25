@@ -371,6 +371,17 @@ auditColumns?: boolean    // 默认 true（非 exact 时写 __* 列）
 
 **不建议 Phase 2 前并行第四条**（NLQ 一体问数、全簿 CF 扫描、核心 Levenshtein reconcile）。
 
+### Gate 1d / 1e（算子词汇，与 B1–B3 并行轨道）
+
+> **设计选择（不突破）**：核心 fuzzy、ERP OAuth —— 见上文「刻意不做」。  
+> **真实瓶颈（可突破）**：`calculate_table` 词汇贫乏、链式对账缺压平、缺受限 IF、缺多维活公式交叉表。  
+> **停线**：扩到 SKILL 编排不再靠 `write_formula` 手拼计算逻辑为止；再往后是编排确定性（LLM 跳步），加算子解决不了。
+
+| Gate | brief | 内容 | 状态 |
+|---|---|---|---|
+| **1d** | [`gate-1d-operator-vocab.md`](gate-1d-operator-vocab.md) | `sumifs_multi`（或扩 sumifs）· `arithmetic` · `flatten_reconcile` · `conditional_column` | ready |
+| **1e** | [`gate-1e-analysis-ops.md`](gate-1e-analysis-ops.md) | `cross_tab` · `lookup_multi` · `flag_rows` | blocked on 1d |
+
 ---
 
 ## 开工前检查表
@@ -390,4 +401,5 @@ auditColumns?: boolean    // 默认 true（非 exact 时写 __* 列）
 |---|---|
 | 2026-08-17 | v1 草稿（对话） |
 | 2026-08-17 | v2 独立评审修正：移除核心 fuzzy、补决策树 / 协议 / 基线 / Gate 1c |
+| 2026-08-24 | 增补 Gate 1d/1e 指针（算子词汇 vs 分析扩展；与 B1–B3 分轨） |
 | 2026-08-17 | §产品叙事：合并 A/B 档（话术 + 场景）；工程契约未改 |

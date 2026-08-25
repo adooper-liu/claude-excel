@@ -13,6 +13,7 @@ interface Props {
   onUninstallSample?: (sampleId: string) => Promise<void>;
   onImportPack?: (file: File) => Promise<void>;
   onRemoveImportedPack?: (id: string) => Promise<void>;
+  onCreatePack?: () => void;
   onClose: () => void;
 }
 
@@ -26,6 +27,7 @@ export default function PackMenu({
   onUninstallSample,
   onImportPack,
   onRemoveImportedPack,
+  onCreatePack,
   onClose,
 }: Props): JSX.Element {
   const [packBusy, setPackBusy] = useState<string | null>(null);
@@ -109,39 +111,55 @@ export default function PackMenu({
     <div className="flyout pack-flyout" role="dialog" aria-label="安装">
       <div className="flyout-head">
         <span>安装</span>
-        <button
-          type="button"
-          className="sample-btn ghost"
-          disabled={importBusy}
-          onClick={() => importInputRef.current?.click()}
-          title="导入 Pack (zip)"
-        >
-          {importBusy ? "导入中…" : "导入"}
-        </button>
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".zip,application/zip"
-          className="pack-csv-input-hidden"
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (!f || !onImportPack) return;
-            setImportErr("");
-            setImportBusy(true);
-            try {
-              await onImportPack(f);
-            } catch (err) {
-              setImportErr(err instanceof Error ? err.message : String(err));
-            } finally {
-              setImportBusy(false);
-              e.target.value = "";
-            }
-          }}
-        />
-        <button className="icon-btn" onClick={onClose} title="关闭" aria-label="关闭">
-          ✕
-        </button>
+        <div className="flyout-head-actions">
+          {onCreatePack && (
+            <button
+              type="button"
+              className="sample-btn ghost"
+              disabled={importBusy}
+              onClick={() => {
+                onClose();
+                onCreatePack();
+              }}
+              title="对话创建场景包"
+            >
+              创建 Pack
+            </button>
+          )}
+          <button
+            type="button"
+            className="sample-btn ghost"
+            disabled={importBusy}
+            onClick={() => importInputRef.current?.click()}
+            title="导入 Pack (zip)"
+          >
+            {importBusy ? "导入中…" : "导入"}
+          </button>
+          <button className="icon-btn" onClick={onClose} title="关闭" aria-label="关闭">
+            ✕
+          </button>
+        </div>
       </div>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".zip,application/zip"
+        className="pack-csv-input-hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f || !onImportPack) return;
+          setImportErr("");
+          setImportBusy(true);
+          try {
+            await onImportPack(f);
+          } catch (err) {
+            setImportErr(err instanceof Error ? err.message : String(err));
+          } finally {
+            setImportBusy(false);
+            e.target.value = "";
+          }
+        }}
+      />
       {packs.length === 0 && samples.length === 0 ? (
         <p className="flyout-empty">暂无可用示例。</p>
       ) : (

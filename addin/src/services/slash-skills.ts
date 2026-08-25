@@ -100,6 +100,16 @@ const ASK: Record<string, string> = {
     "把用户的工作流做成一条可安装的 Excel 技能。若对话上一轮有【拆解交接】代码块，直接按它起草——🟢 步骤映射现有算子、🟡 判断点作口径选项、验证锚点作试跑检查，不要重新问流程，只补口令/结果形态/试跑口令。若流程还含糊，先拆解再写技能。若现有对账、整形、计算、透视、假设、取数、调研、规范已经能做，用中文说明怎么开口即可，不要让用户先背斜杠清单，也不要新建技能。先判断用户处在哪一步（从零写 / 已有草稿要改 / 只要试跑）。用户没说清楚要自动化什么时，最多问四件事：做什么、什么口令触发、结果长什么样、要不要用当前表头走一遍。可 inspect_workbook（只读，不要改表）。起草 SKILL.md：YAML 必须有 name、description、slash。正文每步点名现有 Office JS 算子（extract_selection / reshape_table / reconcile_tables / calculate_table / create_pivot / write_inputs 等），禁止发明工具、禁止把表体读进对话再写回。附 2–3 句试跑口令。最后用一个 markdown 代码块给出完整 SKILL.md。",
 };
 
+const PACK_CREATOR_ASK =
+  "进入 Pack 模式：把流程做成可安装的第三方场景包（pack.json + SKILL.md），不要只装单技能。只读 inspect_*，不要改表。pack.json 的 id 必须以 local- 开头。回复用围栏，信息行写成 zip 路径：```pack.json 与 ```skills/<name>/SKILL.md。不要 extensions、不要发明工具名。";
+
+export function isPackCreatorExtra(extra?: string): boolean {
+  const t = String(extra || "").trim().toLowerCase();
+  if (!t) return false;
+  if (t === "pack") return true;
+  return /打包|行业包|场景包/.test(String(extra || ""));
+}
+
 export function mergeSlashSkills(installed?: SlashSkill[]): SlashSkill[] {
   const seen = new Set(SLASH_SKILLS.map((s) => s.slash));
   const extra: SlashSkill[] = [];
@@ -180,6 +190,10 @@ export function slashDisplay(
 }
 
 export function skillAsk(id: SkillId, extra?: string): string {
+  if (id === "skill-creator" && isPackCreatorExtra(extra)) {
+    const more = String(extra || "").trim();
+    return more && more.toLowerCase() !== "pack" ? PACK_CREATOR_ASK + " 用户补充：" + more : PACK_CREATOR_ASK;
+  }
   const base =
     ASK[id] ||
     "按已安装技能处理当前工作簿。先 inspect_workbook，按实际表头工作，不要假设列名。";

@@ -61,7 +61,11 @@ describe("finance-reconciliation SKILL handbook (Pack 化 P2)", function () {
     assert.ok(raw.indexOf("附录 B") >= 0);
     assert.ok(raw.indexOf("附录 C") >= 0);
     assert.ok(raw.indexOf("| B2 |") >= 0 && raw.indexOf("| B10 |") >= 0);
-    assert.ok(raw.indexOf("假设参数!$B$3") >= 0);
+    assert.ok(raw.indexOf("$B$3") >= 0);
+    assert.ok(raw.indexOf("SUMPRODUCT") >= 0, "收入须数量×单价（SUMPRODUCT）");
+    assert.ok(raw.indexOf("left_quantity") >= 0, "件数/收入须引用 left_quantity");
+    assert.ok(raw.indexOf("$B$2") >= 0, "金额须乘汇率 B2");
+    assert.ok(raw.indexOf("$E$2:$E$61") < 0, "禁止死区间示例");
   });
 
   it("audit step includes assumptionSnapshot and matchRate", function () {

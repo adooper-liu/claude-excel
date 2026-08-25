@@ -29,4 +29,10 @@ describe("skill-create-guide", function () {
     assert.ok(skillCreatorSkill.indexOf("extract_selection") >= 0);
     assert.ok(skillCreatorSkill.indexOf("发明工具名") >= 0);
   });
+
+  it("documents Pack mode for L3 create-pack", function () {
+    assert.ok(skillCreatorSkill.indexOf("Pack 模式") >= 0);
+    assert.ok(skillCreatorSkill.indexOf("pack.json") >= 0);
+    assert.ok(skillCreatorSkill.indexOf("local-") >= 0);
+  });
 });

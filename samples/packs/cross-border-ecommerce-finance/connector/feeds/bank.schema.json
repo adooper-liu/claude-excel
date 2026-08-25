@@ -1,0 +1,16 @@
+{
+  "feedId": "bank",
+  "sheetName": "Pack_银行",
+  "description": "Bank credit lines for settlement deposit matching (canonical).",
+  "primaryKeys": ["amount", "biz_date"],
+  "columns": [
+    { "name": "txn_date", "type": "date", "required": true },
+    { "name": "amount", "type": "number", "required": true },
+    { "name": "currency", "type": "string", "required": true },
+    { "name": "counterparty", "type": "string", "required": false },
+    { "name": "ref", "type": "string", "required": false },
+    { "name": "settlement_id", "type": "string", "required": false, "note": "Optional; when present enables exact match mode" },
+    { "name": "biz_date", "type": "date", "required": true, "note": "join key; from txn_date" },
+    { "name": "raw_erp_status", "type": "string", "required": false }
+  ]
+}

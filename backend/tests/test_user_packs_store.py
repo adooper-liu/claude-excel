@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from user_packs_store import (  # noqa: E402
     TAXONOMY_FILE,
     category_label,
+    create_pack,
     install_pack,
     list_packs,
     load_taxonomy,
@@ -426,3 +427,155 @@ def test_export_import_roundtrip(tmp_path, monkeypatch):
     entry = user_packs_store.import_pack_zip(z)
     assert entry["id"] == "vendor-z"
     assert (tmp_path / "packs-imported" / "vendor-z" / "skills" / "zs" / "SKILL.md").is_file()
+
+
+_S1_SKILL_MD = """---
+name: s1-demo-skill
+description: S1 create-pack demo
+slash: s1demo
+---
+# demo
+编排 inspect_workbook。
+"""
+
+
+def _patch_create_pack_dirs(tmp_path, monkeypatch):
+    import user_packs_store
+    import user_skills_store
+
+    monkeypatch.setattr(user_skills_store, "SKILLS_DIR", tmp_path / "skills")
+    monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
+    monkeypatch.setattr(user_packs_store, "PACKS_DIR", tmp_path / "packs-official")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs-runtime")
+    (tmp_path / "packs-official").mkdir()
+    (tmp_path / "packs-imported").mkdir()
+
+
+def test_create_pack_imports_and_installs(tmp_path, monkeypatch):
+    _patch_create_pack_dirs(tmp_path, monkeypatch)
+    z = _make_zip(
+        {
+            "pack.json": json.dumps(
+                {
+                    "id": "vendor-s1-demo",
+                    "category": "自定义",
+                    "title": "S1 Demo",
+                    "skills": ["s1-demo-skill"],
+                }
+            ),
+            "skills/s1-demo-skill/SKILL.md": _S1_SKILL_MD,
+        }
+    )
+    result = create_pack(z)
+    assert result["packId"] == "vendor-s1-demo"
+    assert result["imported"] is True
+    assert result["source"] == "third-party"
+    assert any(s["id"] == "s1-demo-skill" for s in result["skills"])
+    assert (tmp_path / "skills" / "s1-demo-skill" / "SKILL.md").is_file()
+    assert (tmp_path / "packs-imported" / "vendor-s1-demo" / "pack.json").is_file()
+    installed = json.loads((tmp_path / "installed_packs.json").read_text(encoding="utf-8"))
+    assert any(r.get("id") == "vendor-s1-demo" for r in installed)
+
+
+def test_create_pack_rejects_bad_zip(tmp_path, monkeypatch):
+    _patch_create_pack_dirs(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match="pack.json"):
+        create_pack(_make_zip({"skills/x": "1"}))
+    assert list((tmp_path / "packs-imported").iterdir()) == []
+
+
+def test_create_pack_rolls_back_import_when_install_fails(tmp_path, monkeypatch):
+    _patch_create_pack_dirs(tmp_path, monkeypatch)
+    z = _make_zip(
+        {
+            "pack.json": json.dumps(
+                {
+                    "id": "vendor-s1-bad",
+                    "category": "自定义",
+                    "title": "Bad",
+                    "skills": ["declared-missing"],
+                }
+            ),
+            "skills/s1-demo-skill/SKILL.md": _S1_SKILL_MD,
+        }
+    )
+    with pytest.raises(ValueError, match="skills 与 skills/ 目录不一致"):
+        create_pack(z)
+    assert not (tmp_path / "packs-imported" / "vendor-s1-bad").exists()
+    assert not (tmp_path / "skills" / "s1-demo-skill").exists()
+    assert not (tmp_path / "installed_packs.json").is_file() or json.loads(
+        (tmp_path / "installed_packs.json").read_text(encoding="utf-8") or "[]"
+    ) == []
+
+
+def test_create_pack_rolls_back_when_extensions_need_consent(tmp_path, monkeypatch):
+    _patch_create_pack_dirs(tmp_path, monkeypatch)
+    ext_manifest = json.dumps(
+        {
+            "name": "user.demo_fn",
+            "description": "demo",
+            "entry": "handler.py",
+            "returns": "json",
+            "network": False,
+            "secrets": [],
+            "timeoutMs": 5000,
+        }
+    )
+    z = _make_zip(
+        {
+            "pack.json": json.dumps(
+                {
+                    "id": "vendor-s1-ext",
+                    "category": "自定义",
+                    "title": "Ext",
+                    "skills": ["s1-demo-skill"],
+                    "extensions": ["demo-ext"],
+                }
+            ),
+            "skills/s1-demo-skill/SKILL.md": _S1_SKILL_MD,
+            "extensions/demo-ext/manifest.json": ext_manifest,
+            "extensions/demo-ext/handler.py": "def run(args):\n    return {}\n",
+        }
+    )
+    with pytest.raises(ValueError, match="需要用户同意"):
+        create_pack(z, consent_extensions=False)
+    assert not (tmp_path / "packs-imported" / "vendor-s1-ext").exists()
+
+
+def test_create_pack_installs_extensions_with_consent(tmp_path, monkeypatch):
+    import user_extension_registry
+
+    _patch_create_pack_dirs(tmp_path, monkeypatch)
+    monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs-runtime")
+    monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
+    ext_manifest = json.dumps(
+        {
+            "name": "user.demo_fn",
+            "description": "demo",
+            "entry": "handler.py",
+            "returns": "json",
+            "network": False,
+            "secrets": [],
+            "timeoutMs": 5000,
+        }
+    )
+    z = _make_zip(
+        {
+            "pack.json": json.dumps(
+                {
+                    "id": "vendor-s1-ext2",
+                    "category": "自定义",
+                    "title": "Ext2",
+                    "skills": ["s1-demo-skill"],
+                    "extensions": ["demo-ext"],
+                }
+            ),
+            "skills/s1-demo-skill/SKILL.md": _S1_SKILL_MD,
+            "extensions/demo-ext/manifest.json": ext_manifest,
+            "extensions/demo-ext/handler.py": "def run(args):\n    return {}\n",
+        }
+    )
+    result = create_pack(z, consent_extensions=True)
+    assert result["packId"] == "vendor-s1-ext2"
+    assert any(e["id"] == "demo-ext" for e in result.get("extensions") or [])

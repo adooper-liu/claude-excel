@@ -1,0 +1,5 @@
+txn_date,amount,currency,counterparty,ref,settlement_id
+2026-01-22,38000,USD,Amazon Payments,AMZ SET-2026-01-A,SET-2026-01-A
+2026-01-29,12500.50,USD,Amazon Payments,AMZ SET-2026-01-B,SET-2026-01-B
+2026-02-08,8900,USD,Amazon Payments,AMZ SET-2026-01-C,SET-2026-01-C
+2026-02-12,500,USD,Other Vendor,INV-99,

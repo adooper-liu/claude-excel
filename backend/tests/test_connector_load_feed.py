@@ -121,6 +121,26 @@ async def test_connector_load_feed_content_base64_gbk(isolated_pack_env):
 
 
 @pytest.mark.asyncio
+async def test_connector_load_feed_settlement_and_bank(isolated_pack_env):
+    _tmp_path, sync = isolated_pack_env
+    install_pack("cross-border-ecommerce-finance", consent_extensions=True)
+    sync("cross-border-ecommerce-finance")
+
+    settlement = await run_user_fn("user.connector_load_feed", {"feed": "settlement"})
+    assert settlement["ok"] is True
+    assert settlement["data"]["sheetName"] == "Pack_结算"
+    assert "amount" in settlement["data"]["headers"]
+    assert "biz_date" in settlement["data"]["headers"]
+    assert settlement["data"]["rows"]
+
+    bank = await run_user_fn("user.connector_load_feed", {"feed": "bank"})
+    assert bank["ok"] is True
+    assert bank["data"]["sheetName"] == "Pack_银行"
+    assert "settlement_id" in bank["data"]["headers"]
+    assert bank["data"]["rows"]
+
+
+@pytest.mark.asyncio
 async def test_connector_load_feed_content_skips_fixture(isolated_pack_env):
     _tmp_path, sync = isolated_pack_env
     install_pack("cross-border-ecommerce-finance", consent_extensions=True)

@@ -15,6 +15,8 @@ FEED_FILES = {
     "orders": "orders.csv",
     "ads": "ads.csv",
     "inventory": "inventory.csv",
+    "settlement": "settlement.csv",
+    "bank": "bank.csv",
 }
 
 HEADER_ALIASES: dict[str, list[str]] = {
@@ -34,6 +36,13 @@ HEADER_ALIASES: dict[str, list[str]] = {
     "clicks": ["clicks", "点击"],
     "on_hand": ["on_hand", "on_hand_qty", "可用库存", "库存"],
     "warehouse": ["warehouse", "仓"],
+    "settlement_id": ["settlement_id", "settlement-id", "结算号"],
+    "deposit_date": ["deposit_date", "deposit date", "到账日", "付款日"],
+    "fee_type": ["fee_type", "transaction_type", "费用类型"],
+    "amount": ["amount", "total_amount", "金额", "入账金额"],
+    "txn_date": ["txn_date", "transaction_date", "交易日", "银行日期"],
+    "counterparty": ["counterparty", "对方", "付款方"],
+    "ref": ["ref", "reference", "备注", "摘要"],
 }
 
 
@@ -114,15 +123,27 @@ def _map_raw_row(raw: dict[str, str]) -> dict[str, Any]:
         mapped["order_date"] = _normalize_date(mapped["order_date"])
     if "ad_date" in mapped:
         mapped["ad_date"] = _normalize_date(mapped["ad_date"])
+    if "deposit_date" in mapped:
+        mapped["deposit_date"] = _normalize_date(mapped["deposit_date"])
+    if "txn_date" in mapped:
+        mapped["txn_date"] = _normalize_date(mapped["txn_date"])
     if "quantity" in mapped:
         mapped["quantity"] = _coerce_number(mapped["quantity"])
     if "item_price" in mapped:
         mapped["item_price"] = _coerce_number(mapped["item_price"])
     if "spend" in mapped:
         mapped["spend"] = _coerce_number(mapped["spend"])
+    if "amount" in mapped:
+        mapped["amount"] = _coerce_number(mapped["amount"])
     if "is_refund" in mapped:
         mapped["is_refund"] = _coerce_bool(mapped["is_refund"])
-    biz = mapped.get("order_date") or mapped.get("ad_date") or ""
+    biz = (
+        mapped.get("order_date")
+        or mapped.get("ad_date")
+        or mapped.get("deposit_date")
+        or mapped.get("txn_date")
+        or ""
+    )
     if biz:
         mapped["biz_date"] = _normalize_date(biz)
     return mapped
