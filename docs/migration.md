@@ -31,16 +31,14 @@ npm run build
 
 ### 3. 迁用户数据（旧机台 → 新机台）
 
-拷贝整个 `~/.claude-excel-web/` 目录到新机台同名位置（Windows 为 `%USERPROFILE%\.claude-excel-web\`）：
+用产品内功能迁移，不再手工拷目录：
 
-| 内容 | 说明 |
-|---|---|
-| `config.json` | 各 provider 的 API Key、baseUrl、model。**敏感**——用安全通道传，勿进 git |
-| `skills/` `knowledge/` | 已装技能、本机知识库 RAG |
-| `packs/` `installed_packs.json` | 已装场景包 |
-| `templates.json` `fetch-recipes/` | 提示词模板、取数 recipe |
+1. **旧机台**：Excel 侧边栏 ⚙ 设置 → 「备份与迁移」→「导出备份」，得到一个 `sheetwise-backup-<date>.zip`。
+2. **搬文件**：把 zip 通过任意通道（U 盘 / 网盘 / 聊天工具）传到新机台。备份不含 API Key，无需特殊安全通道。
+3. **新机台**：⚙ 设置 →「备份与迁移」→ 选 zip →「预览备份」→「确认导入」。
+4. **重填 Key**：导入后到设置面板重新填写各 provider 的 API Key。
 
-> 环境变量 `DEEPSEEK_API_KEY` / `ANTHROPIC_AUTH_TOKEN` 若在用，一并迁移；环境变量优先级高于文件配置。
+> 备份不含 API Key；含本机扩展（user.*）的场景包导入后需要重新信任。
 
 ### 4. 装浏览器扩展（取数用）
 
@@ -55,5 +53,7 @@ npm run build
 ## 边界与风险
 
 - **机台耦合只有四处**：开发者证书、加载项注册表、Playwright 浏览器、浏览器扩展——全是「重跑 / 重装」可解决，代码里 0 处硬编码本机路径（后端用 `Path(__file__)` 相对解析，用户数据用 `Path.home()`）。
-- **`config.json` 含 API Key**：迁数据走安全通道，别打进 zip 提交到 git。
+- **备份不含 API Key**：迁移不再搬 `config.json`，导入后在设置内重新填写各 provider 的 Key。
 - 旧机台先保留一份 `~/.claude-excel-web/` 备份再动手。
+
+
