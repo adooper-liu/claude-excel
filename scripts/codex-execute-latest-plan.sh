@@ -59,6 +59,8 @@ if [ -n "${CODEX_MODEL:-}" ]; then
   args+=(--model "$CODEX_MODEL")
 fi
 
-codex exec "${args[@]}" "$PROMPT"
+# 用 stdin 传 prompt：Windows 下 plan 常超过 32KB 命令行上限，codex 的 node shim 会
+# 「Argument list too long」。codex exec 的 `-` 表示从 stdin 读指令。
+printf '%s\n' "$PROMPT" | codex exec "${args[@]}" -
 
 echo "✅ Codex 执行完毕。提交见 git log；review 交给 Claude 对照 plan 逐粒核对。"
