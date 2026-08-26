@@ -43,6 +43,7 @@
 | `docs/domain/dirty-data-patterns.md` | 人 · pack 作者 · Claude Code | 脏数据坑典（已证实 / 候选 + 解决层 + 证据）：写 pack knowledge、定算子参数、评审 pack 覆盖度时查表 |
 | `docs/document-usage.md` | 人 | 本文——每份文档的消费者清单 |
 | `docs/coordination.md` | Claude Code · Cursor | 完整协同规则（主目录/分支/阶段/交接/串行化/会话生命周期） |
+| `docs/git-usage.md` | 人 · Claude Code · Cursor | Git 操作速查（命令/commit 纪律/救援撤销；引用 coordination.md 不复制） |
 | `docs/harness-guide.md` | 人 · Claude Code | Harness 六层框架摘要 + 本项目对照（参考文档；来源 liziran.com 长文） |
 | `docs/migration.md` | 人 | 换机台 / 新机台部署时对照执行（README 快速启动的增量：带数据走 + 重建机台相关项） |
 | `docs/tasks/*.md` | Claude Code · Cursor | 任务 brief（目标/边界/验收/方案/Review notes/进度 log） |
