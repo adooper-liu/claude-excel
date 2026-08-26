@@ -6,8 +6,9 @@ import json
 import httpx
 from contextlib import asynccontextmanager
 from pathlib import Path
+from datetime import date
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -63,6 +64,7 @@ from skill_registry import (
     load_tools,
     validate_backend_skills,
 )
+from backup_store import export_backup, preview_backup, apply_backup, MAX_BACKUP_BYTES
 
 ADDIN_DIR = Path(__file__).parent.parent / "addin" / "dist"
 ROOT_DIR = Path(__file__).parent.parent
@@ -786,6 +788,50 @@ ADDIN_FILES = {
 }
 
 
+
+
+@app.get("/api/backup/export")
+async def api_backup_export(request: Request):
+    require_loopback(request)
+    try:
+        data = export_backup()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    fname = f"sheetwise-backup-{date.today().isoformat()}.zip"
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.post("/api/backup/import/preview")
+async def api_backup_preview(request: Request, file: UploadFile = File(...)):
+    require_loopback(request)
+    data = await file.read(MAX_BACKUP_BYTES + 1)
+    if len(data) > MAX_BACKUP_BYTES:
+        raise HTTPException(400, "备份超过 50MB 上限")
+    try:
+        return preview_backup(data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/backup/import/apply")
+async def api_backup_apply(
+    request: Request,
+    file: UploadFile = File(...),
+    consentExtensions: bool = Form(False),
+):
+    require_loopback(request)
+    data = await file.read(MAX_BACKUP_BYTES + 1)
+    if len(data) > MAX_BACKUP_BYTES:
+        raise HTTPException(400, "备份超过 50MB 上限")
+    try:
+        return await apply_backup(data, consent_extensions=consentExtensions)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
 @app.get("/{full_path:path}")
 async def serve_addin(full_path: str):
     if full_path in ADDIN_FILES and ADDIN_DIR.joinpath(full_path).exists():
@@ -819,3 +865,5 @@ if __name__ == "__main__":
         )
     else:
         uvicorn.run(app, host="127.0.0.1", port=8765)
+
+

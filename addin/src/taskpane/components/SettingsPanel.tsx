@@ -10,6 +10,7 @@ import type { ApiMode } from '../../services/claude';
 import { setMode, setProviderConfig } from '../../services/claude';
 import { setupDirectMode, setupProxyMode, switchProvider, AuthStatus } from '../../services/auth';
 import { API_BASE } from '../../services/api-config';
+import BackupSection from './BackupSection';
 
 interface Props {
   onReady: () => void;
@@ -283,6 +284,9 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
           </div>
         </div>
       )}
+        <BackupSection proxyUrl={proxyUrl} />
     </div>
   );
 }
+
+
