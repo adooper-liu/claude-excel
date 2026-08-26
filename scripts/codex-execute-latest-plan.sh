@@ -47,6 +47,14 @@ $(cat "$PLAN_FILE")
 - 测试/构建失败时：贴出失败断言/报错原文 + 你认为的根因，不要只写「失败」。
 - 计划里该 Task 有「提交」步骤就照它的 commit message 提交；没有就跳过，别乱提交。
 - 遇阻立刻停，不猜测、不盲改、不扩大计划范围。
+
+本仓库协同纪律（先读这些再动手）：
+- docs/coordination.md（分支/提交粒度/串行化）+ AGENTS.md（摘要）。
+提交纪律（强制）：
+- 每个 Task 独立一个 commit，按计划里该 Task 的 commit message 提交；不得把多个 Task 的改动堆在一起。
+- 只做计划里的改动，不加计划外文件/全局 hack（禁止 sitecustomize.py 之类临时文件、禁止改测试配置绕沙箱）。
+- 改现有文件用精改（Edit/替换），禁止整文件覆盖导致内容重复。
+- 不 commit master、不 push；做完留在任务分支，review 交给 Claude 对照 plan 逐粒核对。
 本脚本运行即代表用户授权按计划提交，计划里「提交前需用户确认」在此不适用。
 全部结束后：
 1. 若有未提交改动：git add -A && git commit -m "feat: implement $(basename "$PLAN_FILE" .md) per plan"
