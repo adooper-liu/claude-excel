@@ -1,39 +1,37 @@
 ﻿<#
 .SYNOPSIS
-    卸载 SheetWise Windows 服务
-
+    卸载 SheetWiseBackend 服务（管理员）。
 .DESCRIPTION
-    停止并删除 SheetWiseBackend 服务，清理相关日志文件
+    停止并删除 Windows 服务，清除 Machine 级 SHEETWISE_USER_HOME 环境变量。
 #>
-
+param([string]$ServiceName = "SheetWiseBackend")
+$ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
+$ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # 项目根（两跳）
 
-# 验证管理员权限
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (-not $isAdmin) {
-    Write-Host "ERROR: 此脚本需要管理员权限"
-    exit 1
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
+    throw "需要管理员 PowerShell。"
 }
 
-$SCRIPT_DIR = Split-Path $MyInvocation.MyCommand.Path
-$REPO_ROOT = Split-Path $SCRIPT_DIR
-
-Write-Host "卸载 SheetWise 服务..."
-
-# 停止服务
-Write-Host "  停止服务..."
-& nssm stop SheetWiseBackend 2>&1 | Out-Null
-Start-Sleep -Seconds 1
-
-# 删除服务
-Write-Host "  删除服务..."
-& nssm remove SheetWiseBackend confirm 2>&1 | Out-Null
-
-# 清理日志（可选）
-$logDir = Join-Path $REPO_ROOT ".claude-excel-web\logs"
-if (Test-Path $logDir) {
-    Write-Host "  清理日志..."
-    Remove-Item $logDir -Recurse -Force
+$nssmExe = Join-Path $ROOT "scripts\service\nssm\nssm.exe"
+$outFile = Join-Path $env:TEMP "nssm-out-$(Get-Random).txt"
+$errFile = Join-Path $env:TEMP "nssm-err-$(Get-Random).txt"
+function Invoke-Nssm {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    $p = Start-Process -FilePath $nssmExe -ArgumentList $Args -NoNewWindow -Wait -PassThru `
+        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+    return @{ ExitCode = $p.ExitCode; Output = "$(Get-Content $outFile -Raw -ErrorAction SilentlyContinue)$(Get-Content $errFile -Raw -ErrorAction SilentlyContinue)" }
 }
-
-Write-Host "服务已卸载"
+try {
+    if (Test-Path $nssmExe) {
+        Invoke-Nssm stop $ServiceName | Out-Null
+        Invoke-Nssm remove $ServiceName confirm | Out-Null
+    } else {
+        sc.exe stop $ServiceName 2>$null | Out-Null
+        sc.exe delete $ServiceName 2>$null | Out-Null
+    }
+    [Environment]::SetEnvironmentVariable("SHEETWISE_USER_HOME", $null, "Machine")
+    Write-Host "服务 $ServiceName 已卸载，SHEETWISE_USER_HOME 已清除。"
+} finally {
+    Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
+}
