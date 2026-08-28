@@ -28,6 +28,12 @@ if (-not $Uninstall) {
 if (-not $UserHome) { throw "参数错误：-UserHome 必填（服务以 LocalSystem 跑，必须指向真实用户目录）" }
 Write-Host "UserHome = $UserHome"
 
+$userCrt = Join-Path $UserHome ".office-addin-dev-certs\localhost.crt"
+$userKey = Join-Path $UserHome ".office-addin-dev-certs\localhost.key"
+if (-not (Test-Path $userCrt) -or -not (Test-Path $userKey)) {
+    throw "用户开发证书缺失：$userCrt / $userKey。请先在相同 Windows 用户下运行 install.bat。"
+}
+
 # ---- Invoke-Nssm：Start-Process + Redirect 绕开 PS stderr 深坑（§1.2），幂等 ----
 function Invoke-Nssm {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
@@ -66,7 +72,13 @@ function Ensure-Nssm {
 $venvPython = Join-Path $ROOT "backend\.venv\Scripts\python.exe"
 $venvDir     = Join-Path $ROOT "backend\.venv"
 function Ensure-PythonEnv {
-    if (Test-Path $venvPython) { Write-Host "venv 已存在: $venvPython"; return }
+    if (Test-Path $venvPython) {
+        Write-Host "venv 已存在: $venvPython"
+        Write-Host "同步 requirements..."
+        & $venvPython -m pip install -r (Join-Path $ROOT "backend\requirements.txt")
+        if ($LASTEXITCODE -ne 0) { throw "pip install 失败（exit=$LASTEXITCODE）" }
+        return
+    }
     $seedPy = (Get-Command python).Source   # 每台机器 PATH 首个 python（本机是 conda base，属正常）
     Write-Host "创建后端 venv（seed=$seedPy）..."
     & $seedPy -m venv $venvDir
@@ -125,7 +137,7 @@ Start-Sleep -Seconds 8
 $svc = Get-Service $ServiceName
 Write-Host "服务状态: $($svc.Status)"
 if ($svc.Status -ne "Running") {
-    Write-Warning "服务未 Running。查看 logs\service.log + backend-stderr.log 定位。"
+    Write-Warning "服务未 Running。查看 scripts\service\logs\service.log + backend-stderr.log 定位。"
     exit 1
 }
 Write-Host "安装完成。用 .\status-service.ps1 验证。"

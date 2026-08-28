@@ -41,16 +41,17 @@ if (-not (Test-Path $crt) -or -not (Test-Path $key)) {
 }
 $needsCopy = (-not (Test-Path $certFile)) -or (-not (Test-Path $keyFile))
 try {
-    $backendCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certFile)
     $userCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($crt)
-    $needsCopy = ($backendCert.Thumbprint -ne $userCert.Thumbprint) -or
-                 ($userCert.NotAfter -le (Get-Date).AddDays(7))
-} catch { $needsCopy = $true }
-if ($needsCopy) {
-    if ($userCert -and $userCert.NotAfter -le (Get-Date).AddDays(7)) {
+    if ($userCert.NotAfter -le (Get-Date).AddDays(7)) {
         Write-SvcLog "User certificate expires at $($userCert.NotAfter) — rerun install.bat" "ERROR"
         exit 1
     }
+    if (-not $needsCopy) {
+        $backendCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certFile)
+        $needsCopy = $backendCert.Thumbprint -ne $userCert.Thumbprint
+    }
+} catch { $needsCopy = $true }
+if ($needsCopy) {
     Copy-Item $crt $certFile -Force
     Copy-Item $key $keyFile -Force
     Write-SvcLog "Certificate copied from $userHome."
