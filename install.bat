@@ -7,7 +7,7 @@ echo.
 
 cd /d "%~dp0"
 
-echo [1/3] 生成并信任 Office 开发证书...
+echo [1/4] 生成并信任 Office 开发证书...
 call npx office-addin-dev-certs install
 if %ERRORLEVEL% neq 0 (
     echo 证书生成失败，请确认已安装 Node.js
@@ -19,14 +19,32 @@ copy /Y "%USERPROFILE%\.office-addin-dev-certs\localhost.key" "backend\key.pem" 
 echo 证书已配置。
 
 echo.
-echo [2/3] 安装 Python 依赖...
+echo [2/4] 安装并构建 addin 前端（生产模式下后端从 :8765 托管 addin\dist）...
+cd addin
+call npm install
+if %ERRORLEVEL% neq 0 (
+    echo npm install 失败，请确认已安装 Node.js
+    cd ..
+    exit /b 1
+)
+call npm run build
+if %ERRORLEVEL% neq 0 (
+    echo npm run build 失败 -> 后端 :8765 将无法提供 taskpane（生产模式不可用）
+    cd ..
+    exit /b 1
+)
+cd ..
+echo 前端 dist 已构建。
+
+echo.
+echo [3/4] 安装 Python 依赖...
 pip install -r backend\requirements.txt -q
 echo 安装 Chromium（ERP 网页登录用，仅本机）...
 playwright install chromium
 echo 依赖已安装。
 
 echo.
-echo [3/3] 注册 Excel 加载项...
+echo [4/4] 注册 Excel 加载项...
 powershell -Command "$m='file:///'+(Get-Location).Path.Replace('\','/')+'/addin/manifest.xml';$k='HKCU:\SOFTWARE\Microsoft\Office\16.0\Wef\Developer\';if(-not(Test-Path $k)){New-Item -Path $k -Force};Set-ItemProperty -Path $k -Name 'b8c7e1a2-4f3d-4a5b-9c6d-7e8f1a2b3c4d' -Value $m"
 
 echo.
