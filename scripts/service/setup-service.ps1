@@ -59,30 +59,21 @@ function Ensure-Nssm {
     Unblock-File $nssmExe -ErrorAction SilentlyContinue
 }
 
-# ---- Ensure-PythonEnv：服务用项目自身 venv（不与用户交互 python 共享），幂等 ----
+# ---- Ensure-PythonEnv：服务用项目自身 venv（不与交互 python 共享），幂等 ----
+# 每台机器 python 路径不同：seed 运行期从 PATH 首个 python 解析，禁止写死绝对路径。
+# venv 创建/安装都直接调用（不经过 Start-Process-Redirect——那会把 -m venv 参数拼坏，
+# python 落入交互控制台并在重定向句柄下抛 WinError 6，实测复现）。
 $venvPython = Join-Path $ROOT "backend\.venv\Scripts\python.exe"
-function Invoke-NativePip {
-    param(
-        [string]$PyExe,
-        [string[]]$Args
-    )
-    $out = Join-Path $env:TEMP "pip-out-$(Get-Random).txt"
-    $err = Join-Path $env:TEMP "pip-err-$(Get-Random).txt"
-    try {
-        $p = Start-Process -FilePath $PyExe -ArgumentList $Args -NoNewWindow -Wait -PassThru `
-            -RedirectStandardOutput $out -RedirectStandardError $err
-        return @{ ExitCode = $p.ExitCode; Output = "$(Get-Content $out -Raw -ErrorAction SilentlyContinue)$(Get-Content $err -Raw -ErrorAction SilentlyContinue)" }
-    } finally { Remove-Item $out, $err -ErrorAction SilentlyContinue }
-}
+$venvDir     = Join-Path $ROOT "backend\.venv"
 function Ensure-PythonEnv {
     if (Test-Path $venvPython) { Write-Host "venv 已存在: $venvPython"; return }
-    Write-Host "创建后端 venv..."
-    $seedPy = (Get-Command python).Source
-    $venv = Invoke-NativePip $seedPy @("-m", "venv", (Join-Path $ROOT "backend\.venv"))
-    if ($venv.ExitCode -ne 0) { throw "venv 创建失败：$($venv.Output)" }
+    $seedPy = (Get-Command python).Source   # 每台机器 PATH 首个 python（本机是 conda base，属正常）
+    Write-Host "创建后端 venv（seed=$seedPy）..."
+    & $seedPy -m venv $venvDir
+    if ($LASTEXITCODE -ne 0) { throw "venv 创建失败（exit=$LASTEXITCODE）：$seedPy -m venv $venvDir" }
     Write-Host "安装 requirements 到 venv..."
-    $pip = Invoke-NativePip $venvPython @("-m", "pip", "install", "-r", (Join-Path $ROOT "backend\requirements.txt"))
-    if ($pip.ExitCode -ne 0) { throw "pip install 失败：$($pip.Output)" }
+    & $venvPython -m pip install -r (Join-Path $ROOT "backend\requirements.txt")
+    if ($LASTEXITCODE -ne 0) { throw "pip install 失败（exit=$LASTEXITCODE）" }
     Write-Host "venv 就绪: $venvPython"
 }
 
