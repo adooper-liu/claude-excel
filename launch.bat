@@ -45,8 +45,15 @@ if not exist "backend\cert.pem" (
 echo OK: Certificates ready.
 
 echo [3/5] Starting backend...
+set "VENV_PY=%~dp0backend\.venv\Scripts\python.exe"
+if not exist "%VENV_PY%" (
+    echo Error: backend\.venv missing.
+    echo Run install.bat first.
+    pause
+    exit /b 1
+)
 rem Use cmd /k so backend window stays open on failure (no flash-close).
-start "SheetWise-Backend" /D "%~dp0" cmd /k "python backend\server.py"
+start "SheetWise-Backend" /D "%~dp0" cmd /k ""%VENV_PY%" backend\server.py"
 
 echo [4/5] Waiting for backend...
 set /a count=0

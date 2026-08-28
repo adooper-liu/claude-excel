@@ -7,10 +7,39 @@ echo.
 
 cd /d "%~dp0"
 
+where python >nul 2>nul
+if %ERRORLEVEL% neq 0 (
+    echo 未找到 Python，请先安装 Python 3.11+ 并加入 PATH
+    pause
+    exit /b 1
+)
+where npm >nul 2>nul
+if %ERRORLEVEL% neq 0 (
+    echo 未找到 npm，请先安装 Node.js 20+
+    pause
+    exit /b 1
+)
+
 echo [1/4] 生成并信任 Office 开发证书...
 call npx office-addin-dev-certs install
 if %ERRORLEVEL% neq 0 (
     echo 证书生成失败，请确认已安装 Node.js
+    pause
+    exit /b 1
+)
+if not exist "%USERPROFILE%\.office-addin-dev-certs\localhost.crt" (
+    echo 未找到 Office 开发证书：%USERPROFILE%\.office-addin-dev-certs\localhost.crt
+    pause
+    exit /b 1
+)
+if not exist "%USERPROFILE%\.office-addin-dev-certs\localhost.key" (
+    echo 未找到 Office 开发私钥：%USERPROFILE%\.office-addin-dev-certs\localhost.key
+    pause
+    exit /b 1
+)
+certutil -user -addstore -f Root "%USERPROFILE%\.office-addin-dev-certs\ca.crt" >nul
+if %ERRORLEVEL% neq 0 (
+    echo 开发证书 CA 信任失败
     pause
     exit /b 1
 )
@@ -38,9 +67,27 @@ echo 前端 dist 已构建。
 
 echo.
 echo [3/4] 安装 Python 依赖...
-pip install -r backend\requirements.txt -q
+if not exist "backend\.venv\Scripts\python.exe" (
+    python -m venv backend\.venv
+)
+if not exist "backend\.venv\Scripts\python.exe" (
+    echo 创建 backend\.venv 失败
+    pause
+    exit /b 1
+)
+"backend\.venv\Scripts\python.exe" -m pip install -r backend\requirements.txt
+if %ERRORLEVEL% neq 0 (
+    echo Python 依赖安装失败
+    pause
+    exit /b 1
+)
 echo 安装 Chromium（ERP 网页登录用，仅本机）...
-playwright install chromium
+"backend\.venv\Scripts\python.exe" -m playwright install chromium
+if %ERRORLEVEL% neq 0 (
+    echo Chromium 安装失败；后端可运行，但网页抓取功能不可用
+    pause
+    exit /b 1
+)
 echo 依赖已安装。
 
 echo.
