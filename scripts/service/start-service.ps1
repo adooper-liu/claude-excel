@@ -72,11 +72,18 @@ foreach ($port in 8765, 8766) {
 }
 Start-Sleep -Seconds 1
 
-# ---- 起 uvicorn（后台隐藏；避 PS stderr 用 Redirect，不 2>&1）----
-Write-SvcLog "Starting uvicorn :8765..."
+# ---- venv 解释器（服务专用，Ensured by setup-service.ps1；失败 fail-closed 交 NSSM）----
+$venvPython = Join-Path $ROOT "backend\.venv\Scripts\python.exe"
+if (-not (Test-Path $venvPython)) {
+    Write-SvcLog "venv python missing: $venvPython — run setup-service.ps1 first" "ERROR"
+    exit 1
+}
+
+# ---- 起 uvicorn（后台隐藏；用 venv python，不 2>&1）----
+Write-SvcLog "Starting uvicorn :8765 (venv)..."
 $stdoutLog = Join-Path $logDir "backend-stdout.log"
 $stderrLog = Join-Path $logDir "backend-stderr.log"
-$proc = Start-Process -FilePath (Get-Command python).Source `
+$proc = Start-Process -FilePath $venvPython `
     -ArgumentList (Join-Path $ROOT "backend\server.py") `
     -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog

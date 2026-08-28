@@ -59,6 +59,33 @@ function Ensure-Nssm {
     Unblock-File $nssmExe -ErrorAction SilentlyContinue
 }
 
+# ---- Ensure-PythonEnv：服务用项目自身 venv（不与用户交互 python 共享），幂等 ----
+$venvPython = Join-Path $ROOT "backend\.venv\Scripts\python.exe"
+function Invoke-NativePip {
+    param(
+        [string]$PyExe,
+        [string[]]$Args
+    )
+    $out = Join-Path $env:TEMP "pip-out-$(Get-Random).txt"
+    $err = Join-Path $env:TEMP "pip-err-$(Get-Random).txt"
+    try {
+        $p = Start-Process -FilePath $PyExe -ArgumentList $Args -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+        return @{ ExitCode = $p.ExitCode; Output = "$(Get-Content $out -Raw -ErrorAction SilentlyContinue)$(Get-Content $err -Raw -ErrorAction SilentlyContinue)" }
+    } finally { Remove-Item $out, $err -ErrorAction SilentlyContinue }
+}
+function Ensure-PythonEnv {
+    if (Test-Path $venvPython) { Write-Host "venv 已存在: $venvPython"; return }
+    Write-Host "创建后端 venv..."
+    $seedPy = (Get-Command python).Source
+    $venv = Invoke-NativePip $seedPy @("-m", "venv", (Join-Path $ROOT "backend\.venv"))
+    if ($venv.ExitCode -ne 0) { throw "venv 创建失败：$($venv.Output)" }
+    Write-Host "安装 requirements 到 venv..."
+    $pip = Invoke-NativePip $venvPython @("-m", "pip", "install", "-r", (Join-Path $ROOT "backend\requirements.txt"))
+    if ($pip.ExitCode -ne 0) { throw "pip install 失败：$($pip.Output)" }
+    Write-Host "venv 就绪: $venvPython"
+}
+
 # ---- Uninstall 分支：停+删服务、清 Machine env、删日志（范围=plan：停/删/清 env）----
 if ($Uninstall) {
     Write-Host "卸载服务 $ServiceName ..."
@@ -72,6 +99,8 @@ if ($Uninstall) {
 
 Ensure-Nssm
 Unblock-File $nssmExe -ErrorAction SilentlyContinue
+
+Ensure-PythonEnv
 
 # ---- 建服务（先清残留，幂等）----
 Invoke-Nssm stop $ServiceName | Out-Null
