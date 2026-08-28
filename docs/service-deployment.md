@@ -98,7 +98,7 @@ scripts/service/
 ### 2.6 边界与安全（本项目特殊，来源没有）
 
 - **只绑 127.0.0.1**（[server.py:861,867](backend/server.py#L861-L867)）——服务化后**不变**，禁止 0.0.0.0。LocalSystem 跑在 loopback 上，无外部暴露面。
-- config/apiKey 仍在 `~/.claude-excel-web/`（用户目录，非服务代码目录），LocalSystem 跑 server.py 读得到吗？——**要点**：`Path.home()` 在 LocalSystem 下解析为 `C:\Windows\System32\config\systemprofile`，不再是用户目录！**服务化后 config.sjon 路径会错**。这是本项目落地映射的**关键差异**，必须处理：服务模式下 CONFIG_DIR 需显式指到真实用户目录（启动时注入环境变量 `EXCEL_ADDIN_USER_HOME` 或改 `config_store.py` 支持覆盖）。→ 写进 plan 为必做项，不可随 NSSM 照抄。
+- config/apiKey 仍在 `~/.claude-excel-web/`（用户目录，非服务代码目录），LocalSystem 跑 server.py 读得到吗？——**要点**：`Path.home()` 在 LocalSystem 下解析为 `C:\Windows\System32\config\systemprofile`，不再是用户目录！**服务化后 config.sjon 路径会错**。这是本项目落地映射的**关键差异**，必须处理：服务模式下 CONFIG_DIR 需显式指到真实用户目录（启动时注入环境变量 `SHEETWISE_USER_HOME` 或改 `config_store.py` 支持覆盖）。→ 写进 plan 为必做项，不可随 NSSM 照抄。
 
 ---
 
