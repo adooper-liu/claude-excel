@@ -45,6 +45,9 @@ env/
 *.log
 backend/debug_run.log
 
+# NSSM runtime download (setup-service.ps1 Ensure-Nssm)
+scripts/service/nssm/
+
 # pytest basetemp (Windows tmpdir PermissionError workaround)
 .pytest-tmp/
 backend/.pytest-tmp/
