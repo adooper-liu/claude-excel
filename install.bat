@@ -30,6 +30,10 @@ echo [3/3] 注册 Excel 加载项...
 powershell -Command "$m='file:///'+(Get-Location).Path.Replace('\','/')+'/addin/manifest.xml';$k='HKCU:\SOFTWARE\Microsoft\Office\16.0\Wef\Developer\';if(-not(Test-Path $k)){New-Item -Path $k -Force};Set-ItemProperty -Path $k -Name 'b8c7e1a2-4f3d-4a5b-9c6d-7e8f1a2b3c4d' -Value $m"
 
 echo.
+echo 可选：把后端装成 Windows 服务（后台常驻、开机自启，Excel 直连不用开黑框）：
+echo   管理员 PowerShell 运行：scripts\service\setup-service.ps1 -UserHome C:\Users\你的用户名
+echo   只读体检：scripts\service\status-service.ps1
+echo.
 echo ==========================================
 echo   安装完成！
 echo   以后每次使用：双击 launch.bat
