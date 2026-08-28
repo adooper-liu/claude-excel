@@ -45,7 +45,15 @@ echo 依赖已安装。
 
 echo.
 echo [4/4] 注册 Excel 加载项...
-powershell -Command "$m='file:///'+(Get-Location).Path.Replace('\','/')+'/addin/manifest.xml';$k='HKCU:\SOFTWARE\Microsoft\Office\16.0\Wef\Developer\';if(-not(Test-Path $k)){New-Item -Path $k -Force};Set-ItemProperty -Path $k -Name 'b8c7e1a2-4f3d-4a5b-9c6d-7e8f1a2b3c4d' -Value $m"
+reg delete "HKCU\Software\Microsoft\Office\16.0\Wef\Developer" /v b8c7e1a2-4f3d-4a5b-9c6d-7e8f1a2b3c4d /f >nul 2>nul
+pushd addin
+call npx --yes office-addin-dev-settings register .\dist\manifest.xml
+if %ERRORLEVEL% neq 0 (
+    echo 加载项注册失败
+    popd
+    exit /b 1
+)
+popd
 
 echo.
 echo 可选：把后端装成 Windows 服务（后台常驻、开机自启，Excel 直连不用开黑框）：
