@@ -397,8 +397,10 @@ def install_pack(pack_id: str, *, consent_extensions: bool = False) -> dict:
         raise ValueError(f"单个 pack 技能数不能超过 {MAX_PACK_SKILLS}")
 
     declared = pack.get("skills")
-    if not isinstance(declared, list) or not declared:
-        raise ValueError("pack.json 需要非空 skills 列表")
+    if not isinstance(declared, list):
+        raise ValueError("pack.json 的 skills 必须是数组")
+    if not declared and not (pack_dir / "extensions").is_dir():
+        raise ValueError("pack.json 需要至少一个 skill 或 extension")
     declared_ids = {str(x).strip() for x in declared if str(x).strip()}
     disk_ids = {s["id"] for s in skills}
     if declared_ids != disk_ids:

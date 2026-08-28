@@ -40,6 +40,7 @@ def _patch_data_dirs(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(knowledge_store, "SOURCES_DIR", tmp_path / "knowledge" / "sources")
     monkeypatch.setattr(user_packs_store, "IMPORTED_PACKS_DIR", tmp_path / "packs-imported")
     monkeypatch.setattr(user_packs_store, "RUNTIME_PACKS_DIR", tmp_path / "packs")
+    monkeypatch.setattr(user_packs_store, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
     monkeypatch.setattr(user_extension_registry, "RUNTIME_PACKS_DIR", tmp_path / "packs")
     monkeypatch.setattr(user_extension_registry, "INSTALLED_PACKS_FILE", tmp_path / "installed_packs.json")
     monkeypatch.setattr(templates_store, "TEMPLATES_FILE", tmp_path / "templates.json")
@@ -151,7 +152,7 @@ def test_preview_needs_consent_when_pack_has_extensions(tmp_path, monkeypatch):
         "installed-packs.json": json.dumps([{"id": "vendor-p", "source": "third-party"}]),
         "packs/vendor-p/pack.json": json.dumps({"id": "vendor-p", "skills": []}),
         "packs/vendor-p/extensions/demo/manifest.json": json.dumps(
-            {"name": "user.demo_fn", "description": "d", "entry": "handler.py", "network": False, "secrets": [], "timeoutMs": 5000}
+            {"name": "user.demo_fn", "description": "d", "entry": "handler.py", "returns": "json", "network": False, "secrets": [], "timeoutMs": 5000}
         ),
     })
     prev = backup_store.preview_backup(z)
@@ -218,7 +219,7 @@ def test_apply_extension_pack_needs_consent_flag(tmp_path, monkeypatch):
             {"id": "vendor-ext", "category": "自定义", "title": "Ext", "skills": [], "extensions": ["demo"]}
         ),
         "packs/vendor-ext/extensions/demo/manifest.json": json.dumps(
-            {"name": "user.demo_fn", "description": "d", "entry": "handler.py", "network": False, "secrets": [], "timeoutMs": 5000}
+            {"name": "user.demo_fn", "description": "d", "entry": "handler.py", "returns": "json", "network": False, "secrets": [], "timeoutMs": 5000}
         ),
         "packs/vendor-ext/extensions/demo/handler.py": "def run(args):\n    return {}\n",
     })
