@@ -25,30 +25,35 @@ if (-not $acquired) {
 # 记录本实例开始时刻，用于 Test-PortOwnedBySelf（区分"我起的" vs 残留孤儿）
 $script:StartedAt = Get-Date
 
-# ---- 证书自检（存在且有效期 >=7 天才算新鲜；NSSM 自愈重启时自动续期）----
+# ---- 证书同步（信任判定属于当前登录用户，不能交给 LocalSystem）----
 $certFile = Join-Path $ROOT "backend\cert.pem"
 $keyFile  = Join-Path $ROOT "backend\key.pem"
-function Test-CertFresh {
-    if (-not (Test-Path $certFile) -or -not (Test-Path $keyFile)) { return $false }
-    $inner = "try{`$c=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new('$certFile');`$ch=New-Object System.Security.Cryptography.X509Certificates.X509Chain;`$ch.ChainPolicy.RevocationMode='NoCheck';`$ok=`$ch.Build(`$c);if(`$ok -and `$c.NotAfter -gt (Get-Date).AddDays(7)){'YES'}}catch{}"
-    $r = & powershell.exe -NoProfile -Command $inner
-    return ($r -match "YES")
+$userHome = [Environment]::GetEnvironmentVariable("SHEETWISE_USER_HOME", "Machine")
+if ([string]::IsNullOrWhiteSpace($userHome)) {
+    Write-SvcLog "SHEETWISE_USER_HOME missing — rerun setup-service.ps1 with -UserHome" "ERROR"
+    exit 1
 }
-if (-not (Test-CertFresh)) {
-    Write-SvcLog "Certificate missing/expiring — regenerating..." "WARN"
-    Push-Location (Join-Path $ROOT "addin")
-    # 失败不阻塞：server.py 无证书时回退 http:8765（spec §3.3）
-    & npx.cmd --yes office-addin-dev-certs install
-    Pop-Location
-    $crt = Join-Path $env:USERPROFILE ".office-addin-dev-certs\localhost.crt"
-    $key = Join-Path $env:USERPROFILE ".office-addin-dev-certs\localhost.key"
-    if (Test-Path $crt) {
-        Copy-Item $crt $certFile -Force
-        Copy-Item $key $keyFile  -Force
-        Write-SvcLog "Certificate regenerated."
-    } else {
-        Write-SvcLog "Certificate regen had no output files — server will fall back to http:8765" "WARN"
+$crt = Join-Path $userHome ".office-addin-dev-certs\localhost.crt"
+$key = Join-Path $userHome ".office-addin-dev-certs\localhost.key"
+if (-not (Test-Path $crt) -or -not (Test-Path $key)) {
+    Write-SvcLog "User certificates missing: $crt / $key — run install.bat first" "ERROR"
+    exit 1
+}
+$needsCopy = (-not (Test-Path $certFile)) -or (-not (Test-Path $keyFile))
+try {
+    $backendCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($certFile)
+    $userCert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($crt)
+    $needsCopy = ($backendCert.Thumbprint -ne $userCert.Thumbprint) -or
+                 ($userCert.NotAfter -le (Get-Date).AddDays(7))
+} catch { $needsCopy = $true }
+if ($needsCopy) {
+    if ($userCert -and $userCert.NotAfter -le (Get-Date).AddDays(7)) {
+        Write-SvcLog "User certificate expires at $($userCert.NotAfter) — rerun install.bat" "ERROR"
+        exit 1
     }
+    Copy-Item $crt $certFile -Force
+    Copy-Item $key $keyFile -Force
+    Write-SvcLog "Certificate copied from $userHome."
 }
 
 # ---- 健康检查：按端口归属 + 自起时间（§1.4），不用 WMI ----
