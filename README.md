@@ -34,14 +34,14 @@ AI 驱动的**独立** Excel 加载项——不绑 Claude 付费账号，填自�
 > 🟢 **第一次用、不熟命令行？** 先看 **[小白版安装使用指南](docs/getting-started-guide.md)**——从环境准备到 API Key 配置的保姆级教程（含三种安装方式对比、常见问题速查卡）。本节是给熟悉命令行的人的精简版。
 
 ### 1. 首次安装（仅一次）
-右键 `install.bat` → **以管理员身份运行**。
-- 安装 Python 依赖
+双击 `install.bat`。
+- 检查 Python / Node.js
 - 生成并信任 Office 开发者证书 (HTTPS)
+- 构建 addin 前端
+- 创建 `backend\.venv` 并安装 Python 依赖
 - 将插件注册到 Excel
 
-首次还需：`cd addin && npm install && npm run build`
-
-日常也可以在仓库根目录执行 `npm start`（会转到加载项）。完整链路（后端 + Excel）请用 `launch.bat`。
+开发前端时再在 `addin/` 下执行 `npm start`。完整链路（后端 + Excel）请用 `launch.bat`。
 
 ### 2. 日常启动
 双击 `launch.bat`：

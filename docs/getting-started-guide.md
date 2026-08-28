@@ -29,8 +29,8 @@
 | 准备项 | 怎么确认 | 没有怎么办 |
 |---|---|---|
 | Windows 电脑 | 你现在用的是 Windows 就行 | 本项目不支持 Mac |
-| Python 3.10+ | 打开命令行输入 `python --version`，能看到版本号就行 | 去 [python.org](https://www.python.org/downloads/) 下载安装，安装时勾选 "Add Python to PATH" |
-| Node.js 18+ | 打开命令行输入 `node --version`，能看到版本号就行 | 去 [nodejs.org](https://nodejs.org/) 下载 LTS 版安装 |
+| Python 3.11+ | 打开命令行输入 `python --version`，能看到版本号就行 | 去 [python.org](https://www.python.org/downloads/) 下载安装，安装时勾选 "Add Python to PATH" |
+| Node.js 20+ | 打开命令行输入 `node --version`，能看到版本号就行 | 去 [nodejs.org](https://nodejs.org/) 下载 LTS 版安装 |
 | 一个 API Key | 注册 DeepSeek / 阿里百炼 / 智谱 GLM 任选一个 | DeepSeek 注册最简单：[platform.deepseek.com](https://platform.deepseek.com/)，充 10 块能用很久 |
 
 > **API Key 是什么？** 就是 AI 大脑的"通行证"。SheetWise 不绑任何付费账号，你填自己的 Key，用多少花多少，数据不出本机。
@@ -55,58 +55,41 @@ git clone https://github.com/你的仓库地址/claude-excel.git
 
 ### 公共步骤（三种方式都要做）
 
-**2.1 一键安装后端：右键 `install.bat` → 以管理员身份运行**
+**2.1 一键安装前后端：双击 `install.bat`**
 
-这一个脚本会自动做三件事：
+这一个脚本会自动做完：
 
-1. 生成并信任 HTTPS 证书（让 Excel 信任本地服务），复制到 backend 目录
-2. **pip 自动安装 Python 依赖**，并下载 Chromium 浏览器内核（ERP 取数功能用）
-3. 把 SheetWise 插件注册进 Excel
+1. 检查 Python 和 Node.js
+2. 生成并信任 HTTPS 证书（让 Excel 信任本地服务），复制到 backend 目录
+3. 安装前端依赖并构建 addin 页面
+4. 创建 `backend\.venv`，安装 Python 依赖和 Chromium 浏览器内核（ERP 取数功能用）
+5. 把 SheetWise 插件注册进 Excel
 
 看到 `安装完成！` 就行。
 
-> **如果报错"npx 不是内部或外部命令"**：说明 Node.js 没装好，回到"准备"步骤重装。
+> **如果报错 "python 不是内部或外部命令" / "npx 不是内部或外部命令"**：说明 Python 或 Node.js 没装好，回到"准备"步骤重装。
 >
-> **如果 pip 下载很慢卡住**：先关掉这个窗口，用**管理员**身份打开命令行，手动换源装一遍（装过的会自动跳过）：
+> **如果 pip 下载很慢卡住**：先关掉窗口，再执行下面命令手动换源装依赖；装完重新双击 `install.bat`，让它继续完成证书、构建和注册：
+> ```bat
+> python -m venv backend\.venv
+> backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 > ```
-> pip install -r backend\requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-> ```
-> 装完再右键 `install.bat` 管理员运行一次，让它把证书和注册做完。
-
-**2.2 装前端依赖**
-
-打开命令行（按 `Win + R`，输入 `cmd` 回车），进到项目目录：
-
-```
-cd /d D:\claude-excel\addin
-npm install
-```
-
-第一次会比较久（3-5 分钟），看到 `added xxx packages` 就 OK。
-
-> `install.bat` 只管后端（Python 那边），前端这两个命令需要自己跑。
 
 ---
 
-### 方式 A：完整安装（再跑一条命令）
+### 方式 A：完整安装（已包含构建）
 
-上一步已经在 `addin` 目录里了，接着执行：
+`install.bat` 已经自动完成 `npm install` 和 `npm run build`，把 Excel 插件界面打包好，让后端能托管。
 
-```
-npm run build
-```
+> 以后只有在改了前端代码时，才需要重新运行 `install.bat` 或手动执行 `npm run build`。
 
-看到 `built` 之类的提示就行。这一步把 Excel 插件界面打包好，让后端能托管。
-
-> 这一步只做一次。以后除非改了代码需要重新构建，否则不用再跑。
-
-**✅ 方式 A 安装到此完成**：右键 `install.bat`（管理员）→ `npm install` → `npm run build`，就这三下。日常启动见下方"第三步 A"。
+**✅ 方式 A 安装到此完成**：双击一次 `install.bat` 就够了。日常启动见下方"第三步 A"。
 
 ---
 
-### 方式 B：开发安装（无需构建）
+### 方式 B：开发安装（开发模式不用关心构建产物）
 
-不需要 `npm run build`，开发模式下代码实时编译。
+开发模式下代码实时编译。`install.bat` 仍会先构建一次，但这是给生产托管用的；日常改代码时不需要重复构建。
 
 但开发模式用的 manifest 指向 `localhost:3000`（不是 :8765），所以你需要确认 `addin/manifest.xml` 的 `SourceLocation` 指向 `https://localhost:3000`（通常默认就是）。
 
@@ -116,7 +99,7 @@ npm run build
 
 ### 方式 C：服务化安装（方式 A 之上多一步）
 
-先完成方式 A 的全部步骤（包括 `npm run build`），然后：
+先完成方式 A，然后：
 
 **2.3 装成 Windows 服务**
 
@@ -133,9 +116,10 @@ cd D:\claude-excel
 1. 下载 NSSM（把 Python 后端包装成 Windows 服务的工具）
 2. 创建名为 `SheetWiseBackend` 的 Windows 服务
 3. 配置崩溃自愈（崩了 5 秒自动重启）
-4. 启动服务
+4. 检查并复用 `backend\.venv`，必要时同步 Python 依赖
+5. 启动服务
 
-看到 `Service started` 之类的提示就 OK。
+看到 `安装完成。用 .\status-service.ps1 验证。` 就 OK。
 
 > **`-UserHome` 是什么？** 服务以系统身份（LocalSystem）运行，它不知道你的用户目录在哪。这个参数告诉它你的 `config.json` 和知识库在哪个目录下，必须填对。
 
@@ -173,11 +157,11 @@ cd D:\claude-excel
 
 **分两步走：**
 
-**①** 先启动后端（开一个命令行窗口）：
+**①** 先启动后端（开一个命令行窗口，必须用项目自带 venv）：
 
 ```
-cd /d D:\claude-excel\backend
-python server.py
+cd /d D:\claude-excel
+backend\.venv\Scripts\python.exe backend\server.py
 ```
 
 **②** 再启动前端开发服务器（另开一个命令行窗口）：
@@ -317,11 +301,14 @@ npx office-addin-dev-certs install
 
 ### Q：安装时 pip install 很慢
 
-换国内源：
+进入项目根目录，用项目 venv 换国内源：
 
 ```
-pip install -r backend\requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+python -m venv backend\.venv
+backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
+
+然后重新运行 `install.bat`。
 
 ### Q：npm install 很慢
 
@@ -358,17 +345,16 @@ npm config set registry https://registry.npmmirror.com
 │    C = 服务化安装（A + 常驻，开机即用）      │
 │                                             │
 │  ── 公共步骤（三种方式都做）──              │
-│    1. 右键 install.bat 管理员运行           │
-│       (证书+Python依赖+Excel注册 全自动)    │
-│    2. cd addin && npm install              │
+│    1. 双击 install.bat                      │
+│       (证书+前端构建+venv依赖+注册 全自动)  │
 │                                             │
-│  ── 方式 A 再一步 ──                        │
-│    3. npm run build                        │
+│  ── 方式 A：安装即完成 ──                   │
 │    日常启动：双击 launch.bat                │
 │                                             │
 │  ── 方式 B 无需构建 ──                      │
 │    日常启动：                               │
-│      窗口1: python backend\server.py       │
+│      窗口1: backend\.venv\...python.exe     │
+│             backend\server.py               │
 │      窗口2: cd addin && npm start          │
 │                                             │
 │  ── 方式 C 在 A 之上 ──                     │
