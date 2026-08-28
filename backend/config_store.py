@@ -8,7 +8,13 @@ import json
 import os
 from pathlib import Path
 
-CONFIG_DIR = Path.home() / ".claude-excel-web"
+# 支持 SHEETWISE_USER_HOME 环境变量（服务模式）
+_CONFIG_HOME = os.getenv("SHEETWISE_USER_HOME")
+if _CONFIG_HOME:
+    CONFIG_DIR = Path(_CONFIG_HOME) / ".claude-excel-web"
+else:
+    CONFIG_DIR = Path.home() / ".claude-excel-web"
+
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
 DEFAULT_PROVIDERS = {
