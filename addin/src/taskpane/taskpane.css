@@ -1232,8 +1232,8 @@ select:focus-visible {
   border-left: 1px solid var(--rule);
 }
 .pdf-mode button.on {
-  background: var(--fx-fill);
-  color: var(--fx);
+  background: var(--fx);
+  color: #fff;
   font-weight: 650;
 }
 .pdf-mode button:disabled {
