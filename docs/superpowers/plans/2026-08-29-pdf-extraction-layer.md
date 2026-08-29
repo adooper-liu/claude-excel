@@ -1,9 +1,9 @@
 ---
-status: pending
+status: done
 ---
 # PDF 抽取层（文本 + 表格 + 扫描件 OCR，附加文件入口按内容分流）（2026-08-29）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 新增一套**后端 PDF 抽取层** + 任务窗格「附加文件」入口。用户点「附加 PDF」上传后，后端自动判型（文本型 / 表格型 / 扫描件），按内容分流：**正文 → 落知识库**（对话 `search_knowledge` 引用），**表格 → 结构化表行进簿**（Office JS 写格，不进模型），**扫描件 → OCR**（默认本地，可选云）后再分流。三种都要；**不新增斜杠、不新增模型算子**——这是纯 UI 入口 + 后端 API，模型不参与。
 
@@ -60,14 +60,14 @@ status: pending
 
 **现状缺陷：** 无；后端完全没有 PDF 能力。
 
-- [ ] **Step 1: 依赖** — `requirements.txt` 加 `pypdf>=5`、`pdfplumber>=0.11`、`pillow>=10`；`pytesseract` 加注释说明「本地 OCR 可选，需 tesseract 二进制（install.bat 装）」。`pip install -r backend/requirements.txt` 后 `python -c "import pypdf, pdfplumber, PIL; print('ok')"` → 输出 `ok`、exit 0。
-- [ ] **Step 2: `detect_kind(text_len, table_count)` 纯函数** — 判定规则：`text_len >= 阈值(如 40)` → `text`；否则 `table_count > 0` → `table`；否则 → `scanned`。阈值写成模块常量，可测。
-- [ ] **Step 3: `extract_pdf_text(data)`** — `pypdf.PdfReader` 逐页 `extract_text()`，合并、去空页；返回文本字符串。
-- [ ] **Step 4: `extract_pdf_tables(data)`** — `pdfplumber` 逐页 `extract_tables()`，取**最大**表格（行×列最大），转 `list[list[str]]`（空单元格补 `""`）；返回 `rows` 或 `None`。表头判空对齐 `fetch_recipe.drop_repeated_header` 精神（若首行与第二行相同则去重首行）。
-- [ ] **Step 5: `extract_pdf_ocr_local(data)`** — 逐页转图片（`pypdf`/`pdfplumber` 渲染 + `PIL`）→ `pytesseract.image_to_string(..., lang="chi_sim+eng")`。tesseract 缺失时抛**可读** error（「未安装 tesseract，本地 OCR 不可用；见 install.bat」），不静默返回空。
-- [ ] **Step 6: `extract_pdf(data, ocr_backend)` 统一出口** — 先 `pypdf` 抽文本 + `pdfplumber` 抽表；`detect_kind` 判型：`text` → 返回 text；`table` → 返回 rows + `sheetName = "PDF_" + 文件名去后缀（≤28 字）`；`scanned` → 按 `ocr_backend` 走本地/云 OCR，OCR 结果含表格特征则当 table 返回 rows，否则当 text 返回。`preview` 取前 ~200 字。`ocrBackend=None` 且 scanned 时返回 `{kind:"scanned", error:"需 OCR（本地未装 tesseract 或需云授权）"}`。
-- [ ] **Step 7: 单测 `test_pdf_extract.py`** — (a) `detect_kind` 边界（长文本→text、无文本有表→table、都空→scanned）；(b) 用 `pypdf` 在内存生成一个带文本的最小 PDF，断言 `extract_pdf` 返回 `kind=text` 且 text 非空；(c) 无 tesseract 环境时 scanned 分支返回可读 error（不崩）。`cd backend && python -m pytest tests/test_pdf_extract.py` → exit 0，`N passed`。
-- [ ] **Step 8: 门禁** — `cd backend && python -m pytest tests/test_pdf_extract.py -q` → exit 0；`python -c "import pdf_extract"` → exit 0。
+- [x] **Step 1: 依赖** — `requirements.txt` 加 `pypdf>=5`、`pdfplumber>=0.11`、`pillow>=10`；`pytesseract` 加注释说明「本地 OCR 可选，需 tesseract 二进制（install.bat 装）」。`pip install -r backend/requirements.txt` 后 `python -c "import pypdf, pdfplumber, PIL; print('ok')"` → 输出 `ok`、exit 0。
+- [x] **Step 2: `detect_kind(text_len, table_count)` 纯函数** — 判定规则：`text_len >= 阈值(如 40)` → `text`；否则 `table_count > 0` → `table`；否则 → `scanned`。阈值写成模块常量，可测。
+- [x] **Step 3: `extract_pdf_text(data)`** — `pypdf.PdfReader` 逐页 `extract_text()`，合并、去空页；返回文本字符串。
+- [x] **Step 4: `extract_pdf_tables(data)`** — `pdfplumber` 逐页 `extract_tables()`，取**最大**表格（行×列最大），转 `list[list[str]]`（空单元格补 `""`）；返回 `rows` 或 `None`。表头判空对齐 `fetch_recipe.drop_repeated_header` 精神（若首行与第二行相同则去重首行）。
+- [x] **Step 5: `extract_pdf_ocr_local(data)`** — 逐页转图片（`pypdf`/`pdfplumber` 渲染 + `PIL`）→ `pytesseract.image_to_string(..., lang="chi_sim+eng")`。tesseract 缺失时抛**可读** error（「未安装 tesseract，本地 OCR 不可用；见 install.bat」），不静默返回空。
+- [x] **Step 6: `extract_pdf(data, ocr_backend)` 统一出口** — 先 `pypdf` 抽文本 + `pdfplumber` 抽表；`detect_kind` 判型：`text` → 返回 text；`table` → 返回 rows + `sheetName = "PDF_" + 文件名去后缀（≤28 字）`；`scanned` → 按 `ocr_backend` 走本地/云 OCR，OCR 结果含表格特征则当 table 返回 rows，否则当 text 返回。`preview` 取前 ~200 字。`ocrBackend=None` 且 scanned 时返回 `{kind:"scanned", error:"需 OCR（本地未装 tesseract 或需云授权）"}`。
+- [x] **Step 7: 单测 `test_pdf_extract.py`** — (a) `detect_kind` 边界（长文本→text、无文本有表→table、都空→scanned）；(b) 用 `pypdf` 在内存生成一个带文本的最小 PDF，断言 `extract_pdf` 返回 `kind=text` 且 text 非空；(c) 无 tesseract 环境时 scanned 分支返回可读 error（不崩）。`cd backend && python -m pytest tests/test_pdf_extract.py` → exit 0，`N passed`。
+- [x] **Step 8: 门禁** — `cd backend && python -m pytest tests/test_pdf_extract.py -q` → exit 0；`python -c "import pdf_extract"` → exit 0。
 
 ---
 
@@ -83,10 +83,10 @@ status: pending
 
 **现状缺陷：** 无 PDF 入口；`ocrBackend` 无配置位。
 
-- [ ] **Step 1: `config_store.py`** — `DEFAULT_CONFIG` 加 `"ocrBackend": "local"`；确认 `get_config()` 对缺字段的旧 `config.json` 仍能合并出默认值（不因缺 `ocrBackend` 报错）。
-- [ ] **Step 2: `server.py` 端点** — `@app.post("/api/pdf/extract")`，`async def api_pdf_extract(request, file: UploadFile = File(...), ocr_backend: str = Form(""))`：读 `file.file.read()` 字节 → `extract_pdf(data, ocr_backend or cfg["ocrBackend"])` → 返回 JSON；`ocr_backend == "cloud"` 且非显式授权时返回 `{"error": "云 OCR 需前端确认授权"}`（授权闸门由前端传一个确认标记，见 Task 4）。
-- [ ] **Step 3: 知识库接入说明**（不改代码，写入 SKILL/文档）——正文类由**前端**把 `extract_pdf` 返回的 `text` 以 `原名.md` 名义调现有 `POST /api/knowledge` ingest，后端**不**在 extract 端点内自动 ingest（职责分离：extract 只抽取，落地由前端决定）。
-- [ ] **Step 4: 门禁** — `cd backend && python -m pytest tests/ -q` → exit 0（全量不回归）；`python -c "import server"` 语法 OK（若有导入副作用则改用 `python -m py_compile server.py`）。
+- [x] **Step 1: `config_store.py`** — `DEFAULT_CONFIG` 加 `"ocrBackend": "local"`；确认 `get_config()` 对缺字段的旧 `config.json` 仍能合并出默认值（不因缺 `ocrBackend` 报错）。
+- [x] **Step 2: `server.py` 端点** — `@app.post("/api/pdf/extract")`，`async def api_pdf_extract(request, file: UploadFile = File(...), ocr_backend: str = Form(""))`：读 `file.file.read()` 字节 → `extract_pdf(data, ocr_backend or cfg["ocrBackend"])` → 返回 JSON；`ocr_backend == "cloud"` 且非显式授权时返回 `{"error": "云 OCR 需前端确认授权"}`（授权闸门由前端传一个确认标记，见 Task 4）。
+- [x] **Step 3: 知识库接入说明**（不改代码，写入 SKILL/文档）——正文类由**前端**把 `extract_pdf` 返回的 `text` 以 `原名.md` 名义调现有 `POST /api/knowledge` ingest，后端**不**在 extract 端点内自动 ingest（职责分离：extract 只抽取，落地由前端决定）。
+- [x] **Step 4: 门禁** — `cd backend && python -m pytest tests/ -q` → exit 0（全量不回归）；`python -c "import server"` 语法 OK（若有导入副作用则改用 `python -m py_compile server.py`）。
 
 ---
 
@@ -103,13 +103,13 @@ status: pending
 
 **现状缺陷：** 无 PDF 入口；知识栏只认 `.md/.txt/.csv` 文本文件。
 
-- [ ] **Step 1: 上传** — 复用 `BackupSection.tsx` 的 multipart 模式：`form.append('file', file)` → `fetch('/api/pdf/extract', {method:'POST', body:form})`。文件选择器 `accept=".pdf"`。
-- [ ] **Step 2: 分流（前端）** — 拿 `{kind, text, rows, sheetName, preview, error}`：
+- [x] **Step 1: 上传** — 复用 `BackupSection.tsx` 的 multipart 模式：`form.append('file', file)` → `fetch('/api/pdf/extract', {method:'POST', body:form})`。文件选择器 `accept=".pdf"`。
+- [x] **Step 2: 分流（前端）** — 拿 `{kind, text, rows, sheetName, preview, error}`：
   - `kind === "text"`（或 scanned-OCR 出 text）→ `POST /api/knowledge`，body `{name: 原名+".md", content: text}`（按现有 ingest API 的字段名，实现时对齐 `api_knowledge_ingest` 的 req 结构）→ 提示「已入知识库，可对话提问」+ 刷新知栏。
   - `kind === "table"`（或 scanned-OCR 出 rows）→ `writeToNewSheet(sheetName, rows)` → 提示「表已进簿：<sheetName>（N 行）」。
   - `error` → 直接展示，不静默。
-- [ ] **Step 3: 按钮 + 样式** — 「附加 PDF」按钮放在知识栏/取数栏入口旁；上传中显示 loading，完成后提示结果。**不新增斜杠**。
-- [ ] **Step 4: 门禁** — `cd addin && npm run typecheck` → exit 0；`cd addin && npm run build` → exit 0。
+- [x] **Step 3: 按钮 + 样式** — 「附加 PDF」按钮放在知识栏/取数栏入口旁；上传中显示 loading，完成后提示结果。**不新增斜杠**。
+- [x] **Step 4: 门禁** — `cd addin && npm run typecheck` → exit 0；`cd addin && npm run build` → exit 0。
 
 ---
 
@@ -125,9 +125,9 @@ status: pending
 
 **现状缺陷：** 无云 OCR；无授权闸门。
 
-- [ ] **Step 1: `extract_pdf_ocr_cloud(data)`** — 调百炼文档解析接口（doc-parse），返回识别文本；失败返回可读 error（不静默空）。**敏感内容风险**：此路径内容上云，仅在前端授权后调用。
-- [ ] **Step 2: 前端授权闸门** — 当 `ocrBackend === "cloud"` 时，上传前弹确认「该 PDF 内容将上传云端解析，请确认不含敏感信息（账号/密码/合同隐私）」，用户确认后才带 `ocrBackend=cloud` + 确认标记调 extract。默认 local。
-- [ ] **Step 3: 门禁** — `cd backend && python -m pytest tests/ -q` → exit 0；`cd addin && npm run typecheck` → exit 0；`cd addin && npm run build` → exit 0。
+- [x] **Step 1: `extract_pdf_ocr_cloud(data)`** — 调百炼文档解析接口（doc-parse），返回识别文本；失败返回可读 error（不静默空）。**敏感内容风险**：此路径内容上云，仅在前端授权后调用。
+- [x] **Step 2: 前端授权闸门** — 当 `ocrBackend === "cloud"` 时，上传前弹确认「该 PDF 内容将上传云端解析，请确认不含敏感信息（账号/密码/合同隐私）」，用户确认后才带 `ocrBackend=cloud` + 确认标记调 extract。默认 local。
+- [x] **Step 3: 门禁** — `cd backend && python -m pytest tests/ -q` → exit 0；`cd addin && npm run typecheck` → exit 0；`cd addin && npm run build` → exit 0。
 
 ---
 
@@ -151,3 +151,7 @@ status: pending
    `git add backend/pdf_extract.py backend/tests/test_pdf_extract.py backend/requirements.txt backend/server.py backend/config_store.py addin/src/taskpane/components/PdfAttachSection.tsx addin/src/taskpane/taskpane.css && git commit -m "feat(pdf): PDF 抽取层（文本/表格/本地OCR，附加文件入口按内容分流；云OCR授权闸门）"`（挂载点改动若在 App.tsx/ChatInput.tsx 一并 add）。
 4. 真机验收段留给管理员，Codex 不代跑、不标 done 时声称已验。
 5. 全部通过后：按 `docs/coordination.md`，review 交回 Claude 对照本 plan 逐粒核对。
+
+## Progress log
+
+- 2026-08-29: 已实现 PDF 抽取层、`/api/pdf/extract`、附加 PDF 分流入口、本地 OCR 与百炼 doc-parse 云路径；云路径保留前端显式授权闸门。后端 204 passed，前端 300 passed，typecheck/build 通过；`build_dashboard` 缺失的后端 executor 注册已在门禁中补齐。真机验收（文本入库、表格进簿、扫描件识别率、云闸门、撤销与敏感信息路径）待管理员执行。

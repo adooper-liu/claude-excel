@@ -33,6 +33,7 @@ from user_packs_store import (
 from extension_secrets import set_secret
 from user_extension_registry import list_extensions
 from user_fn_runner import run_user_fn
+import pdf_extract
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
 from knowledge_store import delete_document, ingest_document, ingest_document_from_path, list_documents, search, status
@@ -697,6 +698,31 @@ async def api_web_fetch(req: dict, request: Request):
         str(password) or None,
         as_rows=as_rows,
         browser=bool(req.get("browser")),
+    )
+
+
+@app.post("/api/pdf/extract")
+async def api_pdf_extract(
+    request: Request,
+    file: UploadFile = File(...),
+    ocr_backend: str = Form(""),
+    cloudConfirmed: bool = Form(False),
+):
+    require_loopback(request)
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "PDF 文件为空")
+    backend = (ocr_backend or get_config().get("ocrBackend") or "local").strip().lower()
+    if backend not in ("local", "cloud"):
+        raise HTTPException(400, "ocrBackend 仅支持 local 或 cloud")
+    if backend == "cloud" and cloudConfirmed is not True:
+        return {"error": "云 OCR 需前端确认授权"}
+    filename = file.filename or "upload.pdf"
+    return await asyncio.to_thread(
+        pdf_extract.extract_pdf,
+        data,
+        backend,
+        filename,
     )
 
 

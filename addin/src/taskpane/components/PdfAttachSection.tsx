@@ -1,0 +1,270 @@
+/**
+ * PdfAttachSection — extract a local PDF, then land text in knowledge or tables in the workbook.
+ */
+
+import React, { useCallback, useRef, useState } from "react";
+import { API_BASE } from "../../services/api-config";
+import { writeToNewSheet } from "../../excel";
+
+type OcrBackend = "local" | "cloud";
+
+type PdfResult = {
+  kind: "text" | "table" | "scanned";
+  text?: string | null;
+  rows?: unknown;
+  sheetName?: string;
+  preview?: string;
+  pages?: number;
+  tables?: number;
+  ocrBackend?: "local" | "cloud" | null;
+  error?: string;
+};
+
+interface Props {
+  disabled: boolean;
+}
+
+async function readJson(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { detail: text };
+  }
+}
+
+function postJson(path: string, body: object): Promise<Record<string, unknown>> {
+  return fetch(API_BASE + path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(async (response) => {
+    const data = await readJson(response);
+    if (!response.ok) {
+      throw new Error(String(data.detail || response.statusText || "请求失败"));
+    }
+    return data;
+  });
+}
+
+function resultRows(data: PdfResult): string[][] {
+  if (!Array.isArray(data.rows)) return [];
+  return data.rows
+    .filter(Array.isArray)
+    .map((row) => row.map((cell) => String(cell ?? "")));
+}
+
+function pickFileFromDrop(dt: DataTransfer | null): File | null {
+  if (!dt) return null;
+  if (dt.files?.length) return dt.files[0];
+  const item = dt.items?.[0];
+  return item?.kind === "file" ? item.getAsFile() : null;
+}
+
+export default function PdfAttachSection({ disabled }: Props): JSX.Element {
+  const [backend, setBackend] = useState<OcrBackend>("local");
+  const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [err, setErr] = useState("");
+  const [status, setStatus] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const extract = useCallback(async (file: File, useBackend: OcrBackend): Promise<PdfResult> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("ocr_backend", useBackend);
+    if (useBackend === "cloud") {
+      form.append("cloudConfirmed", "true");
+    }
+    const response = await fetch(API_BASE + "/api/pdf/extract", {
+      method: "POST",
+      body: form,
+    });
+    const data = await readJson(response);
+    if (!response.ok) {
+      throw new Error(String(data.detail || response.statusText || "PDF 解析失败"));
+    }
+    return data as PdfResult;
+  }, []);
+
+  const land = useCallback(async (file: File, data: PdfResult) => {
+    const rows = resultRows(data);
+    if (data.kind === "table" && rows.length) {
+      const sheetName = String(data.sheetName || file.name || "PDF").slice(0, 28);
+      const written = await writeToNewSheet(sheetName, rows);
+      setStatus("表已进簿：「" + written + "」（" + rows.length + " 行）");
+      return;
+    }
+
+    const text = String(data.text || "");
+    if (!text.trim()) {
+      throw new Error(String(data.error || "PDF 没有可用的文本或表格。"));
+    }
+    const base = file.name.replace(/\.pdf$/i, "") || "document";
+    await postJson("/api/knowledge", { filename: base + ".md", content: text });
+    const viaOcr = data.ocrBackend ? "，OCR：" + data.ocrBackend : "";
+    setStatus("已入知识库，可在对话提问" + viaOcr);
+  }, []);
+
+  const process = useCallback(async (file: File, useBackend: OcrBackend) => {
+    if (disabled || busy) return;
+      setBusy(true);
+      setErr("");
+      setStatus("正在解析：" + file.name);
+      try {
+        const data = await extract(file, useBackend);
+        await land(file, data);
+        setPendingFile(null);
+      } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setStatus("");
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, disabled, extract, land]);
+
+  const onFilePick = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!/\.pdf$/i.test(file.name)) {
+      setErr("请选择 PDF 文件");
+      setStatus("");
+      return;
+    }
+    setErr("");
+    setStatus("");
+    if (backend === "cloud") {
+      setPendingFile(file);
+      return;
+    }
+    void process(file, "local");
+  }, [backend, process]);
+
+  const onDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOver(false);
+    const file = pickFileFromDrop(event.dataTransfer);
+    if (!file) {
+      setErr("拖放失败：未识别到文件。");
+      return;
+    }
+    if (!/\.pdf$/i.test(file.name)) {
+      setErr("请选择 PDF 文件");
+      return;
+    }
+    setErr("");
+    setStatus("");
+    if (backend === "cloud") {
+      setPendingFile(file);
+      return;
+    }
+    void process(file, "local");
+  }, [backend, process]);
+
+  const switchBackend = useCallback((next: OcrBackend) => {
+    if (busy) return;
+    setBackend(next);
+    setPendingFile(null);
+    setErr("");
+  }, [busy]);
+
+  return (
+    <div className="fetch-bar pdf-bar">
+      <div className="fetch-row pdf-head">
+        <span className="pdf-title">附加 PDF</span>
+        <div className="pdf-mode" role="group" aria-label="OCR 方式">
+          <button
+            type="button"
+            className={backend === "local" ? "on" : ""}
+            onClick={() => switchBackend("local")}
+            disabled={disabled || busy}
+            aria-pressed={backend === "local"}
+          >
+            本机 OCR
+          </button>
+          <button
+            type="button"
+            className={backend === "cloud" ? "on" : ""}
+            onClick={() => switchBackend("cloud")}
+            disabled={disabled || busy}
+            aria-pressed={backend === "cloud"}
+          >
+            云端 OCR
+          </button>
+        </div>
+      </div>
+
+      <div
+        className={"skill-upload-zone pdf-upload" + (dragOver ? " pdf-drag-over" : "")}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragOver(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          setDragOver(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          setDragOver(false);
+        }}
+        onDrop={onDrop}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pdf,application/pdf"
+          className="skill-file-input"
+          onChange={onFilePick}
+          aria-hidden
+          tabIndex={-1}
+        />
+        <button
+          type="button"
+          className="knowledge-upload-btn"
+          disabled={disabled || busy}
+          onClick={() => fileRef.current?.click()}
+        >
+          {busy ? "解析中…" : "浏览 PDF"}
+        </button>
+      </div>
+
+      {pendingFile && (
+        <div className="pdf-confirm" role="alertdialog" aria-label="云端 OCR 授权">
+          <p>
+            {pendingFile.name} 将上传云端解析。请确认不含账号、密码或合同隐私。
+          </p>
+          <div className="pdf-confirm-actions">
+            <button
+              type="button"
+              className="pdf-confirm-cancel"
+              onClick={() => setPendingFile(null)}
+              disabled={busy}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="pdf-confirm-ok"
+              onClick={() => void process(pendingFile, "cloud")}
+              disabled={busy}
+            >
+              确认上传
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status && <p className="fetch-ok">{status}</p>}
+      {err && <p className="fetch-err">{err}</p>}
+      {backend === "cloud" && !pendingFile && (
+        <p className="skill-install-note">云端解析只在确认后才上传；本机 OCR 不上云。</p>
+      )}
+    </div>
+  );
+}

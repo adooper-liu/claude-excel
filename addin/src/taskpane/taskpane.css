@@ -1200,6 +1200,92 @@ select:focus-visible {
   color: var(--muted);
   white-space: nowrap;
 }
+.pdf-bar {
+  border-top: 1px dashed var(--rule);
+  padding-bottom: 8px;
+}
+.pdf-head {
+  align-items: center;
+  justify-content: space-between;
+}
+.pdf-title {
+  font-size: var(--fs-ui);
+  font-weight: 650;
+  color: var(--ink);
+}
+.pdf-mode {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.pdf-mode button {
+  min-width: 66px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+.pdf-mode button + button {
+  border-left: 1px solid var(--rule);
+}
+.pdf-mode button.on {
+  background: var(--fx-fill);
+  color: var(--fx);
+  font-weight: 650;
+}
+.pdf-mode button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.pdf-upload {
+  flex-direction: row;
+  justify-content: center;
+  padding: 10px 8px;
+}
+.pdf-upload.pdf-drag-over {
+  border-color: var(--fx);
+  background: var(--fx-fill);
+}
+.pdf-confirm {
+  border: 1px solid var(--fx);
+  border-radius: var(--radius);
+  background: var(--fx-fill);
+  padding: 8px;
+}
+.pdf-confirm p {
+  margin: 0 0 6px;
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+  color: var(--ink);
+}
+.pdf-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.pdf-confirm-actions button {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+.pdf-confirm-cancel {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--muted);
+}
+.pdf-confirm-ok {
+  background: var(--fx);
+  border: 1px solid var(--fx);
+  color: #fff;
+}
+.pdf-confirm-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .fetch-bar {
   padding: 8px 10px 0;
   display: flex;

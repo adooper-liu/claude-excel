@@ -6,6 +6,7 @@ import React, { useState, useRef, useCallback, KeyboardEvent, useMemo } from 're
 import PromptMenu from './PromptMenu';
 import FetchBar, { type FetchRows } from './FetchBar';
 import KnowledgeBar from './KnowledgeBar';
+import PdfAttachSection from './PdfAttachSection';
 import { filterSlashSkills, parseSlashCommand, slashQuery, type SlashSkill } from '../../services/slash-skills';
 import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
 import { operatorCatalogByGroup } from '../../services/operator-catalog';
@@ -33,6 +34,7 @@ export default function ChatInput({
   const [installing, setInstalling] = useState(false);
   const [showFetch, setShowFetch] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
+  const [showPdf, setShowPdf] = useState(false);
   const [installPasteOpen, setInstallPasteOpen] = useState(false);
   const [showOperatorRef, setShowOperatorRef] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -206,6 +208,9 @@ export default function ChatInput({
       {showKnowledge && (
         <KnowledgeBar disabled={disabled || isStreaming} />
       )}
+      {showPdf && (
+        <PdfAttachSection disabled={disabled || isStreaming} />
+      )}
     <div className="chat-input-area">
       <div className="chat-input-tools">
         <button
@@ -232,6 +237,14 @@ export default function ChatInput({
           title="本机知识库"
           aria-label="本机知识库"
         >知</button>
+        <button
+          type="button"
+          className={`icon-btn${showPdf ? " on" : ""}`}
+          disabled={disabled || isStreaming}
+          onClick={() => setShowPdf((v) => !v)}
+          title="附加 PDF"
+          aria-label="附加 PDF"
+        >附</button>
         {showPrompts && (
           <PromptMenu
             draft={text}

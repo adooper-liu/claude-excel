@@ -81,6 +81,20 @@ if %ERRORLEVEL% neq 0 (
     pause
     exit /b 1
 )
+"backend\.venv\Scripts\python.exe" -m pip install "pytesseract>=0.3.13"
+if %ERRORLEVEL% neq 0 (
+    echo pytesseract 安装失败；后端可运行，但扫描件本地 OCR 不可用
+)
+where tesseract >nul 2>nul
+if %ERRORLEVEL% neq 0 (
+    echo 安装本地 OCR 引擎 Tesseract（UB-Mannheim 版，默认含 chi_sim）...
+    winget install -e --id UB-Mannheim.TesseractOCR --accept-package-agreements --accept-source-agreements
+    if %ERRORLEVEL% neq 0 (
+        echo Tesseract 安装失败；后端可运行，但扫描件本地 OCR 不可用
+    )
+) else (
+    echo 已找到本地 OCR 引擎 Tesseract。
+)
 echo 安装 Chromium（ERP 网页登录用，仅本机）...
 "backend\.venv\Scripts\python.exe" -m playwright install chromium
 if %ERRORLEVEL% neq 0 (

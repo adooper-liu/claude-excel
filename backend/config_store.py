@@ -40,6 +40,7 @@ DEFAULT_CONFIG = {
     "activeProvider": "deepseek",
     "providers": DEFAULT_PROVIDERS,
     "embeddingModel": "",
+    "ocrBackend": "local",
 }
 
 _config: dict = {}
@@ -97,6 +98,7 @@ def load_config() -> dict:
     if cfg.get("activeProvider") not in providers:
         cfg["activeProvider"] = "deepseek"
     cfg.setdefault("embeddingModel", "")
+    cfg.setdefault("ocrBackend", "local")
 
     _config = cfg
     return _config
