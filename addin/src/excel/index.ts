@@ -12,6 +12,7 @@ export { inspectWorkbook, inspectTable } from './inspect';
 export { inspectFormulas, scanFormulaErrors } from './formula-inspect';
 export { writeInputs } from './write-inputs';
 export { createPivot } from './pivot';
+export { buildDashboard } from './dashboard';
 export { listPalettes } from './style-core';
 export { ensureTable, readTable, listTableNames } from './table';
 export { reconcileTables } from './reconcile';

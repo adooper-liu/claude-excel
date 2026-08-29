@@ -1,0 +1,29 @@
+{
+  "name": "dashboard",
+    "version": "1.0.0",
+      "description": "Build a live-formula dashboard: KPI cards + per-dimension SUMIFS tables + optional monthly series + best-of highlight + charts. All cells are formulas referencing the source table.",
+        "tools": [
+            {
+                  "name": "build_dashboard",
+                        "description": "在输出 sheet 铺一张活公式仪表盘（KPI 卡片 + 维度 SUMIFS 表 + 可选月序列表 + 最佳值 INDEX/MATCH 高亮 + 图表），全部公式引用源表，源表变仪表盘自动重算。模型只传列名（来自 inspect），不写格、不进表体。",
+                              "input_schema": {
+                                      "type": "object",
+                                              "properties": {
+                                                        "tableName": { "type": "string", "description": "源 Excel Table 名（先 ensure_table）" },
+                                                                  "sourceSheet": { "type": "string", "description": "无 tableName 时的源 sheet" },
+                                                                            "sourceRange": { "type": "string", "description": "无 tableName 时的源 range，含表头" },
+                                                                                      "outputSheet": { "type": "string", "description": "默认「仪表盘」" },
+                                                                                                "valueColumns": { "type": "array", "items": { "type": "string" }, "description": "数值列（如 金额），每个生成一个「合计」KPI；维度表/月序列表按第一个 valueColumn 求和" },
+                                                                                                          "countColumn": { "type": "string", "description": "计数列（如 订单号），「笔数」KPI 用 COUNTA；缺省回落第一个维度列" },
+                                                                                                                    "dimensions": { "type": "array", "items": { "type": "string" }, "description": "维度列（产品/区域/销售/类目），每个生成一张 SUMIFS 表" },
+                                                                                                                              "dateColumn": { "type": "string", "description": "日期列，生成月序列表（按实际数据月范围）" },
+                                                                                                                                        "kpis": { "type": "array", "items": { "type": "string", "enum": ["total", "count", "avg"] }, "description": "默认 [total, count, avg]；total=每 valueColumn 求和，count=COUNTA(countColumn)，avg=IFERROR(合计/笔数,0)" },
+                                                                                                                                                  "charts": { "type": "array", "items": { "type": "string", "enum": ["dimension-bar", "month-line", "dimension-pie"] }, "description": "默认：有 dimensions 给 dimension-bar（第一个维度），有 dateColumn 给 month-line" },
+                                                                                                                                                            "includeBestOf": { "type": "boolean", "description": "默认 true，生成最佳值高亮（INDEX/MATCH）" }
+                                                                                                                                                                    },
+                                                                                                                                                                            "required": ["valueColumns"]
+                                                                                                                                                                                  }
+                                                                                                                                                                                      }
+                                                                                                                                                                                        ]
+                                                                                                                                                                                        }
+                                                                                                                                                                                        

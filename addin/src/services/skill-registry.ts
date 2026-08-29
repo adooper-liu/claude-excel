@@ -30,6 +30,7 @@ export const HANDLED_TOOLS: ReadonlySet<string> = new Set([
   "reshape_table",
   "calculate_table",
   "create_pivot",
+  "build_dashboard",
   "write_inputs",
   "web_fetch",
   "search_knowledge",

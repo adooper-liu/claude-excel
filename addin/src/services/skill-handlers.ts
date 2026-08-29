@@ -105,6 +105,30 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         });
         return JSON.stringify(r);
       }
+      case 'build_dashboard': {
+        const splitCsv = (v: unknown): string[] | undefined => {
+          if (Array.isArray(v)) return (v as string[]).map((s) => String(s).trim()).filter(Boolean);
+          if (v == null || v === '') return undefined;
+          return String(v).split(',').map((s) => s.trim()).filter(Boolean);
+        };
+        let includeBestOf: boolean | undefined;
+        if (input.includeBestOf === true || String(input.includeBestOf) === 'true') includeBestOf = true;
+        else if (input.includeBestOf === false || String(input.includeBestOf) === 'false') includeBestOf = false;
+        const r = await E.buildDashboard({
+          tableName: input.tableName as string | undefined,
+          sourceSheet: input.sourceSheet as string | undefined,
+          sourceRange: input.sourceRange as string | undefined,
+          outputSheet: input.outputSheet as string | undefined,
+          valueColumns: splitCsv(input.valueColumns) || [],
+          countColumn: input.countColumn as string | undefined,
+          dimensions: splitCsv(input.dimensions),
+          dateColumn: input.dateColumn as string | undefined,
+          kpis: splitCsv(input.kpis) as string[] | undefined,
+          charts: splitCsv(input.charts) as string[] | undefined,
+          includeBestOf,
+        });
+        return JSON.stringify(r);
+      }
       case 'sort_filter': {
         const r = await E.applySortFilter(
           input.sheetName as string,
@@ -530,7 +554,7 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (tool.name === "ensure_table" || tool.name === "reconcile_tables" || tool.name === "reshape_table" || tool.name === "calculate_table" || tool.name === "create_pivot" || tool.name === "write_inputs" || tool.name === "extract_selection" || tool.name === "sort_filter" || tool.name === "fill_range" || tool.name === "find_replace" || tool.name === "data_validation") {
+    if (tool.name === "ensure_table" || tool.name === "reconcile_tables" || tool.name === "reshape_table" || tool.name === "calculate_table" || tool.name === "create_pivot" || tool.name === "build_dashboard" || tool.name === "write_inputs" || tool.name === "extract_selection" || tool.name === "sort_filter" || tool.name === "fill_range" || tool.name === "find_replace" || tool.name === "data_validation") {
       return `${tool.name} failed: ${msg}. This tool IS available — fix the arguments and retry. Do not use write_to_sheet.`;
     }
     return `Error: ${msg}`;

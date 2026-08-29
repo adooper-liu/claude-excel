@@ -10,6 +10,7 @@ import reconcile from "../../skills/core/reconcile/manifest.json";
 import reshape from "../../skills/core/reshape/manifest.json";
 import calculate from "../../skills/core/calculate/manifest.json";
 import pivot from "../../skills/core/pivot/manifest.json";
+import dashboard from "../../skills/core/dashboard/manifest.json";
 import sortFilter from "../../skills/core/sort-filter/manifest.json";
 import table from "../../skills/core/table/manifest.json";
 import web from "../../skills/core/web/manifest.json";
@@ -33,6 +34,7 @@ export const CORE_SKILL_MANIFESTS: CoreSkillManifest[] = [
   reconcile,
   calculate,
   pivot,
+  dashboard,
   formula,
   sortFilter,
   format,
