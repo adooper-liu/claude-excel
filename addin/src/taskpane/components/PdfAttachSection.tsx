@@ -347,7 +347,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
             {pendingResult.text && (
               <button
                 type="button"
-                className="pdf-confirm-ok"
+                className="pdf-confirm-alt"
                 onClick={() => void landKnowledge()}
                 disabled={busy}
               >
