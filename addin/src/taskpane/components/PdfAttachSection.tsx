@@ -1,5 +1,6 @@
 /**
- * PdfAttachSection — extract a local PDF, then land text in knowledge or tables in the workbook.
+ * PdfAttachSection — attach a document (PDF / image / text), then let the user
+ * confirm where it lands: text -> knowledge base, table -> a new sheet.
  */
 
 import React, { useCallback, useRef, useState } from "react";
@@ -20,9 +21,21 @@ type PdfResult = {
   error?: string;
 };
 
+type PendingLand = {
+  file: File;
+  kind: "text" | "table";
+  text?: string;
+  rows?: string[][];
+  sheetName?: string;
+  ocrBackend?: "local" | "cloud" | null;
+};
+
 interface Props {
   disabled: boolean;
 }
+
+const DOC_EXT = /\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i;
+const TEXT_EXT = /\.(md|markdown|txt|csv)$/i;
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   const text = await response.text();
@@ -69,6 +82,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
   const [err, setErr] = useState("");
   const [status, setStatus] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingResult, setPendingResult] = useState<PendingLand | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const extract = useCallback(async (file: File, useBackend: OcrBackend): Promise<PdfResult> => {
@@ -84,100 +98,137 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     });
     const data = await readJson(response);
     if (!response.ok) {
-      throw new Error(String(data.detail || response.statusText || "PDF 解析失败"));
+      throw new Error(String(data.detail || response.statusText || "解析失败"));
     }
     return data as PdfResult;
   }, []);
 
-  const land = useCallback(async (file: File, data: PdfResult) => {
-    const rows = resultRows(data);
-    if (data.kind === "table" && rows.length) {
-      const sheetName = String(data.sheetName || file.name || "PDF").slice(0, 28);
-      const written = await writeToNewSheet(sheetName, rows);
-      setStatus("表已进簿：「" + written + "」（" + rows.length + " 行）");
-      return;
-    }
+  const process = useCallback(
+    async (file: File, useBackend: OcrBackend) => {
+      if (disabled || busy) return;
+      setBusy(true);
+      setErr("");
+      setStatus("正在解析：" + file.name);
+      try {
+        if (TEXT_EXT.test(file.name)) {
+          const text = await file.text();
+          if (!text.trim()) throw new Error("文件没有可索引的正文");
+          setPendingResult({ file, kind: "text", text, ocrBackend: null });
+        } else {
+          const data = await extract(file, useBackend);
+          const rows = resultRows(data);
+          if (data.kind === "table" && rows.length) {
+            setPendingResult({
+              file,
+              kind: "table",
+              rows,
+              sheetName: String(data.sheetName || file.name).slice(0, 28),
+              ocrBackend: data.ocrBackend,
+            });
+          } else {
+            const text = String(data.text || "");
+            if (!text.trim()) {
+              throw new Error(String(data.error || "没有可用的文本或表格。"));
+            }
+            setPendingResult({ file, kind: "text", text, ocrBackend: data.ocrBackend });
+          }
+        }
+        setPendingFile(null);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+        setStatus("");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, disabled, extract]
+  );
 
-    const text = String(data.text || "");
-    if (!text.trim()) {
-      throw new Error(String(data.error || "PDF 没有可用的文本或表格。"));
-    }
-    const base = file.name.replace(/\.(pdf|png|jpe?g|tiff?|bmp)$/i, "") || "document";
-    await postJson("/api/knowledge", { filename: base + ".md", content: text });
-    const viaOcr = data.ocrBackend ? "，OCR：" + data.ocrBackend : "";
-    setStatus("已入知识库，可在对话提问" + viaOcr);
-  }, []);
-
-  const process = useCallback(async (file: File, useBackend: OcrBackend) => {
-    if (disabled || busy) return;
+  const confirmLand = useCallback(async () => {
+    const p = pendingResult;
+    if (!p || busy) return;
     setBusy(true);
     setErr("");
-    setStatus("正在解析：" + file.name);
     try {
-      if (/\.(md|markdown|txt|csv)$/i.test(file.name)) {
-        const text = await file.text();
-        if (!text.trim()) throw new Error("文件没有可索引的正文");
-        await postJson("/api/knowledge", { filename: file.name, content: text });
-        setStatus("已入知识库，可在对话提问");
+      if (p.kind === "text") {
+        const base = p.file.name.replace(DOC_EXT, "") || "document";
+        const filename = TEXT_EXT.test(p.file.name) ? p.file.name : base + ".md";
+        await postJson("/api/knowledge", { filename, content: p.text });
+        const viaOcr = p.ocrBackend ? "（OCR：" + p.ocrBackend + "）" : "";
+        setStatus("已入知识库，可在对话提问" + viaOcr);
       } else {
-        const data = await extract(file, useBackend);
-        await land(file, data);
+        const written = await writeToNewSheet(p.sheetName || "文档", p.rows || []);
+        setStatus("表已进簿：「" + written + "」（" + (p.rows?.length || 0) + " 行）");
       }
-      setPendingFile(null);
+      setPendingResult(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
-      setStatus("");
     } finally {
       setBusy(false);
     }
-  }, [busy, disabled, extract, land]);
+  }, [pendingResult, busy]);
 
-  const onFilePick = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!/\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i.test(file.name)) {
-      setErr("请选择 PDF、图片或 .md/.txt/.csv 文件");
+  const cancelLand = useCallback(() => {
+    setPendingResult(null);
+    setStatus("");
+  }, []);
+
+  const onFilePick = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+      if (!DOC_EXT.test(file.name)) {
+        setErr("请选择 PDF、图片或 .md/.txt/.csv 文件");
+        setStatus("");
+        return;
+      }
+      setErr("");
       setStatus("");
-      return;
-    }
-    setErr("");
-    setStatus("");
-    if (backend === "cloud" && !/\.(md|markdown|txt|csv)$/i.test(file.name)) {
-      setPendingFile(file);
-      return;
-    }
-    void process(file, "local");
-  }, [backend, process]);
+      if (backend === "cloud" && !TEXT_EXT.test(file.name)) {
+        setPendingFile(file);
+        return;
+      }
+      void process(file, "local");
+    },
+    [backend, process]
+  );
 
-  const onDrop = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setDragOver(false);
-    const file = pickFileFromDrop(event.dataTransfer);
-    if (!file) {
-      setErr("拖放失败：未识别到文件。");
-      return;
-    }
-    if (!/\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i.test(file.name)) {
-      setErr("请选择 PDF、图片或 .md/.txt/.csv 文件");
-      return;
-    }
-    setErr("");
-    setStatus("");
-    if (backend === "cloud" && !/\.(md|markdown|txt|csv)$/i.test(file.name)) {
-      setPendingFile(file);
-      return;
-    }
-    void process(file, "local");
-  }, [backend, process]);
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setDragOver(false);
+      const file = pickFileFromDrop(event.dataTransfer);
+      if (!file) {
+        setErr("拖放失败：未识别到文件。");
+        return;
+      }
+      if (!DOC_EXT.test(file.name)) {
+        setErr("请选择 PDF、图片或 .md/.txt/.csv 文件");
+        return;
+      }
+      setErr("");
+      setStatus("");
+      if (backend === "cloud" && !TEXT_EXT.test(file.name)) {
+        setPendingFile(file);
+        return;
+      }
+      void process(file, "local");
+    },
+    [backend, process]
+  );
 
-  const switchBackend = useCallback((next: OcrBackend) => {
-    if (busy) return;
-    setBackend(next);
-    setPendingFile(null);
-    setErr("");
-  }, [busy]);
+  const switchBackend = useCallback(
+    (next: OcrBackend) => {
+      if (busy) return;
+      setBackend(next);
+      setPendingFile(null);
+      setPendingResult(null);
+      setErr("");
+    },
+    [busy]
+  );
 
   return (
     <div className="fetch-bar pdf-bar">
@@ -267,9 +318,40 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
         </div>
       )}
 
+      {pendingResult && (
+        <div className="pdf-confirm" role="dialog" aria-label="确认落地">
+          <p>
+            {pendingResult.kind === "text"
+              ? "识别为正文（" + (pendingResult.text?.length || 0) + " 字），将入知识库。"
+              : "识别为表格（" + (pendingResult.rows?.length || 0) + " 行），将写入工作簿。"}
+          </p>
+          {pendingResult.kind === "text" && (
+            <p className="skill-install-note">{String(pendingResult.text || "").slice(0, 160)}…</p>
+          )}
+          <div className="pdf-confirm-actions">
+            <button
+              type="button"
+              className="pdf-confirm-cancel"
+              onClick={cancelLand}
+              disabled={busy}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="pdf-confirm-ok"
+              onClick={() => void confirmLand()}
+              disabled={busy}
+            >
+              {pendingResult.kind === "text" ? "确认入库" : "确认进簿"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {status && <p className="fetch-ok">{status}</p>}
       {err && <p className="fetch-err">{err}</p>}
-      {backend === "cloud" && !pendingFile && (
+      {backend === "cloud" && !pendingFile && !pendingResult && (
         <p className="skill-install-note">云端解析只在确认后才上传；本机 OCR 不上云。</p>
       )}
     </div>
