@@ -261,7 +261,7 @@ def extract_pdf(
         if kind == "table":
             return _result(
                 kind="table", backend=None, filename=filename,
-                rows=rows, tables=table_count, pages=page_count,
+                text=text, rows=rows, tables=table_count, pages=page_count,
             )
 
         if backend == "local":

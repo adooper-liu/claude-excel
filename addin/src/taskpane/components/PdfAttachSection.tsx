@@ -1,6 +1,6 @@
 /**
  * PdfAttachSection — attach a document (PDF / image / text), then let the user
- * confirm where it lands: text -> knowledge base, table -> a new sheet.
+ * choose where it lands: text -> knowledge base, table -> a new sheet (or both).
  */
 
 import React, { useCallback, useRef, useState } from "react";
@@ -23,7 +23,6 @@ type PdfResult = {
 
 type PendingLand = {
   file: File;
-  kind: "text" | "table";
   text?: string;
   rows?: string[][];
   sheetName?: string;
@@ -113,25 +112,21 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
         if (TEXT_EXT.test(file.name)) {
           const text = await file.text();
           if (!text.trim()) throw new Error("文件没有可索引的正文");
-          setPendingResult({ file, kind: "text", text, ocrBackend: null });
+          setPendingResult({ file, text });
         } else {
           const data = await extract(file, useBackend);
           const rows = resultRows(data);
-          if (data.kind === "table" && rows.length) {
-            setPendingResult({
-              file,
-              kind: "table",
-              rows,
-              sheetName: String(data.sheetName || file.name).slice(0, 28),
-              ocrBackend: data.ocrBackend,
-            });
-          } else {
-            const text = String(data.text || "");
-            if (!text.trim()) {
-              throw new Error(String(data.error || "没有可用的文本或表格。"));
-            }
-            setPendingResult({ file, kind: "text", text, ocrBackend: data.ocrBackend });
+          const text = String(data.text || "").trim();
+          if (!rows.length && !text) {
+            throw new Error(String(data.error || "没有可用的文本或表格。"));
           }
+          setPendingResult({
+            file,
+            text: text || undefined,
+            rows: rows.length ? rows : undefined,
+            sheetName: String(data.sheetName || file.name).slice(0, 28),
+            ocrBackend: data.ocrBackend,
+          });
         }
         setPendingFile(null);
       } catch (e) {
@@ -144,23 +139,34 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     [busy, disabled, extract]
   );
 
-  const confirmLand = useCallback(async () => {
+  const landKnowledge = useCallback(async () => {
     const p = pendingResult;
-    if (!p || busy) return;
+    if (!p || !p.text || busy) return;
     setBusy(true);
     setErr("");
     try {
-      if (p.kind === "text") {
-        const base = p.file.name.replace(DOC_EXT, "") || "document";
-        const filename = TEXT_EXT.test(p.file.name) ? p.file.name : base + ".md";
-        await postJson("/api/knowledge", { filename, content: p.text });
-        const viaOcr = p.ocrBackend ? "（OCR：" + p.ocrBackend + "）" : "";
-        setStatus("已入知识库，可在对话提问" + viaOcr);
-      } else {
-        const written = await writeToNewSheet(p.sheetName || "文档", p.rows || []);
-        setStatus("表已进簿：「" + written + "」（" + (p.rows?.length || 0) + " 行）");
-      }
-      setPendingResult(null);
+      const base = p.file.name.replace(DOC_EXT, "") || "document";
+      const filename = TEXT_EXT.test(p.file.name) ? p.file.name : base + ".md";
+      await postJson("/api/knowledge", { filename, content: p.text });
+      const viaOcr = p.ocrBackend ? "（OCR：" + p.ocrBackend + "）" : "";
+      setStatus("正文已入知识库，可在对话提问" + viaOcr);
+      setPendingResult((prev) => (prev && prev.rows ? { ...prev, text: undefined } : null));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [pendingResult, busy]);
+
+  const landSheet = useCallback(async () => {
+    const p = pendingResult;
+    if (!p || !p.rows || busy) return;
+    setBusy(true);
+    setErr("");
+    try {
+      const written = await writeToNewSheet(p.sheetName || "文档", p.rows);
+      setStatus("表已进簿：「" + written + "」（" + p.rows.length + " 行）");
+      setPendingResult((prev) => (prev && prev.text ? { ...prev, rows: undefined } : null));
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -319,14 +325,15 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
       )}
 
       {pendingResult && (
-        <div className="pdf-confirm" role="dialog" aria-label="确认落地">
-          <p>
-            {pendingResult.kind === "text"
-              ? "识别为正文（" + (pendingResult.text?.length || 0) + " 字），将入知识库。"
-              : "识别为表格（" + (pendingResult.rows?.length || 0) + " 行），将写入工作簿。"}
-          </p>
-          {pendingResult.kind === "text" && (
-            <p className="skill-install-note">{String(pendingResult.text || "").slice(0, 160)}…</p>
+        <div className="pdf-confirm" role="dialog" aria-label="选择去向">
+          <p>{pendingResult.file.name} 解析完成，选择去向：</p>
+          {pendingResult.text && (
+            <p className="skill-install-note">
+              正文 {pendingResult.text.length} 字：{pendingResult.text.slice(0, 120)}…
+            </p>
+          )}
+          {pendingResult.rows && (
+            <p className="skill-install-note">表格 {pendingResult.rows.length} 行，可写入工作簿。</p>
           )}
           <div className="pdf-confirm-actions">
             <button
@@ -337,14 +344,26 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
             >
               取消
             </button>
-            <button
-              type="button"
-              className="pdf-confirm-ok"
-              onClick={() => void confirmLand()}
-              disabled={busy}
-            >
-              {pendingResult.kind === "text" ? "确认入库" : "确认进簿"}
-            </button>
+            {pendingResult.text && (
+              <button
+                type="button"
+                className="pdf-confirm-ok"
+                onClick={() => void landKnowledge()}
+                disabled={busy}
+              >
+                入知识库
+              </button>
+            )}
+            {pendingResult.rows && (
+              <button
+                type="button"
+                className="pdf-confirm-ok"
+                onClick={() => void landSheet()}
+                disabled={busy}
+              >
+                进工作簿
+              </button>
+            )}
           </div>
         </div>
       )}
