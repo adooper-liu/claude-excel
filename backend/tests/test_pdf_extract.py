@@ -40,9 +40,10 @@ def _text_pdf(text: str) -> bytes:
     return bytes(out)
 
 
-def test_detect_kind_uses_text_then_table_then_scanned():
+def test_detect_kind_uses_table_then_text_then_scanned():
     assert pdf_extract.detect_kind(pdf_extract.TEXT_MIN_LEN, 0) == "text"
     assert pdf_extract.detect_kind(pdf_extract.TEXT_MIN_LEN - 1, 2) == "table"
+    assert pdf_extract.detect_kind(pdf_extract.TEXT_MIN_LEN, 2) == "table"
     assert pdf_extract.detect_kind(0, 0) == "scanned"
 
 

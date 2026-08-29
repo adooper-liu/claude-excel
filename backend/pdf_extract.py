@@ -24,11 +24,11 @@ DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/api/v1"
 
 
 def detect_kind(text_len: int, table_count: int) -> str:
-    """Classify by available text first, then by any structured table."""
-    if text_len >= TEXT_MIN_LEN:
-        return "text"
+    """Classify by structured table first, then text, then scanned."""
     if table_count > 0:
         return "table"
+    if text_len >= TEXT_MIN_LEN:
+        return "text"
     return "scanned"
 
 
