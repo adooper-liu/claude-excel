@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 ---
 # plan 生命周期 + 交接机制优化（2026-08-28）
 
