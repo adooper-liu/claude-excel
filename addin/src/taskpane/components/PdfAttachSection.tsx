@@ -110,14 +110,21 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
 
   const process = useCallback(async (file: File, useBackend: OcrBackend) => {
     if (disabled || busy) return;
-      setBusy(true);
-      setErr("");
-      setStatus("正在解析：" + file.name);
-      try {
+    setBusy(true);
+    setErr("");
+    setStatus("正在解析：" + file.name);
+    try {
+      if (/\.(md|markdown|txt|csv)$/i.test(file.name)) {
+        const text = await file.text();
+        if (!text.trim()) throw new Error("文件没有可索引的正文");
+        await postJson("/api/knowledge", { filename: file.name, content: text });
+        setStatus("已入知识库，可在对话提问");
+      } else {
         const data = await extract(file, useBackend);
         await land(file, data);
-        setPendingFile(null);
-      } catch (e) {
+      }
+      setPendingFile(null);
+    } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setStatus("");
     } finally {
@@ -129,14 +136,14 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!/\.(pdf|png|jpe?g|tiff?|bmp)$/i.test(file.name)) {
-      setErr("请选择 PDF 或图片文件");
+    if (!/\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i.test(file.name)) {
+      setErr("请选择 PDF、图片或 .md/.txt/.csv 文件");
       setStatus("");
       return;
     }
     setErr("");
     setStatus("");
-    if (backend === "cloud") {
+    if (backend === "cloud" && !/\.(md|markdown|txt|csv)$/i.test(file.name)) {
       setPendingFile(file);
       return;
     }
@@ -152,13 +159,13 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
       setErr("拖放失败：未识别到文件。");
       return;
     }
-    if (!/\.(pdf|png|jpe?g|tiff?|bmp)$/i.test(file.name)) {
-      setErr("请选择 PDF 或图片文件");
+    if (!/\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i.test(file.name)) {
+      setErr("请选择 PDF、图片或 .md/.txt/.csv 文件");
       return;
     }
     setErr("");
     setStatus("");
-    if (backend === "cloud") {
+    if (backend === "cloud" && !/\.(md|markdown|txt|csv)$/i.test(file.name)) {
       setPendingFile(file);
       return;
     }
@@ -218,7 +225,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
         <input
           ref={fileRef}
           type="file"
-          accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,application/pdf,image/*"
+          accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.md,.markdown,.txt,.csv,application/pdf,image/*,text/plain,text/markdown"
           className="skill-file-input"
           onChange={onFilePick}
           aria-hidden
