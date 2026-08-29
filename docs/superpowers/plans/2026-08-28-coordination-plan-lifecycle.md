@@ -1,3 +1,6 @@
+---
+status: in-progress
+---
 # plan 生命周期 + 交接机制优化（2026-08-28）
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

@@ -13,26 +13,76 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$BRANCH" = "master" ] && [ "${ALLOW_MASTER:-0}" != "1" ]; then
-  echo "⚠️ 当前在 master 上。AGENTS.md：实现走任务分支（feat/xxx）。" >&2
-  echo "   确实要在 master 跑？ALLOW_MASTER=1 ./scripts/codex-execute-latest-plan.sh" >&2
-  exit 1
-fi
-if [ -n "$(git status --porcelain)" ]; then
-  echo "⚠️ 工作区有未提交改动，会混进 Codex 的提交。先 commit 或 stash。" >&2
-  exit 1
-fi
 # git pull 前自检：落后上游则提醒（不硬挡，留给你决定）
 if git rev-parse --verify --quiet @{u} >/dev/null 2>&1; then
   BEHIND="$(git rev-list --count @..@{u} 2>/dev/null || true)"
   if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ] 2>/dev/null; then
-    echo "⚠️ 本地落后上游 $BEHIND 个提交，建议先 git pull 再执行（避免 review 时冲突）。" >&2
+   echo "⚠️ 本地落后上游 $BEHIND 个提交，建议先 git pull 再执行（避免 review 时冲突）。" >&2
   fi
 fi
 
-# --- 找最新 plan ---
+# --- 复用 git-flow.sh status 的 awk 解析（scripts/git-flow.sh:144） ---
 PLANS_DIR="${PLANS_DIR:-$REPO_ROOT/docs/superpowers/plans}"
-PLAN_FILE="$(ls -t "$PLANS_DIR"/*.md 2>/dev/null | head -1 || true)"
+
+plan_status() {
+  awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n==1 && /^status:[[:space:]]*/{sub(/^status:[[:space:]]*/,""); sub(/[[:space:]]*$/,""); print; exit}' "$1"
+}
+
+# --- 交接前阻塞清单（聚合输出，不再只给一句通用报错） ---
+BLOCKERS=""
+if [ "$BRANCH" = "master" ] && [ "${ALLOW_MASTER:-0}" != "1" ]; then
+  BLOCKERS+=$'\n'"- 当前在 master（实现必须走任务分支；确认要跑就设 ALLOW_MASTER=1）"
+fi
+
+DIRTY="$(git status --porcelain || true)"
+if [ -n "$DIRTY" ]; then
+  DIRTY_COUNT="$(printf '%s\n' "$DIRTY" | wc -l)"
+  BLOCKERS+=$'\n'"- 工作区未提交项（$DIRTY_COUNT 项），会混进 Codex 的提交："
+  BLOCKERS+=$'\n'"$DIRTY"
+fi
+
+NOSTATUS=""
+for file in "$PLANS_DIR"/*.md; do
+  [ -e "$file" ] || continue
+  if [ -z "$(plan_status "$file")" ]; then
+    NOSTATUS+=$'\n'"  - $(basename "$file")"
+  fi
+done
+if [ -n "$NOSTATUS" ]; then
+  NOSTATUS_COUNT="$(printf '%s\n' "$NOSTATUS" | sed '1d' | wc -l)"
+  echo "⚠️ 有 $NOSTATUS_COUNT 个 plan 缺 status，建议补 frontmatter（本次仍可按 mtime 回落）：$NOSTATUS" >&2
+fi
+
+if [ -n "$BLOCKERS" ]; then
+  echo "🚫 交接阻塞：$BLOCKERS" >&2
+  exit 1
+fi
+
+# --- 找待执行 plan（status: pending 优先；无则回落 mtime 并告警） ---
+PENDING_COUNT=0
+PENDING_FILE=""
+for file in "$PLANS_DIR"/*.md; do
+  [ -e "$file" ] || continue
+  if [ "$(plan_status "$file")" = "pending" ]; then
+    PENDING_COUNT=$((PENDING_COUNT + 1))
+    PENDING_FILE="$file"
+    echo "  - $(basename "$file")" >&2
+  fi
+done
+
+if [ "$PENDING_COUNT" -gt 1 ]; then
+  echo "⚠️ 存在 $PENDING_COUNT 个 pending plan（串行化），列表见上。" >&2
+  echo "   同一时刻只允许 1 个 pending；先把非当前项标 done，再跑本脚本。" >&2
+  exit 1
+elif [ "$PENDING_COUNT" -eq 1 ]; then
+  PLAN_FILE="$PENDING_FILE"
+else
+  PLAN_FILE="$(ls -t "$PLANS_DIR"/*.md 2>/dev/null | head -1 || true)"
+  if [ -n "$PLAN_FILE" ]; then
+    echo "⚠️ 无 pending plan，回落 mtime 最新（$(basename "$PLAN_FILE")）。建议给待执行 plan 标 status: pending。" >&2
+  fi
+fi
+
 if [ -z "$PLAN_FILE" ]; then
   echo "❌ 没找到 plan：$PLANS_DIR/*.md" >&2
   exit 1

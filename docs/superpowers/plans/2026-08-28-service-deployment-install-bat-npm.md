@@ -1,3 +1,6 @@
+---
+status: done
+---
 install.bat 一键自足：补 npm install + npm run build（2026-08-28）
 <system-reminder>This file content continuation follows the established plan template in this repo.</system-reminder>
 # install.bat 一键自足：补 npm install + npm run build（2026-08-28）

@@ -1,3 +1,6 @@
+---
+status: done
+---
 # 后端 URL 收敛 127.0.0.1（修复 IPv6 间歇连不上）Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

@@ -1,3 +1,6 @@
+---
+status: done
+---
 # 服务化 venv 种子修复（2026-08-28）：每台机器 python 路径不同 + venv 创建不走 Start-Process 重定向
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
