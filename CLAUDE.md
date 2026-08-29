@@ -199,7 +199,7 @@ Excel 格子、公式、格式、图表、透视、分块洗表全部在加载�
 
 ## 开发规范
 
-- **新工具**: `addin/skills/core/<name>/manifest.json` → `executeHandler` case → `HANDLED_TOOLS` 与 `ADDIN_HANDLERS` → `skill-loader.ts` import → 重启后端
+- **新工具（注册链六处，缺一启动失败）**: `addin/skills/core/<name>/manifest.json` + `SKILL.md` → `skill-manifests.ts` import + `CORE_SKILL_MANIFESTS` 加项 → `skill-registry.ts` `HANDLED_TOOLS` 加名 → `skill-handlers.ts` `executeHandler` 加 case → `excel/index.ts` export 实现 → **后端 `backend/skill_registry.py` `ADDIN_HANDLERS` 加名**。门禁同时跑**后端 `pytest`**（`test_skill_registry.py` 校验前端 `HANDLED_TOOLS` == 后端 `ADDIN_HANDLERS` == manifest 三方一致，漏后端会红）与**前端** `test:unit`/`typecheck`/`build`。
 - **算子 vs 口令**: 先扩工具参数，再考虑短路。禁止为新说法堆 `isXxxRequest` / `mergeXxxFollowup`。见上文「算子要通用，口令不要堆」
 - **行业包 / Pack**: 不要为清关/电商新增无执行器的**核心**工具名。用户 SKILL 只编排 `skill-create-guide.ts` 算子。**禁止**恢复 `industry-workflows.ts` 或把 SOP 写进 `builtin-skills.ts`。**禁止**把 `user.*` 注册进 `addin/skills/core`。新增官方示例 → `samples/packs/` + `docs/user-packs.md` checklist。
 - **Pack API**: `user_packs_store.install_pack`；测试 `test_user_packs_store.py`。
