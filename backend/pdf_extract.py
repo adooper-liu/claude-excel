@@ -47,24 +47,70 @@ def count_pdf_pages(data: bytes) -> int:
 
 
 def extract_pdf_tables(data: bytes) -> tuple[list[list[str]] | None, int]:
-    """Return the largest table and the total number of non-empty tables."""
-    largest: list[list[str]] | None = None
-    largest_size = 0
+    """Return the largest table (with an inferred header row) and the table count."""
+    best: list[list[str]] | None = None
+    best_size = 0
     table_count = 0
     with pdfplumber.open(BytesIO(data)) as pdf:
         for page in pdf.pages:
-            for raw in page.extract_tables():
-                rows = _normalize_table(raw)
+            words = page.extract_words()
+            for table in page.find_tables():
+                rows = _normalize_table(table.extract())
                 if not rows:
                     continue
                 table_count += 1
                 size = len(rows) * max(len(row) for row in rows)
-                if size > largest_size:
-                    largest = rows
-                    largest_size = size
-    if largest and len(largest) >= 2 and largest[0] == largest[1]:
-        largest.pop(0)
-    return largest, table_count
+                if size <= best_size:
+                    continue
+                best = _with_inferred_header(rows, table, words)
+                best_size = size
+    if best and len(best) >= 2 and best[0] == best[1]:
+        best.pop(0)
+    return best, table_count
+
+
+def _is_numeric(text: str) -> bool:
+    t = str(text or "").strip().replace(",", "").replace("￥", "").replace("¥", "").replace("%", "")
+    if not t:
+        return False
+    try:
+        float(t)
+        return True
+    except ValueError:
+        return False
+
+
+def _has_text_cell(row: list[str]) -> bool:
+    """True if any cell in the row is non-empty and not purely numeric."""
+    return any(cell.strip() and not _is_numeric(cell) for cell in row)
+
+
+def _with_inferred_header(
+    rows: list[list[str]], table: Any, words: list[dict[str, Any]]
+) -> list[list[str]]:
+    """If the first row is all-numeric (data, no header), lift a header from above the table."""
+    if not rows or _has_text_cell(rows[0]):
+        return rows
+    header = _header_row_above(table, words)
+    return ([header] + rows) if header else rows
+
+
+def _header_row_above(table: Any, words: list[dict[str, Any]], tol: float = 14.0) -> list[str] | None:
+    """Collect words just above the table's top edge, deduped and x-sorted, as a header row."""
+    bbox = getattr(table, "bbox", None)
+    if not bbox:
+        return None
+    top = float(bbox[1])
+    near = [w for w in words if float(w["bottom"]) <= top and top - float(w["bottom"]) <= tol]
+    if not near:
+        return None
+    near.sort(key=lambda w: (float(w["x0"]), -float(w["top"])))
+    header: list[str] = []
+    for w in near:
+        t = str(w.get("text", "")).strip()
+        if t and (not header or header[-1] != t):
+            header.append(t)
+    return header or None
 
 
 _TESSERACT_WIN_PATHS = (

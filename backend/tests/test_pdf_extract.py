@@ -55,6 +55,42 @@ def test_is_image_magic_bytes():
     assert not pdf_extract._is_image(b"not-an-image")
 
 
+def test_is_numeric():
+    assert pdf_extract._is_numeric("123")
+    assert pdf_extract._is_numeric("1,234.5")
+    assert pdf_extract._is_numeric("￥50")
+    assert pdf_extract._is_numeric("12%")
+    assert not pdf_extract._is_numeric("")
+    assert not pdf_extract._is_numeric("品名")
+
+
+def test_has_text_cell():
+    assert not pdf_extract._has_text_cell(["1", "2", "3"])
+    assert pdf_extract._has_text_cell(["品名", "数量", "单价"])
+    assert pdf_extract._has_text_cell(["1", "品名", "3"])
+
+
+def test_with_inferred_header_lifts_header_above_table():
+    class T:
+        bbox = (0, 100, 300, 200)
+
+    words = [
+        {"x0": 10, "top": 90, "bottom": 99, "text": "品名"},
+        {"x0": 100, "top": 90, "bottom": 99, "text": "数量"},
+        {"x0": 200, "top": 90, "bottom": 99, "text": "单价"},
+    ]
+    rows = [["1", "2", "3"], ["4", "5", "6"]]
+    out = pdf_extract._with_inferred_header(rows, T(), words)
+    assert out[0] == ["品名", "数量", "单价"]
+    assert out[1] == ["1", "2", "3"]
+
+
+def test_with_inferred_header_keeps_existing_header():
+    rows = [["品名", "数量", "单价"], ["A", "1", "2"]]
+    out = pdf_extract._with_inferred_header(rows, object(), [])
+    assert out == rows
+
+
 def test_extract_pdf_text_layer():
     result = pdf_extract.extract_pdf(
         _text_pdf("This is a plain PDF text layer for SheetWise."),
