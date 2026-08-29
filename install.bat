@@ -103,6 +103,16 @@ if exist "%ProgramFiles%\Tesseract-OCR\tesseract.exe" (
         echo 已将 Tesseract-OCR 加入用户 PATH（新开终端后 where tesseract 可找到）。
     )
 )
+rem UB-Mannheim winget 包默认只装英文；补下载中文语言包（发票/单据 OCR 需要）
+if exist "%ProgramFiles%\Tesseract-OCR\tesseract.exe" if not exist "%ProgramFiles%\Tesseract-OCR\tessdata\chi_sim.traineddata" (
+    echo 下载中文 OCR 语言包 chi_sim...
+    curl -L -o "%ProgramFiles%\Tesseract-OCR\tessdata\chi_sim.traineddata" https://github.com/tesseract-ocr/tessdata_fast/raw/main/chi_sim.traineddata
+    if %ERRORLEVEL% neq 0 (
+        echo chi_sim 下载失败；中文 OCR 不可用。可手动下载 chi_sim.traineddata 放到 %ProgramFiles%\Tesseract-OCR\tessdata\
+    ) else (
+        echo chi_sim 已安装。
+    )
+)
 echo 安装 Chromium（ERP 网页登录用，仅本机）...
 "backend\.venv\Scripts\python.exe" -m playwright install chromium
 if %ERRORLEVEL% neq 0 (

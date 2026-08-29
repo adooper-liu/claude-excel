@@ -414,7 +414,7 @@ def _result(
 
 def _sheet_name(filename: str) -> str:
     stem = Path(filename or "upload.pdf").stem or "PDF"
-    safe = re.sub(r"[\\/:*?\"<>|\r\n\t]+", "_", stem).strip(" ._") or "PDF"
+    safe = re.sub(r"[\\/:*?\"<>|\[\]\r\n\t]+", "_", stem).strip(" ._") or "PDF"
     return safe[:28]
 
 
