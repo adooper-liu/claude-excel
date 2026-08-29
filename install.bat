@@ -106,7 +106,7 @@ if exist "%ProgramFiles%\Tesseract-OCR\tesseract.exe" (
 rem UB-Mannheim winget 包默认只装英文；补下载中文语言包（发票/单据 OCR 需要）
 if exist "%ProgramFiles%\Tesseract-OCR\tesseract.exe" if not exist "%ProgramFiles%\Tesseract-OCR\tessdata\chi_sim.traineddata" (
     echo 下载中文 OCR 语言包 chi_sim...
-    curl -L --ssl-no-revoke -o "%ProgramFiles%\Tesseract-OCR\tessdata\chi_sim.traineddata" https://github.com/tesseract-ocr/tessdata_fast/raw/main/chi_sim.traineddata
+    curl -L --ssl-no-revoke -o "%ProgramFiles%\Tesseract-OCR\tessdata\chi_sim.traineddata" https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/chi_sim.traineddata
     if %ERRORLEVEL% neq 0 (
         echo chi_sim 下载失败；中文 OCR 不可用。可手动下载 chi_sim.traineddata 放到 %ProgramFiles%\Tesseract-OCR\tessdata\
     ) else (
