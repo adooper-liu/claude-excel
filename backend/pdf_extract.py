@@ -46,16 +46,23 @@ def count_pdf_pages(data: bytes) -> int:
     return len(PdfReader(BytesIO(data)).pages)
 
 
+_TABLE_SETTINGS = {"vertical_strategy": "text", "horizontal_strategy": "lines"}
+
+
 def extract_pdf_tables(data: bytes) -> tuple[list[list[str]] | None, int]:
-    """Return the largest table (with an inferred header row) and the table count."""
+    """Return the largest table (header inferred, empty columns dropped) and the table count.
+
+    vertical_strategy="text" clusters columns from word x-positions, so borderless
+    tables (invoices, statements) are captured too — not just line-ruled ones.
+    """
     best: list[list[str]] | None = None
     best_size = 0
     table_count = 0
     with pdfplumber.open(BytesIO(data)) as pdf:
         for page in pdf.pages:
             words = page.extract_words()
-            for table in page.find_tables():
-                rows = _normalize_table(table.extract())
+            for table in page.find_tables(table_settings=_TABLE_SETTINGS):
+                rows = _drop_empty_columns(_normalize_table(table.extract()))
                 if not rows:
                     continue
                 table_count += 1
@@ -69,6 +76,15 @@ def extract_pdf_tables(data: bytes) -> tuple[list[list[str]] | None, int]:
     return best, table_count
 
 
+def _drop_empty_columns(rows: list[list[str]]) -> list[list[str]]:
+    """Remove columns that are empty across all rows."""
+    if not rows:
+        return rows
+    width = max(len(row) for row in rows)
+    keep = [c for c in range(width) if any(c < len(r) and r[c].strip() for r in rows)]
+    return [[row[c] for c in keep] for row in rows]
+
+
 def _is_numeric(text: str) -> bool:
     t = str(text or "").strip().replace(",", "").replace("￥", "").replace("¥", "").replace("%", "")
     if not t:
@@ -80,22 +96,23 @@ def _is_numeric(text: str) -> bool:
         return False
 
 
-def _has_text_cell(row: list[str]) -> bool:
-    """True if any cell in the row is non-empty and not purely numeric."""
-    return any(cell.strip() and not _is_numeric(cell) for cell in row)
+def _looks_like_header(row: list[str]) -> bool:
+    """True if every non-empty cell is text (no numeric cell) — a header row."""
+    non_empty = [c for c in row if c.strip()]
+    return bool(non_empty) and all(not _is_numeric(c) for c in non_empty)
 
 
 def _with_inferred_header(
     rows: list[list[str]], table: Any, words: list[dict[str, Any]]
 ) -> list[list[str]]:
     """If the first row is all-numeric (data, no header), lift a header from above the table."""
-    if not rows or _has_text_cell(rows[0]):
+    if not rows or _looks_like_header(rows[0]):
         return rows
     header = _header_row_above(table, words)
     return ([header] + rows) if header else rows
 
 
-def _header_row_above(table: Any, words: list[dict[str, Any]], tol: float = 14.0) -> list[str] | None:
+def _header_row_above(table: Any, words: list[dict[str, Any]], tol: float = 20.0) -> list[str] | None:
     """Collect words just above the table's top edge, deduped and x-sorted, as a header row."""
     bbox = getattr(table, "bbox", None)
     if not bbox:
@@ -342,7 +359,8 @@ def _normalize_table(raw: list[list[Any]]) -> list[list[str]]:
     rows: list[list[str]] = []
     for raw_row in raw or []:
         row = ["" if cell is None else str(cell) for cell in raw_row or []]
-        if any(cell.strip() for cell in row):
+        # Drop summary/merged rows: a clean data cell never contains a line break.
+        if any(cell.strip() for cell in row) and not any("\n" in cell for cell in row):
             rows.append(row)
     width = max((len(row) for row in rows), default=0)
     return [row + [""] * (width - len(row)) for row in rows]

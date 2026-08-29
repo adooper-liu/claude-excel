@@ -64,10 +64,11 @@ def test_is_numeric():
     assert not pdf_extract._is_numeric("品名")
 
 
-def test_has_text_cell():
-    assert not pdf_extract._has_text_cell(["1", "2", "3"])
-    assert pdf_extract._has_text_cell(["品名", "数量", "单价"])
-    assert pdf_extract._has_text_cell(["1", "品名", "3"])
+def test_looks_like_header():
+    assert not pdf_extract._looks_like_header(["1", "2", "3"])
+    assert pdf_extract._looks_like_header(["品名", "数量", "单价"])
+    assert not pdf_extract._looks_like_header(["1", "品名", "3"])
+    assert not pdf_extract._looks_like_header(["网页设计", "$50.00", "50", "$2500.00"])
 
 
 def test_with_inferred_header_lifts_header_above_table():
