@@ -164,7 +164,15 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     setBusy(true);
     setErr("");
     try {
-      const written = await writeToNewSheet(p.sheetName || "文档", p.rows);
+      let grid: string[][] = p.rows;
+      if (p.text) {
+        const lines = p.text
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+        grid = [...lines.map((l) => [l]), [""], ...p.rows];
+      }
+      const written = await writeToNewSheet(p.sheetName || "文档", grid);
       setStatus("表已进簿：「" + written + "」（" + p.rows.length + " 行）");
       setPendingResult((prev) => (prev && prev.text ? { ...prev, rows: undefined } : null));
     } catch (e) {
