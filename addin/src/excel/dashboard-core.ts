@@ -269,7 +269,11 @@ export function planDashboard(headers: string[], params: DashboardParams): Dashb
   dims.forEach((d) => requireColumn(heads, d));
 
   let countColumn = String(params.countColumn || "").trim();
-  if (!countColumn) countColumn = dims[0] || valueColumns[0];
+  let countLabel = "笔数";
+  if (!countColumn) {
+    countColumn = dims[0] || valueColumns[0];
+    if (!dims[0]) countLabel = "记录数";
+  }
   const countIdx = requireColumn(heads, countColumn);
 
   const dateColumn = String(params.dateColumn || "").trim();
@@ -319,7 +323,7 @@ export function planDashboard(headers: string[], params: DashboardParams): Dashb
   if (kpis.indexOf("count") >= 0) {
     kpi.push({
       kind: "count",
-      label: "笔数",
+      label: countLabel,
       cell: a1(2, col),
       formula: countFormula(tableName, sourceSheet, countColumn, countIdx),
       column: countColumn,
@@ -371,7 +375,7 @@ export function planDashboard(headers: string[], params: DashboardParams): Dashb
   }
 
   let monthly: MonthlySection | null = null;
-  if (dateColumn) {
+  if (dateColumn && months.length > 0) {
     grid.push((["月度营收"] as Cell[]).concat(fillRow(width - 1, "")));
     r = 5;
     grid.push((["月份", "合计"] as Cell[]).concat(fillRow(width - 2, "")));

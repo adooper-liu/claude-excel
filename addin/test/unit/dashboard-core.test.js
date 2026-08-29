@@ -108,4 +108,23 @@ describe("dashboard-core", function () {
     assert.ok(total.indexOf("=SUMIFS('流水'!") === 0, total);
     assert.ok(total.indexOf("$A") >= 0, total);
   });
+
+  it("skips the monthly section when no valid dates parse", function () {
+    const plan = planDashboard(HEADERS, Object.assign({}, PARAMS, {
+      dateColumnValues: ["", "not-a-date", null],
+    }));
+    assert.strictEqual(plan.report.monthly, null);
+  });
+
+  it("labels a value-column fallback count as 记录数 not 笔数", function () {
+    const plan = planDashboard(HEADERS, {
+      tableName: "T_订单",
+      valueColumns: ["金额"],
+      kpis: ["total", "count"],
+    });
+    const count = plan.report.kpi.find(function (k) {
+      return k.kind === "count";
+    });
+    assert.strictEqual(count.label, "记录数");
+  });
 });
