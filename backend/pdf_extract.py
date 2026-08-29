@@ -67,13 +67,30 @@ def extract_pdf_tables(data: bytes) -> tuple[list[list[str]] | None, int]:
     return largest, table_count
 
 
+_TESSERACT_WIN_PATHS = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+)
+
+
+def _find_tesseract() -> str | None:
+    """PATH first, then common Windows install dirs (UB-Mannheim does not touch PATH)."""
+    found = shutil.which("tesseract")
+    if found:
+        return found
+    for candidate in _TESSERACT_WIN_PATHS:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def extract_pdf_ocr_local(data: bytes) -> str:
-    if shutil.which("tesseract") is None:
+    tesseract_cmd = _find_tesseract()
+    if tesseract_cmd is None:
         raise ValueError(
             "未安装 tesseract 二进制，本地 OCR 不可用。install.bat 会安装 "
             "UB-Mannheim.TesseractOCR（含 chi_sim）。"
         )
-    page_count = 0
     try:
         import pytesseract
     except ImportError as exc:
@@ -81,6 +98,7 @@ def extract_pdf_ocr_local(data: bytes) -> str:
             "pytesseract 未安装，本地 OCR 不可用。请执行 "
             "pip install 'pytesseract>=0.3.13'。"
         ) from exc
+    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
 
     parts: list[str] = []
     pdf = pdfium.PdfDocument(BytesIO(data))
@@ -162,6 +180,37 @@ def extract_pdf_ocr_cloud(data: bytes, filename: str = "upload.pdf") -> str:
         raise ValueError("云 OCR 请求失败：" + str(exc)) from exc
 
 
+_IMAGE_MAGIC = (
+    b"\x89PNG\r\n\x1a\n",  # PNG
+    b"\xff\xd8\xff",       # JPEG
+    b"II*\x00",            # TIFF little-endian
+    b"MM\x00*",            # TIFF big-endian
+    b"BM",                 # BMP
+)
+
+
+def _is_image(data: bytes) -> bool:
+    return any(data.startswith(magic) for magic in _IMAGE_MAGIC)
+
+
+def extract_image_ocr_local(data: bytes) -> str:
+    tesseract_cmd = _find_tesseract()
+    if tesseract_cmd is None:
+        raise ValueError(
+            "未安装 tesseract 二进制，本地 OCR 不可用。install.bat 会安装 "
+            "UB-Mannheim.TesseractOCR（含 chi_sim）。"
+        )
+    try:
+        import pytesseract
+        from PIL import Image
+    except ImportError as exc:
+        raise ValueError("pytesseract/Pillow 未安装，本地 OCR 不可用。") from exc
+    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    image = Image.open(BytesIO(data))
+    text = pytesseract.image_to_string(image, lang="chi_sim+eng")
+    return str(text or "").replace("\x0c", "\n").strip()
+
+
 def extract_pdf(
     data: bytes,
     ocr_backend: str = "local",
@@ -173,13 +222,33 @@ def extract_pdf(
             kind="scanned", backend=None, filename=filename,
             error="ocrBackend 仅支持 local 或 cloud",
         )
-    if not data.startswith(b"%PDF-"):
+    is_pdf = data.startswith(b"%PDF-")
+    is_image = _is_image(data)
+    if not is_pdf and not is_image:
         return _result(
             kind="scanned", backend=None, filename=filename,
-            error="仅支持 PDF 文件（缺少 %PDF 文件头）",
+            error="仅支持 PDF 或图片（PNG/JPG/TIFF/BMP）文件",
         )
 
+    page_count = 0
     try:
+        if is_image:
+            ocr_text = (
+                extract_image_ocr_local(data)
+                if backend == "local"
+                else extract_pdf_ocr_cloud(data, filename)
+            )
+            ocr_rows = _rows_from_ocr_text(ocr_text)
+            if ocr_rows:
+                return _result(
+                    kind="table", backend=backend, filename=filename,
+                    rows=ocr_rows, tables=0, text=ocr_text, pages=1,
+                )
+            return _result(
+                kind="text", backend=backend, filename=filename,
+                text=ocr_text, pages=1,
+            )
+
         page_count = count_pdf_pages(data)
         text = extract_pdf_text(data)
         rows, table_count = extract_pdf_tables(data)

@@ -39,7 +39,7 @@ def test_invalid_pdf_returns_readable_error(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["kind"] == "scanned"
-    assert "%PDF" in data["error"]
+    assert "PDF 或图片" in data["error"]
 
 
 def test_cloud_requires_explicit_confirmation(monkeypatch):

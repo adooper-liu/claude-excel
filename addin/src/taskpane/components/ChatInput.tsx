@@ -242,8 +242,8 @@ export default function ChatInput({
           className={`icon-btn${showPdf ? " on" : ""}`}
           disabled={disabled || isStreaming}
           onClick={() => setShowPdf((v) => !v)}
-          title="附加 PDF"
-          aria-label="附加 PDF"
+          title="附加文档"
+          aria-label="附加文档"
         >附</button>
         {showPrompts && (
           <PromptMenu

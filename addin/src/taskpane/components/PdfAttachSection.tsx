@@ -102,7 +102,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     if (!text.trim()) {
       throw new Error(String(data.error || "PDF 没有可用的文本或表格。"));
     }
-    const base = file.name.replace(/\.pdf$/i, "") || "document";
+    const base = file.name.replace(/\.(pdf|png|jpe?g|tiff?|bmp)$/i, "") || "document";
     await postJson("/api/knowledge", { filename: base + ".md", content: text });
     const viaOcr = data.ocrBackend ? "，OCR：" + data.ocrBackend : "";
     setStatus("已入知识库，可在对话提问" + viaOcr);
@@ -129,8 +129,8 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!/\.pdf$/i.test(file.name)) {
-      setErr("请选择 PDF 文件");
+    if (!/\.(pdf|png|jpe?g|tiff?|bmp)$/i.test(file.name)) {
+      setErr("请选择 PDF 或图片文件");
       setStatus("");
       return;
     }
@@ -152,8 +152,8 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
       setErr("拖放失败：未识别到文件。");
       return;
     }
-    if (!/\.pdf$/i.test(file.name)) {
-      setErr("请选择 PDF 文件");
+    if (!/\.(pdf|png|jpe?g|tiff?|bmp)$/i.test(file.name)) {
+      setErr("请选择 PDF 或图片文件");
       return;
     }
     setErr("");
@@ -175,7 +175,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
   return (
     <div className="fetch-bar pdf-bar">
       <div className="fetch-row pdf-head">
-        <span className="pdf-title">附加 PDF</span>
+        <span className="pdf-title">附加文档</span>
         <div className="pdf-mode" role="group" aria-label="OCR 方式">
           <button
             type="button"
@@ -218,7 +218,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
         <input
           ref={fileRef}
           type="file"
-          accept=".pdf,application/pdf"
+          accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,application/pdf,image/*"
           className="skill-file-input"
           onChange={onFilePick}
           aria-hidden
@@ -230,7 +230,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
           disabled={disabled || busy}
           onClick={() => fileRef.current?.click()}
         >
-          {busy ? "解析中…" : "浏览 PDF"}
+          {busy ? "解析中…" : "浏览文档"}
         </button>
       </div>
 

@@ -95,6 +95,14 @@ if %ERRORLEVEL% neq 0 (
 ) else (
     echo 已找到本地 OCR 引擎 Tesseract。
 )
+rem UB-Mannheim 安装器默认不加 PATH；装在默认目录但不在 PATH 时补进用户 PATH（新开终端生效）
+if exist "%ProgramFiles%\Tesseract-OCR\tesseract.exe" (
+    echo %PATH% | findstr /I /C:"Tesseract-OCR" >nul
+    if errorlevel 1 (
+        setx PATH "%PATH%;%ProgramFiles%\Tesseract-OCR" >nul
+        echo 已将 Tesseract-OCR 加入用户 PATH（新开终端后 where tesseract 可找到）。
+    )
+)
 echo 安装 Chromium（ERP 网页登录用，仅本机）...
 "backend\.venv\Scripts\python.exe" -m playwright install chromium
 if %ERRORLEVEL% neq 0 (

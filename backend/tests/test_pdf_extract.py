@@ -46,6 +46,14 @@ def test_detect_kind_uses_text_then_table_then_scanned():
     assert pdf_extract.detect_kind(0, 0) == "scanned"
 
 
+def test_is_image_magic_bytes():
+    assert pdf_extract._is_image(b"\x89PNG\r\n\x1a\nxxxx")
+    assert pdf_extract._is_image(b"\xff\xd8\xff\xe0xxxx")
+    assert pdf_extract._is_image(b"II*\x00xxxx")
+    assert not pdf_extract._is_image(b"%PDF-1.4")
+    assert not pdf_extract._is_image(b"not-an-image")
+
+
 def test_extract_pdf_text_layer():
     result = pdf_extract.extract_pdf(
         _text_pdf("This is a plain PDF text layer for SheetWise."),
@@ -59,7 +67,7 @@ def test_extract_pdf_text_layer():
 
 
 def test_scanned_pdf_local_missing_tesseract_returns_readable_error(monkeypatch):
-    monkeypatch.setattr(pdf_extract.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(pdf_extract, "_find_tesseract", lambda: None)
     result = pdf_extract.extract_pdf(_text_pdf(""), filename="scan.pdf", ocr_backend="local")
     assert result["kind"] == "scanned"
     assert "tesseract" in result["error"]
