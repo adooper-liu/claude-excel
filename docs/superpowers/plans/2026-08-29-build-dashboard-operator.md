@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 ---
 # build_dashboard 算子（活公式仪表盘组合件）（2026-08-29）
 
@@ -184,3 +184,7 @@ status: pending
 4. 提交（任务分支，一条 commit）：`git add addin/skills/core/dashboard addin/src/services/skill-manifests.ts addin/src/services/skill-registry.ts addin/src/services/skill-handlers.ts addin/src/excel/index.ts addin/src/excel/dashboard.ts addin/src/excel/dashboard-core.ts addin/test/unit/dashboard-core.test.js addin/test/unit/dashboard-registry.test.js && git commit -m "feat(skills): build_dashboard 活公式仪表盘组合件（KPI+维度SUMIFS+月序+最佳值+图表，复用 calculate-core/chart）"`。
 5. 真机验收段留给管理员跑，Codex 不代跑、不标 done 时声称已验。
 6. 全部通过后：按 `docs/coordination.md`，实现完成，review 交回 Claude 对照本 plan 逐粒核对。
+
+## 进度 log
+
+- 2026-08-29 Codex(feat/build-dashboard-operator f8c72b6)：Task1-4 实现完成，typecheck / test:unit(300) / build 全绿。真机验收留给管理员，review 交回 Claude。
