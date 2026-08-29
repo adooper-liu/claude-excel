@@ -100,6 +100,10 @@ $(cat "$PLAN_FILE")
 
 本仓库协同纪律（先读这些再动手）：
 - docs/coordination.md（分支/提交粒度/串行化）+ AGENTS.md（摘要）。
+计划写作约定（改 plan 文档时遵守）：
+- 每个 Task 的验证步骤写「可跑命令 + 期望退出码/输出特征」（如 rg 断言为空、命令 exit 0），少用「应看到 X」这类自然语言。
+- 管理员/真机才能验的步骤（装 Windows 服务、杀进程、服务自愈、sc.exe 查询）单独列在 plan 尾部「真机验收（管理员，不代跑）」段，明确标注沙箱验不到；没权限的步骤禁止声称已验证，只写「待真机验收」。
+- plan 加 frontmatter status：待执行=pending、执行中=in-progress、完成待合=done；一次只允许 1 个 pending。
 提交纪律（强制）：
 - 每个 Task 独立一个 commit，按计划里该 Task 的 commit message 提交；不得把多个 Task 的改动堆在一起。
 - 只做计划里的改动，不加计划外文件/全局 hack（禁止 sitecustomize.py 之类临时文件、禁止改测试配置绕沙箱）。
