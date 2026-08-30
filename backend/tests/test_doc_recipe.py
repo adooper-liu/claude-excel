@@ -167,9 +167,9 @@ def test_field_group_whitelist_and_source_locator():
     assert fields["品名"]["group"] == "detail"
     assert fields["发票号码"]["group"] == "header"
     assert fields["发票号码"]["source"] == "发票号码"
-    # invalid group falls back to detail (backward compatible)
-    assert fields["坏组"]["group"] == "detail"
-    # old templates without group default to detail
-    assert fields["旧字段"]["group"] == "detail"
+    # invalid group is dropped (no key) -> legacy positional path
+    assert "group" not in fields["坏组"]
+    # old templates without group keep no group key -> legacy single-sheet
+    assert "group" not in fields["旧字段"]
     # empty source is kept empty (no key), position fallback applies
     assert "source" not in fields["空来源"]

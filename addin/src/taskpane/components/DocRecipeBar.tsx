@@ -122,8 +122,8 @@ function fieldsToText(fields: DocRecipeField[]): string {
   const needsJson = fields.some(function (f) {
     const hasFormat = f.format && Object.keys(f.format).length > 0;
     const hasColon = /[:：]/.test(f.name) || (f.source ? /[:：]/.test(f.source) : false);
-    const hasHeaderGroup = f.group === "header";
-    return hasFormat || hasColon || hasHeaderGroup;
+    const hasGroup = f.group === "header" || f.group === "detail";
+    return hasFormat || hasColon || hasGroup;
   });
   if (needsJson) {
     return JSON.stringify(fields);
