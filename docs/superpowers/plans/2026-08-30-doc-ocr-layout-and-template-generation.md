@@ -289,12 +289,18 @@ status: done
 
 **现状缺陷：** 词盒聚类是启发式，键值/表格边界靠空隙猜，准确率上不去。
 
-- [ ] **Step 1: 依赖探针 `_rapid_available()`** — `try: import rapidocr`（包名/导入路径以官方 README 为准）→ True；`ImportError` → False。`extract_layout_from_image` 入口按此开关分流 rapid / 词盒。
-- [ ] **Step 2: 表格解析 → `TableBlock`** — 用 `RapidTable` 的 HTML/cells 输出归一成 `TableBlock(headers, rows)`：跳过 `|---|---|` 分隔行；首行全文本 → `headers`，其余 → `rows`；空表/单列/畸形输出不抛异常。
-- [ ] **Step 3: 键值抽取 → `kvs`** — 用 `RapidLayout` 分类出的**文本区** OCR 文本走 `_kvs_from_text`（label 短 + `:：` 分隔）；表格区文本不参与键值抽取。
-- [ ] **Step 4: 组装 + 静默回退** — 组装 `LayoutDocument(kvs, tables, raw_text=全文)`；rapid 任一步抛异常 → 回退 `cluster_words`（沿用 `_safe_layout` 兜底，绝不破坏现有 flow）。
-- [ ] **Step 5: 单测 `test_layout_extract_rapid.py`** — mock `RapidLayout`/`RapidTable`/`RapidOCR` 返回固定数据：(a) 表格 → 正确 `TableBlock`（分隔行被跳、表头归 headers）；(b) 文本区 → `kvs` 正确；(c) rapid 不可用 → 走 `cluster_words` 回退；(d) rapid 抛异常 → 回退不崩。`cd backend && python -m pytest tests/test_layout_extract_rapid.py -q` → exit 0。
+- [x] **Step 1: 依赖探针 `_rapid_available()`** — `try: import rapidocr`（包名/导入路径以官方 README 为准）→ True；`ImportError` → False。`extract_layout_from_image` 入口按此开关分流 rapid / 词盒。
+- [x] **Step 2: 表格解析 → `TableBlock`** — 用 `RapidTable` 的 HTML/cells 输出归一成 `TableBlock(headers, rows)`：跳过 `|---|---|` 分隔行；首行全文本 → `headers`，其余 → `rows`；空表/单列/畸形输出不抛异常。
+- [x] **Step 3: 键值抽取 → `kvs`** — 用 `RapidLayout` 分类出的**文本区** OCR 文本走 `_kvs_from_text`（label 短 + `:：` 分隔）；表格区文本不参与键值抽取。
+- [x] **Step 4: 组装 + 静默回退** — 组装 `LayoutDocument(kvs, tables, raw_text=全文)`；rapid 任一步抛异常 → 回退 `cluster_words`（沿用 `_safe_layout` 兜底，绝不破坏现有 flow）。
+- [x] **Step 5: 单测 `test_layout_extract_rapid.py`** — mock `RapidLayout`/`RapidTable`/`RapidOCR` 返回固定数据：(a) 表格 → 正确 `TableBlock`（分隔行被跳、表头归 headers）；(b) 文本区 → `kvs` 正确；(c) rapid 不可用 → 走 `cluster_words` 回退；(d) rapid 抛异常 → 回退不崩。`cd backend && python -m pytest tests/test_layout_extract_rapid.py -q` → exit 0。
 
 **真机验收（管理员，不代跑）：** 上传真实发票图，本地 OCR 的明细表/抬头键值应明显好于 tesseract 词盒聚类；未装 rapidocr 时行为与 Task 1-9 完全一致。
 
 **收尾：** `cd backend && python -m pytest tests/ -q` → exit 0；提交 `git commit -m "feat(ocr): RapidStruct 布局+表格识别替换词盒聚类"`。
+
+---
+
+## 进度 log
+
+- 2026-08-30 Task 10 完成（分支 feat/ocr-rapid-layout）：`_rapid_available()` 三包检测（rapid_layout + rapid_table + rapidocr v2）；`extract_layout_from_image_rapid` 用 RapidLayout 区域分类 + RapidOCR 全图文本区抽键值 + RapidTable HTML→TableBlock（colspan 展开、分隔行跳过、首行表头）；任何异常静默回退 tesseract 词盒聚类。单测 test_layout_extract_rapid.py 9 项全绿，全量 pytest 329 passed。真机验收保留管理员（本机未装 rapid 三包，回退路径与 Task 1-9 一致）。
