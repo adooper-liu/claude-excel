@@ -16,7 +16,14 @@ import pypdfium2 as pdfium
 from pypdf import PdfReader
 
 from config_store import get_config
-from format_clean import apply_template
+from format_clean import apply_recipe, apply_template
+from image_preprocess import preprocess_image
+from layout_extract import (
+    doc_parse_to_layout,
+    extract_layout_from_image,
+    extract_layout_from_pdf,
+)
+from recipe_propose import propose_recipe
 
 TEXT_MIN_LEN = 40
 OCR_DPI = 200
@@ -276,10 +283,43 @@ def extract_image_ocr_local(data: bytes) -> str:
     except ImportError as exc:
         raise ValueError("pytesseract/Pillow 未安装，本地 OCR 不可用。") from exc
     pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
-    image = Image.open(BytesIO(data))
+    image = preprocess_image(data)
     text = pytesseract.image_to_string(image, lang="chi_sim+eng")
     return str(text or "").replace("\x0c", "\n").strip()
 
+
+def _safe_layout(builder: Any, *args: Any) -> Any:
+    """Best-effort layout extraction: layout problems must not break the
+    existing text/rows flow (layout is v1 best-effort)."""
+    try:
+        return builder(*args)
+    except Exception:
+        return None
+
+
+def _enrich(
+    result: dict[str, Any], layout: Any, template: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Attach sheets (with template) or proposedRecipe (without template).
+
+    New templates (any ``group`` field) produce the two-sheet layout output;
+    old templates keep the legacy single-table rows flow.
+    """
+    if layout is None:
+        return result
+    has_group = any(
+        isinstance(field, dict) and field.get("group")
+        for field in (template.get("fields") if isinstance(template, dict) else [])
+    )
+    if template and has_group:
+        sheets = apply_recipe(layout, template)
+        if sheets:
+            result["sheets"] = sheets
+    elif not template and (layout.kvs or layout.tables):
+        result["proposedRecipe"] = propose_recipe(
+            layout, base_name=str(result.get("sheetName") or "")
+        )
+    return result
 
 def extract_pdf(
     data: bytes,
@@ -309,53 +349,71 @@ def extract_pdf(
                 if backend == "local"
                 else extract_pdf_ocr_cloud(data, filename)
             )
+            if backend == "local":
+                layout = _safe_layout(
+                    extract_layout_from_image, preprocess_image(data)
+                )
+            else:
+                layout = _safe_layout(doc_parse_to_layout, ocr_text)
             ocr_rows = _rows_from_ocr_text(ocr_text)
             if ocr_rows:
                 if template:
                     ocr_rows = apply_template(ocr_rows, template, has_header=False)
-                return _result(
+                result = _result(
                     kind="table", backend=backend, filename=filename,
                     rows=ocr_rows, tables=0, text=ocr_text, pages=1,
                 )
-            return _result(
-                kind="text", backend=backend, filename=filename,
-                text=ocr_text, pages=1,
-            )
+            else:
+                result = _result(
+                    kind="text", backend=backend, filename=filename,
+                    text=ocr_text, pages=1,
+                )
+            return _enrich(result, layout, template)
 
         page_count = count_pdf_pages(data)
         text = extract_pdf_text(data)
         rows, table_count = extract_pdf_tables(data)
         kind = detect_kind(len(text), table_count)
         if kind == "text":
-            return _result(
+            result = _result(
                 kind="text", backend=None, filename=filename,
                 text=text, pages=page_count,
+            )
+            return _enrich(
+                result, _safe_layout(extract_layout_from_pdf, data), template
             )
         if kind == "table":
             if rows and template:
                 rows = apply_template(rows, template, has_header=_looks_like_header(rows[0]))
-            return _result(
+            result = _result(
                 kind="table", backend=None, filename=filename,
                 text=text, rows=rows, tables=table_count, pages=page_count,
+            )
+            return _enrich(
+                result, _safe_layout(extract_layout_from_pdf, data), template
             )
 
         if backend == "local":
             ocr_text = extract_pdf_ocr_local(data)
+            layout = _safe_layout(extract_layout_from_pdf, data)
         else:
             ocr_text = extract_pdf_ocr_cloud(data, filename)
+            layout = _safe_layout(doc_parse_to_layout, ocr_text)
         ocr_rows = _rows_from_ocr_text(ocr_text)
         if ocr_rows:
             if template:
                 ocr_rows = apply_template(ocr_rows, template, has_header=False)
-            return _result(
+            result = _result(
                 kind="table", backend=backend, filename=filename,
                 rows=ocr_rows, tables=table_count, text=ocr_text,
                 pages=page_count,
             )
-        return _result(
-            kind="text", backend=backend, filename=filename,
-            text=ocr_text, pages=page_count,
-        )
+        else:
+            result = _result(
+                kind="text", backend=backend, filename=filename,
+                text=ocr_text, pages=page_count,
+            )
+        return _enrich(result, layout, template)
     except ValueError as exc:
         return _result(
             kind="scanned", backend=backend if backend == "cloud" else None,

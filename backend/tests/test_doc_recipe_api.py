@@ -144,3 +144,151 @@ def test_pdf_extract_api_rejects_corrupted_template(monkeypatch):
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "模板文件损坏"
+
+from io import BytesIO
+
+from PIL import Image
+
+from layout_doc import KVItem, LayoutDocument, TableBlock  # noqa: E402
+
+
+def _png_bytes() -> bytes:
+    buf = BytesIO()
+    Image.new("L", (4, 4), 255).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _fake_layout() -> LayoutDocument:
+    return LayoutDocument(
+        kvs=[KVItem("发票号码", "12345678")],
+        tables=[
+            TableBlock(
+                name="表",
+                headers=["品名", "金额"],
+                rows=[["A", "1,234.56"]],
+            )
+        ],
+    )
+
+
+def _patch_local_image_pipeline(monkeypatch, layout):
+    monkeypatch.setattr(pdf_extract, "preprocess_image", lambda data: object())
+    monkeypatch.setattr(pdf_extract, "extract_layout_from_image", lambda image: layout)
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_image_ocr_local",
+        lambda data: "发票号码: 12345678\nA\t1,234.56\nB\t56.00",
+    )
+
+
+def test_extract_pdf_returns_sheets_for_group_template(monkeypatch):
+    _patch_local_image_pipeline(monkeypatch, _fake_layout())
+    template = {
+        "name": "发票",
+        "fields": [
+            {"name": "品名", "type": "text", "source": "品名", "group": "detail"},
+            {
+                "name": "金额",
+                "type": "number",
+                "source": "金额",
+                "group": "detail",
+                "format": {"numberStyle": "us"},
+            },
+            {"name": "发票号码", "type": "text", "source": "发票号码", "group": "header"},
+        ],
+    }
+    result = pdf_extract.extract_pdf(_png_bytes(), "local", "invoice.png", template)
+    assert result["kind"] == "table"
+    assert len(result["sheets"]) == 2
+    assert result["sheets"][0]["name"] == "发票-明细"
+    assert result["sheets"][0]["rows"][1] == ["A", 1234.56]
+    assert result["sheets"][1]["name"] == "发票-抬头"
+    assert ["发票号码", "12345678"] in result["sheets"][1]["rows"]
+
+
+def test_extract_pdf_returns_proposed_recipe_without_template(monkeypatch):
+    _patch_local_image_pipeline(monkeypatch, _fake_layout())
+    result = pdf_extract.extract_pdf(_png_bytes(), "local", "invoice.png")
+    assert "sheets" not in result
+    proposed = result["proposedRecipe"]
+    assert proposed["name"] == "invoice"
+    detail = [f for f in proposed["fields"] if f["group"] == "detail"]
+    header = [f for f in proposed["fields"] if f["group"] == "header"]
+    assert [f["source"] for f in detail] == ["品名", "金额"]
+    assert header[0]["source"] == "发票号码"
+
+
+def test_extract_pdf_old_template_keeps_rows_single_table(monkeypatch):
+    _patch_local_image_pipeline(monkeypatch, _fake_layout())
+    template = {
+        "name": "发票",
+        "fields": [
+            {"name": "品名", "type": "text"},
+            {"name": "金额", "type": "number", "format": {"numberStyle": "us"}},
+        ],
+    }
+    result = pdf_extract.extract_pdf(_png_bytes(), "local", "invoice.png", template)
+    assert "sheets" not in result
+    assert result["rows"] == [
+        ["品名", "金额"],
+        ["A", 1234.56],
+        ["B", 56.0],
+    ]
+
+
+def test_pdf_extract_api_serializes_sheets(monkeypatch):
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_pdf",
+        lambda data, backend, filename, template=None: {
+            "kind": "table",
+            "rows": [["品名", "金额"], ["A", 1234.56]],
+            "sheets": [
+                {"name": "发票-明细", "rows": [["品名", "金额"], ["A", 1234.56]]},
+                {"name": "发票-抬头", "rows": [["字段", "值"], ["发票号码", "12345678"]]},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        server,
+        "load_doc_recipe",
+        lambda name: {"name": name, "fields": [{"name": "品名", "type": "text", "group": "detail"}]},
+    )
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/pdf/extract",
+        files={"file": ("invoice.pdf", b"%PDF-", "application/pdf")},
+        data={"ocr_backend": "local", "template": "发票"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["sheets"]) == 2
+    assert data["sheets"][0]["rows"][1] == ["A", 1234.56]
+
+
+def test_pdf_extract_api_serializes_proposed_recipe(monkeypatch):
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_pdf",
+        lambda data, backend, filename, template=None: {
+            "kind": "text",
+            "text": "发票号码: 12345678",
+            "proposedRecipe": {
+                "name": "invoice",
+                "description": "自动生成，请确认字段名与类型",
+                "fields": [
+                    {"name": "发票号码", "type": "number", "source": "发票号码", "group": "header"}
+                ],
+            },
+        },
+    )
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/pdf/extract",
+        files={"file": ("invoice.pdf", b"%PDF-", "application/pdf")},
+        data={"ocr_backend": "local"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["proposedRecipe"]["name"] == "invoice"
+    assert data["proposedRecipe"]["fields"][0]["source"] == "发票号码"
