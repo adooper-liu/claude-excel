@@ -164,11 +164,15 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     setBusy(true);
     setErr("");
     try {
-      const written = await writeToNewSheet(p.sheetName || "文档", p.rows);
+      // OCR 文本里 `=` 开头的单元格可能被 Excel 误当公式，加零宽前缀转文本
+      const rows = p.rows.map((row) => row.map((c) => (c.startsWith("=") ? "​" + c : c)));
+      const written = await writeToNewSheet(p.sheetName || "文档", rows);
       setStatus("表已进簿：「" + written + "」（" + p.rows.length + " 行）");
       setPendingResult((prev) => (prev && prev.text ? { ...prev, rows: undefined } : null));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const err = e as { code?: string; name?: string; message?: string; errorLocation?: string };
+      const parts = [err.code, err.name, err.message, err.errorLocation].filter(Boolean);
+      setErr(parts.join(" | ") || String(e));
     } finally {
       setBusy(false);
     }
