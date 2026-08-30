@@ -56,7 +56,7 @@ def test_interpret_document_uses_injected_model_call():
     async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
         assert "臆造" in system_prompt
         assert inject_web_search is False
-        assert max_tokens == 8192
+        assert max_tokens == 16384
         return {
             "content": [
                 {
@@ -122,7 +122,7 @@ def test_propose_recipe_ai_uses_injected_model_call():
     async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
         assert "碎片" in system_prompt
         assert inject_web_search is False
-        assert max_tokens == 8192
+        assert max_tokens == 16384
         return {
             "content": [
                 {
@@ -263,3 +263,39 @@ def test_interpret_document_stream_surfaces_error():
     asyncio.run(collect())
     assert events[0][0] == "error"
     assert "No API key" in events[0][1]
+
+def test_interpret_document_retries_on_thinking_truncation():
+    calls = []
+
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
+        calls.append(messages)
+        if len(calls) == 1:
+            return {"content": [{"type": "thinking", "thinking": "想很久..."}], "stop_reason": "max_tokens"}
+        return {"content": [{"type": "text", "text": '{"kvs":[{"label":"发票号码","value":"123"}],"items":[],"totals":[],"notes":[]}'}]}
+
+    result = asyncio.run(doc_interpret.interpret_document("x", model_call=fake_call))
+    assert result["kvs"] == [{"label": "发票号码", "value": "123"}]
+    assert len(calls) == 2
+    assert "禁止任何思考" in calls[1][0]["content"]
+
+
+def test_interpret_document_stream_retries_when_empty():
+    attempts = []
+
+    async def fake_stream(messages, system_prompt=None, model=None, max_tokens=4096, tools=None, inject_web_search=True):
+        attempts.append(messages)
+        if len(attempts) == 1:
+            return
+        yield '{"kvs":[{"label":"发票号码","value":"123"}],"items":[],"totals":[],"notes":[]}'
+
+    events = []
+
+    async def collect():
+        async for event in doc_interpret.interpret_document_stream("x", model_call=fake_stream):
+            events.append(event)
+
+    asyncio.run(collect())
+    assert events[-1][0] == "result"
+    assert events[-1][1]["kvs"] == [{"label": "发票号码", "value": "123"}]
+    assert len(attempts) == 2
+    assert "禁止任何思考" in attempts[1][0]["content"]

@@ -25,13 +25,37 @@ SYSTEM_PROMPT = """你是文档解读助手。你会收到一段 OCR 识别出�
 只输出一个 JSON 对象，不要 Markdown 代码块，不要任何额外解释，不要输出思考过程。"""
 
 
+_INTERPRET_MAX_TOKENS = 16384
+_ANTI_THINKING_HINT = (
+    " 注意：本任务要求直接给出最终结果，禁止任何思考/推理过程；"
+    "若上次只输出了思考没有答案，这次请直接输出最终 JSON。"
+)
+
+
+def _is_thinking_truncation(payload: dict[str, Any]) -> bool:
+    """Reasoning models may burn the whole budget in ``thinking`` blocks."""
+    if payload.get("stop_reason") != "max_tokens":
+        return False
+    content = payload.get("content")
+    if not isinstance(content, list) or not content:
+        return False
+    return all(
+        isinstance(part, dict) and part.get("type") == "thinking" for part in content
+    )
+
+
 def build_interpret_messages(
-    ocr_text: str, rows: list[list[Any]] | None = None
+    ocr_text: str,
+    rows: list[list[Any]] | None = None,
+    *,
+    anti_thinking: bool = False,
 ) -> list[dict[str, str]]:
     """Compose the model messages: generic system prompt + OCR text (and rows)."""
     user = "OCR 文本：\n" + str(ocr_text or "")
     if rows:
         user += "\n\n识别出的表格行（可能含噪声）：\n" + json.dumps(rows, ensure_ascii=False)
+    if anti_thinking:
+        user += _ANTI_THINKING_HINT
     return [{"role": "user", "content": user}]
 
 
@@ -201,10 +225,20 @@ async def interpret_document(
         messages,
         system_prompt=SYSTEM_PROMPT,
         model=model,
-        max_tokens=8192,
+        max_tokens=_INTERPRET_MAX_TOKENS,
         inject_web_search=False,
     )
     text = _extract_text(payload)
+    if not text and _is_thinking_truncation(payload):
+        messages = build_interpret_messages(ocr_text, rows, anti_thinking=True)
+        payload = await call(
+            messages,
+            system_prompt=SYSTEM_PROMPT,
+            model=model,
+            max_tokens=_INTERPRET_MAX_TOKENS,
+            inject_web_search=False,
+        )
+        text = _extract_text(payload)
     if not text:
         content_types = [
             str(part.get("type") or "?")
@@ -237,25 +271,32 @@ async def interpret_document_stream(
     """
     call = model_call or ai_proxy.chat_stream
     messages = build_interpret_messages(ocr_text, rows)
-    buffer: list[str] = []
-    try:
-        async for token in call(
-            messages,
-            system_prompt=SYSTEM_PROMPT,
-            model=model,
-            max_tokens=8192,
-            inject_web_search=False,
-        ):
-            if not isinstance(token, str):
-                continue
-            if token.startswith("Error:"):
-                yield ("error", token)
+    for attempt in (False, True):
+        buffer: list[str] = []
+        try:
+            async for token in call(
+                messages,
+                system_prompt=SYSTEM_PROMPT,
+                model=model,
+                max_tokens=_INTERPRET_MAX_TOKENS,
+                inject_web_search=False,
+            ):
+                if not isinstance(token, str):
+                    continue
+                if token.startswith("Error:"):
+                    yield ("error", token)
+                    return
+                buffer.append(token)
+                yield ("delta", token)
+            if buffer:
+                yield ("result", parse_interpret_json("".join(buffer)))
                 return
-            buffer.append(token)
-            yield ("delta", token)
-        yield ("result", parse_interpret_json("".join(buffer)))
-    except ValueError as exc:
-        yield ("error", str(exc))
+        except ValueError as exc:
+            yield ("error", str(exc))
+            return
+        # Empty stream = thinking consumed the whole budget -> retry once.
+        messages = build_interpret_messages(ocr_text, rows, anti_thinking=True)
+    yield ("error", "模型未返回可读内容（思考过长或空回复，请切换非思考模型或重试）")
 
 
 RECIPE_SYSTEM_PROMPT = """你是文档模板设计助手。你会收到一段 OCR 识别出的文档文本（可能含错字、噪声、碎片）。
@@ -287,11 +328,16 @@ def _usable_field_name(name: Any) -> bool:
 
 
 def build_recipe_messages(
-    ocr_text: str, rows: list[list[Any]] | None = None
+    ocr_text: str,
+    rows: list[list[Any]] | None = None,
+    *,
+    anti_thinking: bool = False,
 ) -> list[dict[str, str]]:
     user = "OCR 文本：\n" + str(ocr_text or "")
     if rows:
         user += "\n\n识别出的表格行（可能含噪声）：\n" + json.dumps(rows, ensure_ascii=False)
+    if anti_thinking:
+        user += _ANTI_THINKING_HINT
     return [{"role": "user", "content": user}]
 
 
@@ -367,10 +413,20 @@ async def propose_recipe_ai(
         messages,
         system_prompt=RECIPE_SYSTEM_PROMPT,
         model=model,
-        max_tokens=8192,
+        max_tokens=_INTERPRET_MAX_TOKENS,
         inject_web_search=False,
     )
     text = _extract_text(payload)
+    if not text and _is_thinking_truncation(payload):
+        messages = build_recipe_messages(ocr_text, rows, anti_thinking=True)
+        payload = await call(
+            messages,
+            system_prompt=RECIPE_SYSTEM_PROMPT,
+            model=model,
+            max_tokens=_INTERPRET_MAX_TOKENS,
+            inject_web_search=False,
+        )
+        text = _extract_text(payload)
     if not text:
         content_types = [
             str(part.get("type") or "?")
