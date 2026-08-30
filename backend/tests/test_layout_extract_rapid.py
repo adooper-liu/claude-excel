@@ -374,3 +374,55 @@ def test_positional_rows_split_on_cell_count_divergence():
     assert tables[0].headers == ["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"]
     assert len(tables[0].rows) == 1
     assert tables[0].rows[0] == ["d1", "d2", "d3", "d4", "d5", "d6", "d7"]
+
+
+def test_is_noise_text():
+    assert layout_extract._is_noise_text("4920//289<69>176<78-9386*+1")
+    assert layout_extract._is_noise_text("7*<-7423*-<*679709/57670<55")
+    assert not layout_extract._is_noise_text("购买方")
+    assert not layout_extract._is_noise_text("1,234.56")
+    assert not layout_extract._is_noise_text("13%")
+
+
+def test_noise_blocks_clusters_cipher_column():
+    """Symbol-heavy boxes form their own noise block; normal text stays out."""
+    items = [
+        (10, 100, 200, 130, "购买方"),           # left label (clean)
+        (10, 140, 250, 170, "名称：个人"),  # left value (clean)
+        (1500, 100, 2300, 130, "4920//289<69>176<78-9386*+1"),  # right noise
+        (1500, 140, 2300, 170, "7*<-7423*-<*679709/57670<55"),  # right noise
+    ]
+    blocks = layout_extract._noise_blocks(items)
+    assert len(blocks) == 1
+    assert len(blocks[0]) == 2  # both cipher strings in one noise block
+    noise_texts = {t for _x1, _y1, _x2, _y2, t in blocks[0]}
+    assert noise_texts == {"4920//289<69>176<78-9386*+1", "7*<-7423*-<*679709/57670<55"}
+
+def test_noise_block_excluded_from_tables():
+    """The cipher-area block must not contribute table rows."""
+    boxes = [
+        _quad(10, 100, 300, 130),   # 购买方
+        _quad(1500, 100, 2300, 130),  # cipher noise
+        _quad(1500, 140, 2300, 170),  # cipher noise
+        _quad(10, 200, 200, 230),   # 品名 (detail header)
+        _quad(300, 200, 450, 230),  # 金额
+        _quad(600, 200, 750, 230),  # 税率
+        _quad(10, 260, 200, 290),   # A产品
+        _quad(300, 260, 450, 290),  # 1,234.56
+        _quad(600, 260, 750, 290),  # 13%
+    ]
+    txts = [
+        "购买方",
+        "4920//289<69>176<78-9386*+1",
+        "7*<-7423*-<*679709/57670<55",
+        "品名",
+        "金额",
+        "税率",
+        "A产品",
+        "1,234.56",
+        "13%",
+    ]
+    tables = layout_extract._tables_from_rapid_blocks(boxes, txts)
+    assert len(tables) == 1
+    assert tables[0].headers == ["品名", "金额", "税率"]
+    assert tables[0].rows == [["A产品", "1,234.56", "13%"]]

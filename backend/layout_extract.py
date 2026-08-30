@@ -373,6 +373,9 @@ TABLE_REGION_LABELS = {"table", "\u8868\u683c"}
 WHOLE_FORM_AREA_RATIO = 0.5
 #: Minimum number of cells for a positional row to count as a table row.
 MIN_TABLE_CELLS = 3
+#: Characters that make a box look like OCR noise when present without any
+#: CJK char or ASCII letter (e.g. the VAT-invoice cipher/verification area).
+STRONG_NOISE_CHARS = set("<>*+{}[]^~\\|#@&")
 
 #: Layout class names whose OCR text never holds header KVs (figures/stamps).
 NON_TEXT_REGION_LABELS = {
@@ -488,42 +491,56 @@ def _rapid_ocr_lines(
     return [text for _y, _x, text in items]
 
 
-def _rows_from_rapid_ocr(
+def _rapid_items(
     ocr_boxes: list[Any], ocr_txts: list[Any]
-) -> list[list[str]]:
-    """Group RapidOCR line-level boxes into positional rows (one cell each).
-
-    Boxes are grouped by TOP edge proximity (``y1``) with a tolerance based on
-    the GLOBAL median box height, so one tall title box does not inflate the
-    tolerance and swallow whole rows of a dense form.
-    """
-    items: list[tuple[float, float, float, str]] = []
+) -> list[tuple[float, float, float, float, str]]:
+    """Normalize RapidOCR boxes to (x1, y1, x2, y2, text) tuples (non-empty)."""
+    items: list[tuple[float, float, float, float, str]] = []
     for box, txt in zip(ocr_boxes, ocr_txts):
         text = str(txt or "").strip()
         if not text:
             continue
         x1, y1, x2, y2 = _quad_bbox(box)
-        items.append((y1, (x1 + x2) / 2.0, y2 - y1, text))
+        items.append((x1, y1, x2, y2, text))
+    return items
+
+
+def _rows_from_items(
+    items: list[tuple[float, float, float, float, str]],
+) -> list[list[str]]:
+    """Group line-level boxes into positional rows (one cell each).
+
+    Boxes are grouped by TOP edge proximity (``y1``) with a tolerance based on
+    the median box height, so one tall title box does not inflate the
+    tolerance and swallow whole rows of a dense form.
+    """
     if not items:
         return []
-    heights = sorted(height for _y1, _xc, height, _t in items)
+    heights = sorted(y2 - y1 for _x1, y1, _x2, y2, _t in items)
     median_height = heights[len(heights) // 2]
     tolerance = max(8.0, median_height * 0.6)
-    items.sort(key=lambda it: (it[0], it[1]))
+    ordered = sorted(items, key=lambda it: (it[1], it[0]))
 
     rows: list[list[tuple[float, str]]] = []
     current: list[tuple[float, float, str]] = []
-    for y1, xc, _height, text in items:
+    for x1, y1, x2, _y2, text in ordered:
         if current and y1 - current[0][0] > tolerance:
             rows.append(current)
             current = []
-        current.append((y1, xc, text))
+        current.append((y1, (x1 + x2) / 2.0, text))
     if current:
         rows.append(current)
     return [
         [text for _y1, _xc, text in sorted(cells, key=lambda c: c[1])]
         for cells in rows
     ]
+
+
+def _rows_from_rapid_ocr(
+    ocr_boxes: list[Any], ocr_txts: list[Any]
+) -> list[list[str]]:
+    """Group RapidOCR line-level boxes into positional rows (one cell each)."""
+    return _rows_from_items(_rapid_items(ocr_boxes, ocr_txts))
 
 
 def _tables_from_positional_rows(rows: list[list[str]]) -> list[TableBlock]:
@@ -643,6 +660,82 @@ def _rapid_table_block(
     return table
 
 
+
+def _is_noise_text(text: str) -> bool:
+    """A box is OCR noise when it has no CJK/letter and contains strong symbols.
+
+    This catches e.g. the VAT-invoice cipher/verification strings
+    ("4920//289<69>176<78-9386*+1") while keeping normal values
+    ("1,234.56", "13%", dates, names) — the signal is content, not position,
+    so it stays general across document styles.
+    """
+    has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in text)
+    has_letter = any(ch.isascii() and ch.isalpha() for ch in text)
+    if has_cjk or has_letter:
+        return False
+    return any(ch in STRONG_NOISE_CHARS for ch in text)
+
+
+def _noise_blocks(
+    items: list[tuple[float, float, float, float, str]],
+) -> list[list[tuple[float, float, float, float, str]]]:
+    """Cluster symbol-heavy OCR boxes into noise blocks (e.g. the cipher area).
+
+    Only noise boxes participate, so the growing-block bbox stays local to the
+    noisy column/region and never swallows the whole page.
+    """
+    noise = [item for item in items if _is_noise_text(item[4])]
+    if not noise:
+        return []
+    heights = sorted(y2 - y1 for _x1, y1, _x2, y2, _t in noise)
+    median_height = heights[len(heights) // 2]
+    tolerance = max(12.0, median_height * 1.5)
+
+    remaining = list(noise)
+    blocks: list[list[tuple[float, float, float, float, str]]] = []
+    while remaining:
+        seed = remaining.pop(0)
+        block = [seed]
+        bx1, by1, bx2, by2 = seed[0], seed[1], seed[2], seed[3]
+        changed = True
+        while changed:
+            changed = False
+            for index, item in enumerate(remaining):
+                ix1, iy1, ix2, iy2, _t = item
+                if (
+                    min(bx2, ix2) - max(bx1, ix1) > -tolerance
+                    and min(by2, iy2) - max(by1, iy1) > -tolerance
+                ):
+                    block.append(remaining.pop(index))
+                    bx1 = min(bx1, ix1)
+                    by1 = min(by1, iy1)
+                    bx2 = max(bx2, ix2)
+                    by2 = max(by2, iy2)
+                    changed = True
+                    break
+        blocks.append(block)
+    return blocks
+
+
+def _tables_from_rapid_blocks(
+    ocr_boxes: list[Any], ocr_txts: list[Any]
+) -> list[TableBlock]:
+    """Build tables from positional rows, excluding whole noise blocks.
+
+    Boxes are clustered into spatial blocks; a block dominated by symbol-heavy
+    text (e.g. the VAT-invoice cipher/verification area) is treated as one
+    noise block and its boxes are removed before row/table reconstruction, so
+    the cipher characters never leak into table rows or key-values.
+    """
+    items = _rapid_items(ocr_boxes, ocr_txts)
+    noise_items: set[tuple[float, float, float, float, str]] = set()
+    for block in _noise_blocks(items):
+        noise_items.update(block)
+    clean = [item for item in items if item not in noise_items]
+    rows = _rows_from_items(clean)
+    return _tables_from_positional_rows(rows)
+
+
 def _region_area_ratio(
     region: tuple[float, float, float, float], image: Any
 ) -> float:
@@ -699,8 +792,7 @@ def _layout_from_rapid(
         if table is not None:
             tables.append(table)
     if not tables:
-        rows = _rows_from_rapid_ocr(ocr_boxes, ocr_txts)
-        tables = _tables_from_positional_rows(rows)
+        tables = _tables_from_rapid_blocks(ocr_boxes, ocr_txts)
 
     layout = LayoutDocument(kvs=kvs, tables=tables, raw_text=raw_text)
     layout.engine = "rapid"
