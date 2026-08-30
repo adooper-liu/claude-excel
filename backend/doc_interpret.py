@@ -91,6 +91,22 @@ def _extract_first_json(text: str) -> str:
     return text
 
 
+_FULLWIDTH_JSON = str.maketrans(
+    {chr(code): chr(code - 0xFEE0) for code in range(0xFF01, 0xFF5F)}
+)
+
+
+def _load_json_lenient(raw: str) -> Any:
+    """Try the first balanced JSON, then full-width-normalized, else raise."""
+    candidate = _extract_first_json(raw)
+    for attempt in (candidate, candidate.translate(_FULLWIDTH_JSON)):
+        try:
+            return json.loads(attempt)
+        except (TypeError, ValueError):
+            continue
+    raise ValueError("模型输出不是有效 JSON；原文片段：" + (raw or "").strip()[:200])
+
+
 def _strip_code_fence(text: str) -> str:
     cleaned = (text or "").strip()
     if cleaned.startswith("```"):
@@ -155,11 +171,7 @@ def parse_interpret_json(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(text)
     except (TypeError, ValueError):
-        candidate = _extract_first_json(text)
-        try:
-            data = json.loads(candidate)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("模型输出不是有效 JSON") from exc
+        data = _load_json_lenient(text)
     if not isinstance(data, dict):
         raise ValueError("解读结果须为 JSON 对象")
     notes = data.get("notes")
@@ -274,11 +286,7 @@ def parse_recipe_json(raw: str) -> dict[str, Any]:
     try:
         data = json.loads(text)
     except (TypeError, ValueError):
-        candidate = _extract_first_json(text)
-        try:
-            data = json.loads(candidate)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("模型输出不是有效 JSON") from exc
+        data = _load_json_lenient(text)
     if not isinstance(data, dict):
         raise ValueError("模板候选须为 JSON 对象")
     fields: list[dict[str, Any]] = []

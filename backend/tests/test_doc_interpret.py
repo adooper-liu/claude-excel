@@ -224,3 +224,13 @@ def test_parse_recipe_json_tolerates_preamble():
     )
     parsed = doc_interpret.parse_recipe_json(raw)
     assert parsed["fields"][0]["name"] == "金额"
+
+def test_parse_interpret_json_tolerates_fullwidth_braces():
+    raw = '｛"kvs"：［｛"label"："发票号码"，"value"："123"｝］，"items"：［］，"totals"：［］，"notes"：［］｝'
+    parsed = doc_interpret.parse_interpret_json(raw)
+    assert parsed["kvs"] == [{"label": "发票号码", "value": "123"}]
+
+
+def test_parse_interpret_json_error_includes_snippet():
+    with pytest.raises(ValueError, match="原文片段"):
+        doc_interpret.parse_interpret_json("完全没有 JSON 内容的一段话")
