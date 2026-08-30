@@ -104,6 +104,46 @@ def test_extract_pdf_text_layer():
     assert result["preview"].startswith("This is")
 
 
+def test_proposed_recipe_falls_back_to_flat_rows_when_layout_empty(monkeypatch):
+    from layout_doc import LayoutDocument
+
+    monkeypatch.setattr(pdf_extract, "preprocess_image", lambda data: object())
+    monkeypatch.setattr(
+        pdf_extract, "extract_layout_from_image", lambda image: LayoutDocument()
+    )
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_image_ocr_local",
+        lambda data: "Item\tAmount\nWidget\t1,234.56",
+    )
+    result = pdf_extract.extract_pdf(
+        b"\x89PNG\r\n\x1a\nxxxx", ocr_backend="local", filename="invoice.png"
+    )
+    assert result["kind"] == "table"
+    assert result["proposedRecipe"] is not None
+    fields = result["proposedRecipe"]["fields"]
+    assert fields[0]["source"] == "Item"
+    assert fields[1]["type"] == "number"
+
+
+def test_proposed_recipe_falls_back_when_layout_extraction_raises(monkeypatch):
+    def boom(_image):
+        raise RuntimeError("no layout")
+
+    monkeypatch.setattr(pdf_extract, "preprocess_image", lambda data: object())
+    monkeypatch.setattr(pdf_extract, "extract_layout_from_image", boom)
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_image_ocr_local",
+        lambda data: "Item\tAmount\nWidget\t1,234.56",
+    )
+    result = pdf_extract.extract_pdf(
+        b"\x89PNG\r\n\x1a\nxxxx", ocr_backend="local", filename="invoice.png"
+    )
+    assert result["proposedRecipe"] is not None
+    assert result["proposedRecipe"]["fields"][0]["source"] == "Item"
+
+
 def test_extract_pdf_applies_table_template_only_when_provided(monkeypatch):
     template = {
         "fields": [

@@ -297,6 +297,27 @@ def _safe_layout(builder: Any, *args: Any) -> Any:
         return None
 
 
+def _layout_from_result_rows(rows: Any) -> Any:
+    """Synthesize a minimal LayoutDocument from flat rows when word-box layout
+    extraction found nothing (noisy OCR), so template proposal still works
+    from whatever table was recovered."""
+    if not isinstance(rows, list) or not rows:
+        return None
+    table_rows = [list(r) for r in rows if isinstance(r, list)]
+    if not table_rows:
+        return None
+    from layout_doc import LayoutDocument, TableBlock
+
+    headers = list(table_rows[0]) if _looks_like_header(table_rows[0]) else []
+    data_rows = table_rows[1:] if headers else table_rows
+    if not headers and not data_rows:
+        return None
+    return LayoutDocument(
+        tables=[TableBlock(name="表1", headers=headers, rows=data_rows)],
+        raw_text="\n".join(" ".join(str(c) for c in r) for r in table_rows),
+    )
+
+
 def _enrich(
     result: dict[str, Any], layout: Any, template: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -305,6 +326,14 @@ def _enrich(
     New templates (any ``group`` field) produce the two-sheet layout output;
     old templates keep the legacy single-table rows flow.
     """
+    if not template:
+        # Fallback: word-box layout came back empty/None but flat rows were
+        # recovered -> still propose a template from those rows so the
+        # "据此生成模板" entry shows whenever there is any table content.
+        if layout is None or not (layout.kvs or layout.tables):
+            from_rows = _layout_from_result_rows(result.get("rows"))
+            if from_rows is not None:
+                layout = from_rows
     if layout is None:
         return result
     has_group = any(
