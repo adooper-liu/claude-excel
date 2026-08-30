@@ -85,6 +85,11 @@ if %ERRORLEVEL% neq 0 (
 if %ERRORLEVEL% neq 0 (
     echo pytesseract 安装失败；后端可运行，但扫描件本地 OCR 不可用
 )
+rem RapidStruct 版面/表格识别（可选但推荐：未装时回退 tesseract 词盒聚类）
+"backend\.venv\Scripts\python.exe" -m pip install rapid-layout rapid-table rapidocr
+if %ERRORLEVEL% neq 0 (
+    echo RapidStruct 可选依赖安装失败；后端可运行，但本地版面/表格识别将回退 tesseract 词盒聚类
+)
 where tesseract >nul 2>nul
 if %ERRORLEVEL% neq 0 (
     echo 安装本地 OCR 引擎 Tesseract（UB-Mannheim 版，默认含 chi_sim）...

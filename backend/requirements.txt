@@ -10,7 +10,7 @@ pypdfium2>=5.0.0
 pillow>=10.0.0
 # 本地扫描件 OCR 可选：pytesseract>=0.3.13，另需 tesseract 二进制（install.bat 安装 UB-Mannheim 版，含 chi_sim）。
 
-# RapidStruct 版面布局 + 表格识别（可选；未安装/模型缺失时 layout_extract 静默回退 tesseract 词盒聚类）：
+# RapidStruct 版面布局 + 表格识别（可选，install.bat 会自动安装；未安装/模型缺失时 layout_extract 静默回退 tesseract 词盒聚类）：
 # pip install rapid-layout rapid-table rapidocr
 # 说明：RapidTable 内部 OCR 依赖 rapidocr v2，三者同时存在才启用 rapid 路径（_rapid_available）。
 
