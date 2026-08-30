@@ -1913,3 +1913,30 @@ select:focus-visible {
   color: var(--danger);
   font-weight: 700;
 }
+
+.pdf-interpret {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--rule);
+}
+.pdf-interpret-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+  padding: 6px 8px;
+}
+.pdf-interpret-notes {
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.pdf-interpret-notes li {
+  margin: 2px 0;
+}
