@@ -76,6 +76,31 @@ status: pending
 
 ---
 
+
+---
+
+### Task 3: AI 辅助建模板（propose-recipe，解决启发式模板不友好）
+
+**Files:**
+- Modify: `backend/doc_interpret.py`
+- Modify: `backend/tests/test_doc_interpret.py`
+- Modify: `backend/server.py`
+- Modify: `backend/tests/test_doc_recipe_api.py`
+- Modify: `addin/src/taskpane/components/PdfAttachSection.tsx`
+
+**Interfaces:**
+- Produces: `RECIPE_SYSTEM_PROMPT`；`build_recipe_messages`；`parse_recipe_json -> {fields, notes}`；`async propose_recipe_ai(ocr_text, *, rows=None, base_name="", model=None, model_call=None) -> {name, description, fields, notes}`；`POST /api/doc/propose-recipe`（require_loopback）；前端「AI 生成模板」按钮。
+- Consumes: `ai_proxy.chat_complete`、`layout_doc.normalize_key`。
+
+**现状缺陷：** 启发式 `propose_recipe` 会把 OCR 碎片/噪声当字段（购/名/BR），模板不友好。
+
+- [ ] **Step 1: 提示词** — 让模型整理干净字段字典：每项 `{name, type, source, group}`；type 限 `text|number|date|amount|percent`，group 限 `header|detail`；OCR 碎片合并（购/名→购买方名称）、纯噪声丢弃；只输出 JSON。
+- [ ] **Step 2: 归一化** — `_normalize_recipe_field`（type/group 白名单、source 空回退 name、字段名过滤冒号/纯符号）、`parse_recipe_json`（去围栏、按 `normalize_key` 去重、notes）。
+- [ ] **Step 3: 主函数 + 路由** — `propose_recipe_ai`（注入 model_call；空/`Error:` 抛 ValueError）；`POST /api/doc/propose-recipe`（`ocrText` 必填，`rows?`/`baseName?`；ValueError→400）。
+- [ ] **Step 4: 单测** — 提示词含「碎片」；parse 正常/噪声丢弃/type、group 默认/去重；注入 call 成功与 Error；API 200/400。
+- [ ] **Step 5: 前端** — 卡片加「AI 生成模板」按钮（有 `text` 时显示），调 propose-recipe → `onProposeRecipe` 预填 DocRecipeBar。
+- [ ] **Step 6: 门禁** — `pytest tests/ -q` → exit 0；`npm run typecheck`/`test:unit`/`build` → 全绿。
+
 ## 真机验收（管理员 / 桌面 Excel，不代跑）
 
 沙箱验不到模型真实输出，Codex **禁止声称已验证**，只写「待真机验收」。验收者做：
@@ -92,6 +117,7 @@ status: pending
 3. 提交（任务分支，每个 Task 一个 commit）：
    - Task 1: `git commit -m "feat(ai): 文档 AI 结构化解读端点（OCR 字面→模型含义→JSON）"`
    - Task 2: `git commit -m "feat(ui): 解析结果 AI 解读 + 解读进工作簿"`
+   - Task 3: `git commit -m "feat(ai): AI 辅助建模板（propose-recipe 端点 + 前端按钮）"`
    - plan 文档：`git commit -m "docs(plan): 文档 AI 结构化解读"`
 4. 真机验收段留给管理员，Codex 不代跑、不标 done 时声称已验。
 5. 全部通过后：按 `docs/coordination.md`，review 交回 Claude 对照本 plan 逐粒核对。
