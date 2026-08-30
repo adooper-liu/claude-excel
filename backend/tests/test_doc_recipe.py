@@ -150,3 +150,26 @@ def test_save_doc_recipe_rejects_duplicate_create(tmp_path, monkeypatch):
         raise AssertionError("duplicate create was allowed")
 
     assert load_doc_recipe("发票B")["description"] == "original"
+
+def test_field_group_whitelist_and_source_locator():
+    clean = validate_doc_recipe(
+        recipe(
+            fields=[
+                {"name": "品名", "type": "text", "source": "品名", "group": "detail"},
+                {"name": "发票号码", "type": "text", "source": "发票号码", "group": "header"},
+                {"name": "坏组", "type": "text", "group": "bogus"},
+                {"name": "旧字段", "type": "text"},
+                {"name": "空来源", "type": "text", "source": ""},
+            ]
+        )
+    )
+    fields = {f["name"]: f for f in clean["fields"]}
+    assert fields["品名"]["group"] == "detail"
+    assert fields["发票号码"]["group"] == "header"
+    assert fields["发票号码"]["source"] == "发票号码"
+    # invalid group falls back to detail (backward compatible)
+    assert fields["坏组"]["group"] == "detail"
+    # old templates without group default to detail
+    assert fields["旧字段"]["group"] == "detail"
+    # empty source is kept empty (no key), position fallback applies
+    assert "source" not in fields["空来源"]

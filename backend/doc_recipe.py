@@ -66,6 +66,14 @@ def _normalize_fields(raw: Any) -> list[dict[str, Any]]:
                 "fields type 仅支持 " + "、".join(FIELD_TYPES) + "，收到：" + field_type
             )
         field: dict[str, Any] = {"name": name[:80], "type": field_type}
+        # group is a locator kind: "header" fields are found by key name,
+        # "detail" fields by table header column; invalid values fall back to
+        # "detail" so old templates (without group) stay backward compatible.
+        group = str(raw_field.get("group") or "").strip().lower()
+        field["group"] = group if group in ("header", "detail") else "detail"
+        # source is a locator: for group=header it is the key name (e.g.
+        # 发票号码), for group=detail the table header column name (e.g. 金额).
+        # Empty source falls back to positional alignment in apply_recipe.
         source = str(raw_field.get("source") or "").strip()
         if source:
             field["source"] = source[:100]
