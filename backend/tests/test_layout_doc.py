@@ -48,3 +48,15 @@ def test_kv_normalized_lookup():
     doc = LayoutDocument(kvs=[KVItem("发票 号码", "12345678")])
     assert doc.kv("发票号码") == "12345678"
     assert doc.kv("不存在") is None
+
+def test_kv_supports_occurrence_suffix():
+    from layout_doc import KVItem, LayoutDocument
+
+    layout = LayoutDocument(
+        kvs=[KVItem("名称", "购买方-个人"), KVItem("名称", "销售方-京东"), KVItem("发票号码", "123")]
+    )
+    assert layout.kv("名称") == "购买方-个人"
+    assert layout.kv("名称#1") == "购买方-个人"
+    assert layout.kv("名称#2") == "销售方-京东"
+    assert layout.kv("名称#3") is None
+    assert layout.kv("发票号码") == "123"

@@ -144,3 +144,22 @@ def test_propose_recipe_ai_surfaces_model_error():
 
     with pytest.raises(ValueError, match="No API key"):
         asyncio.run(doc_interpret.propose_recipe_ai("x", model_call=fake_call))
+
+def test_recipe_prompt_enforces_types_and_occurrence_sources():
+    assert "编号类纯数字长串" in doc_interpret.RECIPE_SYSTEM_PROMPT
+    assert "键名#1" in doc_interpret.RECIPE_SYSTEM_PROMPT
+    assert "价税合计只保留一条" in doc_interpret.RECIPE_SYSTEM_PROMPT
+
+
+def test_parse_recipe_json_dedupes_sources_and_keeps_occurrence():
+    raw = (
+        '{"fields":['
+        '{"name":"价税合计（小写）","type":"amount","source":"价税合计","group":"header"},'
+        '{"name":"价税合计（大写）","type":"text","source":"价税合计","group":"header"},'
+        '{"name":"购买方名称","type":"text","source":"名称#1","group":"header"},'
+        '{"name":"销售方名称","type":"text","source":"名称#2","group":"header"}'
+        '],"notes":[]}'
+    )
+    parsed = doc_interpret.parse_recipe_json(raw)
+    names = [f["name"] for f in parsed["fields"]]
+    assert names == ["价税合计（小写）", "购买方名称", "销售方名称"]

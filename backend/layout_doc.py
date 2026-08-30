@@ -73,11 +73,27 @@ class LayoutDocument:
         return max(self.tables, key=lambda t: len(t.rows) * max((len(r) for r in t.rows), default=0))
 
     def kv(self, label: str) -> str | None:
-        """Value for the first KV item whose label matches (normalized)."""
-        target = normalize_key(label)
+        """Value for the N-th KV item whose label matches (normalized).
+
+        ``label`` may carry an occurrence suffix ``#N`` (e.g. ``名称#2``) to
+        pick the N-th match for labels repeated in the document (购买方/销售方
+        blocks share the same key names).
+        """
+        raw = str(label or "").strip()
+        target = raw
+        occurrence = 1
+        if "#" in raw:
+            base, _, suffix = raw.rpartition("#")
+            if base and suffix.isdigit():
+                target = base
+                occurrence = int(suffix)
+        normalized = normalize_key(target)
+        seen = 0
         for item in self.kvs:
-            if normalize_key(item.label) == target:
-                return item.value
+            if normalize_key(item.label) == normalized:
+                seen += 1
+                if seen == occurrence:
+                    return item.value
         return None
 
     def to_dict(self) -> dict[str, Any]:

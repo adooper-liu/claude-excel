@@ -242,3 +242,22 @@ def test_clean_date_supports_multiple_formats():
 def test_clean_number_normalizes_ocr_text_at_entry():
     assert clean_number("1 234,56", "eu", []) == 1234.56
     assert clean_number("１,２３４．５６", "us", []) == 1234.56
+
+def test_apply_recipe_header_source_uses_occurrence():
+    from layout_doc import KVItem, LayoutDocument
+
+    layout = LayoutDocument(
+        kvs=[KVItem("名称", "购买方-个人"), KVItem("名称", "销售方-京东")]
+    )
+    template = {
+        "name": "发票",
+        "fields": [
+            {"name": "购买方名称", "type": "text", "source": "名称#1", "group": "header"},
+            {"name": "销售方名称", "type": "text", "source": "名称#2", "group": "header"},
+        ],
+    }
+    sheets = apply_recipe(layout, template)
+    header = next(sheet for sheet in sheets if sheet["name"].endswith("抬头"))
+    values = dict((str(r[0]), r[1]) for r in header["rows"][1:])
+    assert values["购买方名称"] == "购买方-个人"
+    assert values["销售方名称"] == "销售方-京东"

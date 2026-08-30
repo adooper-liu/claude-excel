@@ -153,8 +153,11 @@ RECIPE_SYSTEM_PROMPT = """你是文档模板设计助手。你会收到一段 OC
 2. 每项字段是 {"name": 字段名, "type": "text|number|date|amount|percent", "source": 原文中的键名或表头, "group": "header" 或 "detail"}。
    - group=header：抬头键值字段（如发票号码、开票日期）；
    - group=detail：明细表格列（如品名、金额、税率）。
-3. type 按内容推断；source 填文档里能对上的原文键名/表头，对不上就用字段名。
-4. 只输出一个 JSON 对象 {"fields": [...], "notes": [...]}，不要 Markdown 代码块，不要额外解释。
+3. type 按内容推断，且遵守：编号类纯数字长串（发票号码、机器编号、订单号、校验码、纳税人识别号等）用 "text"，不要用 "number"；只有可计算/可比较的量才用 number/amount；含 % 用 percent；日期用 date。
+4. source 必须唯一：文档里同一键名出现多次（如购买方与销售方都有「名称/纳税人识别号/地址、电话/开户行及账号」）时，用 "键名#1"、"键名#2" 区分（#N 表示该键第 N 次出现）；对不上原文就用字段名。不要给两个字段填相同 source。
+5. 明细只放真正的数据列；「合计/总计」行不当作列字段；价税合计只保留一条（优先保留小写）。
+6. 字段总数控制在 20 以内；重复、噪声、无意义字段丢弃。
+7. 只输出一个 JSON 对象 {"fields": [...], "notes": [...]}，不要 Markdown 代码块，不要额外解释。
 """
 
 RECIPE_TYPES = ("text", "number", "date", "amount", "percent")
@@ -212,15 +215,20 @@ def parse_recipe_json(raw: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("模板候选须为 JSON 对象")
     fields: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    seen_names: set[str] = set()
+    seen_sources: set[str] = set()
     for item in data.get("fields") or []:
         field = _normalize_recipe_field(item)
         if field is None:
             continue
-        key = normalize_key(field["name"])
-        if not key or key in seen:
+        name_key = normalize_key(field["name"])
+        if not name_key or name_key in seen_names:
             continue
-        seen.add(key)
+        source_key = normalize_key(field["source"])
+        if source_key in seen_sources:
+            continue
+        seen_names.add(name_key)
+        seen_sources.add(source_key)
         fields.append(field)
     notes = data.get("notes")
     return {
