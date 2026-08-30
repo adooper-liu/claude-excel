@@ -133,6 +133,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
   const [interpretResult, setInterpretResult] = useState<InterpretResult | null>(null);
   const [interpretBusy, setInterpretBusy] = useState(false);
   const [interpretErr, setInterpretErr] = useState("");
+  const [proposeBusy, setProposeBusy] = useState(false);
 
   const refreshTemplates = useCallback(async () => {
     try {
@@ -402,6 +403,34 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
     }
   }, [pendingResult, interpretResult, busy, interpretBusy]);
 
+  const proposeAi = useCallback(async () => {
+    const p = pendingResult;
+    if (!p || !p.text || busy || interpretBusy || proposeBusy) return;
+    setProposeBusy(true);
+    setInterpretErr("");
+    try {
+      const response = await fetch(API_BASE + "/api/doc/propose-recipe", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ocrText: p.text,
+          rows: p.rows || [],
+          baseName: p.sheetName || "",
+        }),
+      });
+      const data = await readJson(response);
+      if (!response.ok) {
+        throw new Error(String((data as { detail?: string }).detail || response.statusText || "生成失败"));
+      }
+      onProposeRecipe?.(data as DocRecipeProposal);
+      setPendingResult(null);
+    } catch (e) {
+      setInterpretErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setProposeBusy(false);
+    }
+  }, [pendingResult, busy, interpretBusy, proposeBusy, onProposeRecipe]);
+
   return (
     <div className="fetch-bar pdf-bar">
       <div className="fetch-row pdf-head">
@@ -563,13 +592,23 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
                 据此生成模板
               </button>
             )}
+            {pendingResult.text && (
+              <button
+                type="button"
+                className="pdf-confirm-alt"
+                disabled={busy || interpretBusy || proposeBusy}
+                onClick={() => void proposeAi()}
+              >
+                {proposeBusy ? "生成中…" : "AI 生成模板"}
+              </button>
+            )}
           </div>
           {pendingResult.text && (
             <div className="pdf-interpret">
               <button
                 type="button"
                 className="pdf-confirm-alt"
-                disabled={busy || interpretBusy}
+                disabled={busy || interpretBusy || proposeBusy}
                 onClick={() => void interpret()}
               >
                 {interpretBusy ? "解读中…" : interpretResult ? "重新解读" : "AI 解读"}
@@ -591,7 +630,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
                   <button
                     type="button"
                     className="pdf-confirm-ok"
-                    disabled={busy || interpretBusy}
+                    disabled={busy || interpretBusy || proposeBusy}
                     onClick={() => void interpretLandSheet()}
                   >
                     解读进工作簿
