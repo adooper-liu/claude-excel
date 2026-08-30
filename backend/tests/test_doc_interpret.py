@@ -76,3 +76,71 @@ def test_interpret_document_surfaces_model_error():
 
     with pytest.raises(ValueError, match="No API key"):
         asyncio.run(doc_interpret.interpret_document("x", model_call=fake_call))
+
+def test_recipe_prompt_mentions_fragments_and_groups():
+    assert "碎片" in doc_interpret.RECIPE_SYSTEM_PROMPT
+    assert "header" in doc_interpret.RECIPE_SYSTEM_PROMPT
+    assert "detail" in doc_interpret.RECIPE_SYSTEM_PROMPT
+
+
+def test_parse_recipe_json_normalizes_filters_and_dedupes():
+    raw = (
+        '{"fields":['
+        '{"name":"购买方","type":"text","source":"购","group":"header"},'
+        '{"name":"名","type":"text","source":"名","group":"header"},'
+        '{"name":"BR","type":"text","source":"BR","group":"detail"},'
+        '{"name":"金额","type":"number","source":"金额","group":"detail"},'
+        '{"name":"金额","type":"text","source":"金额","group":"detail"},'
+        '{"name":"名称: 个人","type":"text","source":"x","group":"detail"},'
+        '{"name":"1234//<>*","type":"text","source":"y","group":"detail"},'
+        '{"type":"number","source":"无名字"},'
+        '{"name":"","type":"text","source":"空名字"}'
+        '],"notes":["噪声较多"]}'
+    )
+    parsed = doc_interpret.parse_recipe_json(raw)
+    names = [f["name"] for f in parsed["fields"]]
+    assert names.count("金额") == 1
+    assert "名称: 个人" not in names
+    assert "1234//<>*" not in names
+    assert "购买方" in names
+    assert "BR" in names
+    assert parsed["notes"] == ["噪声较多"]
+
+
+def test_parse_recipe_json_defaults_type_and_group():
+    parsed = doc_interpret.parse_recipe_json(
+        '{"fields":[{"name":"备注","type":"bogus","group":"weird"}]}'
+    )
+    field = parsed["fields"][0]
+    assert field["type"] == "text"
+    assert field["group"] == "detail"
+
+
+def test_propose_recipe_ai_uses_injected_model_call():
+    async def fake_call(messages, system_prompt=None, model=None):
+        assert "碎片" in system_prompt
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": '{"fields":[{"name":"购买方名称","type":"text","source":"购买方名称","group":"header"},{"name":"金额","type":"number","source":"金额","group":"detail"}],"notes":[]}',
+                }
+            ]
+        }
+
+    result = asyncio.run(
+        doc_interpret.propose_recipe_ai(
+            "购买方名称: 个人", base_name="发票", model_call=fake_call
+        )
+    )
+    assert result["name"] == "发票"
+    assert result["fields"][0]["name"] == "购买方名称"
+    assert result["fields"][1]["type"] == "number"
+
+
+def test_propose_recipe_ai_surfaces_model_error():
+    async def fake_call(messages, system_prompt=None, model=None):
+        return {"content": [{"type": "text", "text": "Error: No API key configured."}]}
+
+    with pytest.raises(ValueError, match="No API key"):
+        asyncio.run(doc_interpret.propose_recipe_ai("x", model_call=fake_call))

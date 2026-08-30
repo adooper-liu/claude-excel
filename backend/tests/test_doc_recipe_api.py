@@ -64,6 +64,42 @@ def test_doc_recipe_list_create_delete(monkeypatch):
     assert saved["deleted"] == "增值税发票"
 
 
+def test_doc_propose_recipe_api_returns_candidate(monkeypatch):
+    async def fake_propose(ocr_text, *, rows=None, base_name="", model=None, model_call=None):
+        return {
+            "name": "发票",
+            "description": "AI 生成，请确认字段名与类型",
+            "fields": [{"name": "金额", "type": "number", "source": "金额", "group": "detail"}],
+            "notes": [],
+        }
+
+    monkeypatch.setattr(server.doc_interpret, "propose_recipe_ai", fake_propose)
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/doc/propose-recipe", json={"ocrText": "金额 1,234.56", "baseName": "发票"}
+    )
+    assert response.status_code == 200
+    assert response.json()["fields"][0]["name"] == "金额"
+
+
+def test_doc_propose_recipe_api_requires_ocr_text(monkeypatch):
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/propose-recipe", json={"ocrText": " "})
+    assert response.status_code == 400
+    assert "ocrText" in response.json()["detail"]
+
+
+def test_doc_propose_recipe_api_maps_model_error(monkeypatch):
+    async def bad(ocr_text, *, rows=None, base_name="", model=None, model_call=None):
+        raise ValueError("No API key configured")
+
+    monkeypatch.setattr(server.doc_interpret, "propose_recipe_ai", bad)
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/propose-recipe", json={"ocrText": "x"})
+    assert response.status_code == 400
+    assert "No API key" in response.json()["detail"]
+
+
 def test_doc_interpret_api_returns_normalized_json(monkeypatch):
     async def fake_interpret(ocr_text, *, rows=None, model=None, model_call=None):
         return {

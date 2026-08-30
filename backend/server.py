@@ -826,6 +826,24 @@ async def api_doc_recipes_delete(name: str, request: Request):
     return {"ok": True}
 
 
+@app.post("/api/doc/propose-recipe")
+async def api_doc_propose_recipe(req: dict, request: Request):
+    require_loopback(request)
+    ocr_text = str((req or {}).get("ocrText") or "").strip()
+    if not ocr_text:
+        raise HTTPException(400, "ocrText 必填")
+    rows = (req or {}).get("rows")
+    base_name = str((req or {}).get("baseName") or "")
+    try:
+        return await doc_interpret.propose_recipe_ai(
+            ocr_text,
+            rows=rows if isinstance(rows, list) else None,
+            base_name=base_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post("/api/doc/interpret")
 async def api_doc_interpret(req: dict, request: Request):
     require_loopback(request)

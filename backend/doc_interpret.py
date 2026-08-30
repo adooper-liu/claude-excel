@@ -12,6 +12,7 @@ import json
 from typing import Any, Awaitable, Callable
 
 import ai_proxy
+from layout_doc import normalize_key
 
 SYSTEM_PROMPT = """你是文档解读助手。你会收到一段 OCR 识别出的文档文本（可能含错字、噪声、乱码）。
 请按文档自己的术语把它整理成结构化 JSON，规则：
@@ -144,3 +145,116 @@ async def interpret_document(
     if text.startswith("Error:"):
         raise ValueError(text)
     return parse_interpret_json(text)
+
+
+RECIPE_SYSTEM_PROMPT = """你是文档模板设计助手。你会收到一段 OCR 识别出的文档文本（可能含错字、噪声、碎片）。
+请推断一份「识别模板」的字段字典，规则：
+1. 字段名用文档自己的术语，把 OCR 碎片整理成干净字段名（例如 "购"/"名" 合并为 "购买方名称"），纯噪声（无字母无中文的符号串）直接丢弃。
+2. 每项字段是 {"name": 字段名, "type": "text|number|date|amount|percent", "source": 原文中的键名或表头, "group": "header" 或 "detail"}。
+   - group=header：抬头键值字段（如发票号码、开票日期）；
+   - group=detail：明细表格列（如品名、金额、税率）。
+3. type 按内容推断；source 填文档里能对上的原文键名/表头，对不上就用字段名。
+4. 只输出一个 JSON 对象 {"fields": [...], "notes": [...]}，不要 Markdown 代码块，不要额外解释。
+"""
+
+RECIPE_TYPES = ("text", "number", "date", "amount", "percent")
+RECIPE_GROUPS = ("header", "detail")
+_RECIPE_WORD_RE = __import__("re").compile(r"[A-Za-z\u4e00-\u9fff]")
+
+
+def _usable_field_name(name: Any) -> bool:
+    """Keep names that look like real fields (no colon merge, has letter/CJK)."""
+    text = str(name or "").strip()
+    if not text:
+        return False
+    if ":" in text or "：" in text:
+        return False
+    return bool(_RECIPE_WORD_RE.search(text))
+
+
+def build_recipe_messages(
+    ocr_text: str, rows: list[list[Any]] | None = None
+) -> list[dict[str, str]]:
+    user = "OCR 文本：\n" + str(ocr_text or "")
+    if rows:
+        user += "\n\n识别出的表格行（可能含噪声）：\n" + json.dumps(rows, ensure_ascii=False)
+    return [{"role": "user", "content": user}]
+
+
+def _normalize_recipe_field(item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict) or item.get("name") is None:
+        return None
+    name = str(item["name"]).strip()
+    if not _usable_field_name(name):
+        return None
+    field_type = str(item.get("type") or "text").strip().lower()
+    if field_type not in RECIPE_TYPES:
+        field_type = "text"
+    group = str(item.get("group") or "detail").strip().lower()
+    if group not in RECIPE_GROUPS:
+        group = "detail"
+    source = str(item.get("source") or "").strip() or name
+    return {
+        "name": name[:80],
+        "type": field_type,
+        "source": source[:100],
+        "group": group,
+    }
+
+
+def parse_recipe_json(raw: str) -> dict[str, Any]:
+    """Parse + normalize the model's template-candidate JSON (raises ValueError)."""
+    text = _strip_code_fence(raw or "")
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("模型输出不是有效 JSON") from exc
+    if not isinstance(data, dict):
+        raise ValueError("模板候选须为 JSON 对象")
+    fields: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in data.get("fields") or []:
+        field = _normalize_recipe_field(item)
+        if field is None:
+            continue
+        key = normalize_key(field["name"])
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        fields.append(field)
+    notes = data.get("notes")
+    return {
+        "fields": fields,
+        "notes": (
+            [str(n).strip() for n in notes if str(n).strip()]
+            if isinstance(notes, list)
+            else []
+        ),
+    }
+
+
+async def propose_recipe_ai(
+    ocr_text: str,
+    *,
+    rows: list[list[Any]] | None = None,
+    base_name: str = "",
+    model: str | None = None,
+    model_call: Callable[..., Awaitable[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    """Ask the model to clean up OCR noise into a doc-recipe template candidate."""
+    call = model_call or ai_proxy.chat_complete
+    messages = build_recipe_messages(ocr_text, rows)
+    payload = await call(messages, system_prompt=RECIPE_SYSTEM_PROMPT, model=model)
+    text = _extract_text(payload)
+    if not text:
+        raise ValueError("模型未返回可读内容")
+    if text.startswith("Error:"):
+        raise ValueError(text)
+    parsed = parse_recipe_json(text)
+    name = (base_name or "").strip() or "新模板"
+    return {
+        "name": name,
+        "description": "AI 生成，请确认字段名与类型",
+        "fields": parsed["fields"],
+        "notes": parsed["notes"],
+    }
