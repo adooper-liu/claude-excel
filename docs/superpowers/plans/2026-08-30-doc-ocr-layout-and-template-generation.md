@@ -261,3 +261,40 @@ status: done
 4. 真机验收段留给管理员，Codex 不代跑、不标 done 时声称已验。
 5. 全部通过后：按 `docs/coordination.md`，review 交回 Claude 对照本 plan 逐粒核对。
 <!-- 进度 log（2026-08-30 Codex）：实现完成并合入 master（cb4a1ec）；真机验收待管理员，review 交 Claude。 -->
+
+---
+
+## 增量 Task 10（后续）：RapidStruct 布局+表格识别替换词盒聚类
+
+> 本条是主 plan（Task 1-9）完成后的**独立增量**，单独建分支执行，不改已验收行为。目标：用 [RapidOCR / RapidStruct](https://github.com/RapidAI/RapidOCR)（PaddleOCR PP-Structure 的 ONNX 轻量版）的**布局检测 + 表格识别**替换 [layout_extract.py](backend/layout_extract.py) 里 tesseract 词盒聚类（best-effort v1），产出同一 `LayoutDocument`。tesseract 降级为兜底。
+
+**背景 / 已核实事实：**
+
+- 现状 `layout_extract.cluster_words` 靠 tesseract `image_to_data` 词盒 + 空隙聚类分行分列，对不规则单据（键值/多表/合并单元格）不准，是「可用」而非「好用」的主因。
+- RapidOCR/RapidStruct 是 PaddleOCR 模型的 ONNX 版，含 `RapidLayout`（版面区域分类）、`RapidTable`（表格结构识别，输出 HTML/cells）、`RapidFormula`、`RapidOCR`（文字检测识别）。**不依赖 PaddlePaddle/torch**，`onnxruntime` 即可，Windows 本地好装——贴合「本地为主、不加重量依赖」。
+- **RapidStruct 无 SER/键值抽取**（SER 是 PP-Structure 的 KIE，需 Paddle）。键值仍走现有 `_kvs_from_text` 正则，但升级为「只对版面分类出的**文本区**抽键值」，避免误吃表格单元格。
+- 依赖是**可选**的：未安装/模型缺失时回退现有词盒聚类，不破坏 Task 1-9 已验收行为（`_safe_layout` 已兜异常）。
+- 精确 API/包名以官方 README 为准（v2 统一包 `rapidocr` 或 v1 `rapidocr_onnxruntime`；类名/返回结构以 `python/rapid_structure/docs/README_Layout.md`、`README_Table.md` 为准）。**Codex 落地时对照核实，用单测锁行为，不要凭记忆写死接口。**
+
+**Files:**
+
+- Modify: `backend/layout_extract.py`（新增 rapid 路径 + 回退开关）
+- Modify: `backend/requirements.txt`（新增 `rapidocr`（或 `rapidocr_onnxruntime`），注释标「可选」）
+- Create: `backend/tests/test_layout_extract_rapid.py`
+
+**Interfaces:**
+
+- Produces: `extract_layout_from_image_rapid(image) -> LayoutDocument`；`_rapid_available() -> bool`。
+- Consumes: `layout_doc`、现有 `_kvs_from_text`/`cluster_words`（回退）。
+
+**现状缺陷：** 词盒聚类是启发式，键值/表格边界靠空隙猜，准确率上不去。
+
+- [ ] **Step 1: 依赖探针 `_rapid_available()`** — `try: import rapidocr`（包名/导入路径以官方 README 为准）→ True；`ImportError` → False。`extract_layout_from_image` 入口按此开关分流 rapid / 词盒。
+- [ ] **Step 2: 表格解析 → `TableBlock`** — 用 `RapidTable` 的 HTML/cells 输出归一成 `TableBlock(headers, rows)`：跳过 `|---|---|` 分隔行；首行全文本 → `headers`，其余 → `rows`；空表/单列/畸形输出不抛异常。
+- [ ] **Step 3: 键值抽取 → `kvs`** — 用 `RapidLayout` 分类出的**文本区** OCR 文本走 `_kvs_from_text`（label 短 + `:：` 分隔）；表格区文本不参与键值抽取。
+- [ ] **Step 4: 组装 + 静默回退** — 组装 `LayoutDocument(kvs, tables, raw_text=全文)`；rapid 任一步抛异常 → 回退 `cluster_words`（沿用 `_safe_layout` 兜底，绝不破坏现有 flow）。
+- [ ] **Step 5: 单测 `test_layout_extract_rapid.py`** — mock `RapidLayout`/`RapidTable`/`RapidOCR` 返回固定数据：(a) 表格 → 正确 `TableBlock`（分隔行被跳、表头归 headers）；(b) 文本区 → `kvs` 正确；(c) rapid 不可用 → 走 `cluster_words` 回退；(d) rapid 抛异常 → 回退不崩。`cd backend && python -m pytest tests/test_layout_extract_rapid.py -q` → exit 0。
+
+**真机验收（管理员，不代跑）：** 上传真实发票图，本地 OCR 的明细表/抬头键值应明显好于 tesseract 词盒聚类；未装 rapidocr 时行为与 Task 1-9 完全一致。
+
+**收尾：** `cd backend && python -m pytest tests/ -q` → exit 0；提交 `git commit -m "feat(ocr): RapidStruct 布局+表格识别替换词盒聚类"`。
