@@ -57,6 +57,40 @@ def _extract_text(payload: dict[str, Any]) -> str:
     return ""
 
 
+def _extract_first_json(text: str) -> str:
+    """Pull the first balanced JSON object/array from text.
+
+    Models sometimes wrap the answer in preamble / trailing remarks; this
+    tolerates that by scanning for the first top-level ``{...}`` or ``[...]``.
+    """
+    for open_ch, close_ch in (("{", "}"), ("[", "]")):
+        start = text.find(open_ch)
+        if start < 0:
+            continue
+        depth = 0
+        in_str = False
+        escaped = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_str:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == open_ch:
+                depth += 1
+            elif ch == close_ch:
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+    return text
+
+
 def _strip_code_fence(text: str) -> str:
     cleaned = (text or "").strip()
     if cleaned.startswith("```"):
@@ -120,8 +154,12 @@ def parse_interpret_json(raw: str) -> dict[str, Any]:
     text = _strip_code_fence(raw or "")
     try:
         data = json.loads(text)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("模型输出不是有效 JSON") from exc
+    except (TypeError, ValueError):
+        candidate = _extract_first_json(text)
+        try:
+            data = json.loads(candidate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("模型输出不是有效 JSON") from exc
     if not isinstance(data, dict):
         raise ValueError("解读结果须为 JSON 对象")
     notes = data.get("notes")
@@ -235,8 +273,12 @@ def parse_recipe_json(raw: str) -> dict[str, Any]:
     text = _strip_code_fence(raw or "")
     try:
         data = json.loads(text)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("模型输出不是有效 JSON") from exc
+    except (TypeError, ValueError):
+        candidate = _extract_first_json(text)
+        try:
+            data = json.loads(candidate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("模型输出不是有效 JSON") from exc
     if not isinstance(data, dict):
         raise ValueError("模板候选须为 JSON 对象")
     fields: list[dict[str, Any]] = []

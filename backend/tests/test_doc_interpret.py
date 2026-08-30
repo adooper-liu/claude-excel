@@ -206,3 +206,21 @@ def test_interpret_document_thinking_only_reports_content_types():
 
     with pytest.raises(ValueError, match="thinking"):
         asyncio.run(doc_interpret.interpret_document("x", model_call=fake_call))
+
+def test_parse_interpret_json_tolerates_preamble_and_trailing_text():
+    raw = (
+        "好的，以下是整理结果：\n"
+        '{"kvs":[{"label":"发票号码","value":"123"}],"items":[],"totals":[],"notes":[]}\n'
+        "希望有帮助。"
+    )
+    parsed = doc_interpret.parse_interpret_json(raw)
+    assert parsed["kvs"] == [{"label": "发票号码", "value": "123"}]
+
+
+def test_parse_recipe_json_tolerates_preamble():
+    raw = (
+        "字段如下：\n"
+        '{"fields":[{"name":"金额","type":"number","source":"金额","group":"detail"}],"notes":[]}'
+    )
+    parsed = doc_interpret.parse_recipe_json(raw)
+    assert parsed["fields"][0]["name"] == "金额"
