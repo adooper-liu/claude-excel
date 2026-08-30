@@ -20,6 +20,7 @@ export type DocRecipeField = {
   type: string;
   source?: string;
   format?: Record<string, unknown>;
+  group?: string;
 };
 
 export type DocRecipeProposal = {
@@ -64,7 +65,7 @@ function parseFieldsText(text: string): DocRecipeField[] {
       throw new Error("字段 JSON 必须是数组");
     }
     return parsed.map(function (item, i) {
-      const f = item as { name?: unknown; type?: unknown; source?: unknown; format?: unknown };
+      const f = item as { name?: unknown; type?: unknown; source?: unknown; format?: unknown; group?: unknown };
       if (!f || typeof f !== "object" || !f.name) {
         throw new Error("第 " + (i + 1) + " 个字段缺少 name");
       }
@@ -76,6 +77,9 @@ function parseFieldsText(text: string): DocRecipeField[] {
       if (f.source) field.source = String(f.source);
       if (f.format && typeof f.format === "object") {
         field.format = f.format as Record<string, unknown>;
+      }
+      if (f.group === "header" || f.group === "detail") {
+        field.group = String(f.group);
       }
       return field;
     });
@@ -118,7 +122,8 @@ function fieldsToText(fields: DocRecipeField[]): string {
   const needsJson = fields.some(function (f) {
     const hasFormat = f.format && Object.keys(f.format).length > 0;
     const hasColon = /[:：]/.test(f.name) || (f.source ? /[:：]/.test(f.source) : false);
-    return hasFormat || hasColon;
+    const hasHeaderGroup = f.group === "header";
+    return hasFormat || hasColon || hasHeaderGroup;
   });
   if (needsJson) {
     return JSON.stringify(fields);
@@ -142,6 +147,7 @@ export default function DocRecipeBar({ disabled, onChanged, draft }: Props): JSX
   const [fieldsText, setFieldsText] = useState("");
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState("");
   const sampleRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -258,7 +264,16 @@ export default function DocRecipeBar({ disabled, onChanged, draft }: Props): JSX
   const remove = useCallback(
     async (templateName: string) => {
       if (disabled || busy) return;
-      if (!window.confirm("删除模板「" + templateName + "」？")) return;
+      if (confirmDelete !== templateName) {
+        setConfirmDelete(templateName);
+        window.setTimeout(function () {
+          setConfirmDelete(function (current) {
+            return current === templateName ? "" : current;
+          });
+        }, 3000);
+        return;
+      }
+      setConfirmDelete("");
       setBusy(true);
       setErr("");
       try {
@@ -281,7 +296,7 @@ export default function DocRecipeBar({ disabled, onChanged, draft }: Props): JSX
         setBusy(false);
       }
     },
-    [disabled, busy, originalName, refresh, onChanged]
+    [disabled, busy, originalName, confirmDelete, refresh, onChanged]
   );
 
   return (
@@ -315,12 +330,12 @@ export default function DocRecipeBar({ disabled, onChanged, draft }: Props): JSX
                 </button>
                 <button
                   type="button"
-                  className="prompt-del"
+                  className={"prompt-del" + (confirmDelete === r.name ? " doc-recipe-del-confirm" : "")}
                   disabled={disabled || busy}
-                  aria-label={"删除 " + r.name}
+                  aria-label={confirmDelete === r.name ? "确认删除 " + r.name : "删除 " + r.name}
                   onClick={() => void remove(r.name)}
                 >
-                  ✕
+                  {confirmDelete === r.name ? "确认？" : "✕"}
                 </button>
               </li>
             );

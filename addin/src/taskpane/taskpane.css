@@ -1908,3 +1908,8 @@ select:focus-visible {
   opacity: 0.5;
   cursor: default;
 }
+
+.doc-recipe-del-confirm {
+  color: var(--danger);
+  font-weight: 700;
+}
