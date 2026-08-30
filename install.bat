@@ -90,16 +90,22 @@ if %ERRORLEVEL% neq 0 (
     echo 安装本地 OCR 引擎 Tesseract（UB-Mannheim 版，默认含 chi_sim）...
     winget install -e --id UB-Mannheim.TesseractOCR --accept-package-agreements --accept-source-agreements
     if %ERRORLEVEL% neq 0 (
-        echo Tesseract 安装失败；后端可运行，但扫描件本地 OCR 不可用
+        if exist "%ProgramFiles%\Tesseract-OCR\tesseract.exe" (
+            echo Tesseract 已安装（winget 无可升级版本，正常）。
+        ) else (
+            echo Tesseract 安装失败；后端可运行，但扫描件本地 OCR 不可用
+        )
     )
 ) else (
     echo 已找到本地 OCR 引擎 Tesseract。
 )
 rem UB-Mannheim 安装器默认不加 PATH；装在默认目录但不在 PATH 时补进用户 PATH（新开终端生效）
 if exist "%ProgramFiles%\Tesseract-OCR\tesseract.exe" (
-    echo %PATH% | findstr /I /C:"Tesseract-OCR" >nul
+    rem %PATH% 含 "Program Files (x86)" 等括号/＆时，未加引号的 echo %PATH% 会拆散 if 块（\NVIDIA was unexpected at this time），必须加引号
+    echo "%PATH%" | findstr /I /C:"Tesseract-OCR" >nul
     if errorlevel 1 (
-        setx PATH "%PATH%;%ProgramFiles%\Tesseract-OCR" >nul
+        rem setx 会把 >1024 字符的 PATH 截断并吞掉新项，改用 PowerShell 安全追加用户 PATH
+        powershell -NoProfile -Command "$d=Join-Path $env:ProgramFiles 'Tesseract-OCR'; $p=[Environment]::GetEnvironmentVariable('PATH','User'); $parts=@(($p -split ';') | Where-Object { $_ -ne '' }); if ($parts -notcontains $d) { $parts += $d; [Environment]::SetEnvironmentVariable('PATH', ($parts -join ';'), 'User') }"
         echo 已将 Tesseract-OCR 加入用户 PATH（新开终端后 where tesseract 可找到）。
     )
 )
