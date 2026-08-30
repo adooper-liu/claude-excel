@@ -100,6 +100,69 @@ def test_doc_propose_recipe_api_maps_model_error(monkeypatch):
     assert "No API key" in response.json()["detail"]
 
 
+def test_doc_interpret_api_uses_small_fast_model(monkeypatch):
+    seen = {}
+
+    async def fake_interpret(ocr_text, *, rows=None, model=None, model_call=None):
+        seen["model"] = model
+        return {"kvs": [], "items": [], "totals": [], "notes": []}
+
+    monkeypatch.setattr(server.doc_interpret, "interpret_document", fake_interpret)
+    monkeypatch.setattr(server, "get_small_fast_model", lambda: "qwen2.5:7b")
+    monkeypatch.setattr(server, "get_model", lambda: "default")
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/interpret", json={"ocrText": "x"})
+    assert response.status_code == 200
+    assert seen["model"] == "qwen2.5:7b"
+    assert response.json()["model"] == "qwen2.5:7b"
+
+
+def test_doc_propose_recipe_api_uses_small_fast_model(monkeypatch):
+    seen = {}
+
+    async def fake_propose(ocr_text, *, rows=None, base_name="", model=None, model_call=None):
+        seen["model"] = model
+        return {"name": "x", "description": "d", "fields": [], "notes": []}
+
+    monkeypatch.setattr(server.doc_interpret, "propose_recipe_ai", fake_propose)
+    monkeypatch.setattr(server, "get_small_fast_model", lambda: "")
+    monkeypatch.setattr(server, "get_model", lambda: "default")
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/propose-recipe", json={"ocrText": "x"})
+    assert response.status_code == 200
+    assert seen["model"] == "default"
+    assert response.json()["model"] == "default"
+
+
+def test_api_set_key_saves_openai_api_style_without_key(monkeypatch):
+    saved = {}
+    validated = {}
+
+    async def fake_validate(api_key, base_url=None, model=None):
+        validated["key"] = api_key
+        return True
+
+    monkeypatch.setattr(server, "validate_key", fake_validate)
+    monkeypatch.setattr(
+        server, "save_provider", lambda pid, data: saved.update({"pid": pid, "data": data})
+    )
+    monkeypatch.setattr(server, "set_active_provider", lambda pid: True)
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/key/set",
+        json={
+            "provider": "ollama",
+            "baseUrl": "http://localhost:11434",
+            "apiKey": "",
+            "model": "qwen2.5:7b",
+            "apiStyle": "openai",
+        },
+    )
+    assert response.status_code == 200
+    assert saved["data"]["apiStyle"] == "openai"
+    assert validated["key"] == ""
+
+
 def test_doc_interpret_api_returns_normalized_json(monkeypatch):
     async def fake_interpret(ocr_text, *, rows=None, model=None, model_call=None):
         return {

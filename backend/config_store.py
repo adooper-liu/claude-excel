@@ -166,7 +166,7 @@ def save_provider(provider_id: str, data: dict):
     cfg = get_config()
     providers = cfg.setdefault("providers", {})
     entry = providers.setdefault(provider_id, {})
-    for k in ("apiKey", "baseUrl", "model", "smallFastModel"):
+    for k in ("apiKey", "baseUrl", "model", "smallFastModel", "apiStyle"):
         if data.get(k):
             entry[k] = data[k]
     save_config(cfg)
@@ -191,6 +191,7 @@ def get_provider_status() -> dict:
             "baseUrl": p.get("baseUrl", ""),
             "model": p.get("model", ""),
             "smallFastModel": p.get("smallFastModel", ""),
+            "apiStyle": p.get("apiStyle", ""),
         }
     return out
 

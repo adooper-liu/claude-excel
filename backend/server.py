@@ -15,8 +15,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.routing import APIRouter
 import uvicorn
 
-from ai_proxy import chat_complete, chat_stream, validate_key, fetch_models
-from config_store import get_config, get_provider_status, save_provider, set_active_provider, get_active_provider
+from ai_proxy import chat_complete, chat_stream, validate_key, fetch_models, _is_openai_api
+from config_store import get_config, get_provider_status, save_provider, set_active_provider, get_active_provider, get_model, get_small_fast_model
 from templates_store import read_templates, write_templates
 from user_skills_store import delete_skill, install_sample_skill, install_skill, list_sample_skills, list_skills
 from user_packs_store import (
@@ -388,7 +388,7 @@ async def api_chat(req: dict, request: Request):
 async def api_validate_key(req: dict):
     api_key = req.get("apiKey", "")
     base_url = req.get("baseUrl")
-    if not api_key:
+    if not api_key and not _is_openai_api(base_url or ""):
         return {"valid": False, "error": "apiKey required"}
     valid = await validate_key(api_key, base_url, req.get("model"))
     return {"valid": valid}
@@ -398,7 +398,9 @@ async def api_validate_key(req: dict):
 async def api_models_list(req: dict):
     base_url = (req.get("baseUrl") or "").strip()
     api_key = (req.get("apiKey") or "").strip()
-    if not base_url or not api_key:
+    if not base_url:
+        raise HTTPException(400, "baseUrl 必填")
+    if not api_key and not _is_openai_api(base_url):
         raise HTTPException(400, "baseUrl 和 apiKey 必填")
     try:
         models = await fetch_models(base_url, api_key)
@@ -416,17 +418,19 @@ async def api_set_key(req: dict, request: Request):
     require_loopback(request)
     api_key = req.get("apiKey", "")
     provider_id = req.get("provider", "") or "custom"
-    if not api_key:
+    base_url = req.get("baseUrl") or ""
+    openai = _is_openai_api(base_url)
+    if not api_key and not openai:
         raise HTTPException(400, "apiKey required")
     valid = await validate_key(api_key.strip(), req.get("baseUrl"), req.get("model"))
     if not valid:
-        raise HTTPException(400, "Key 校验失败。请确认 Key 和 Base URL。")
+        raise HTTPException(400, "校验失败。请确认 Key、Base URL（或本地模型服务已启动）。")
     save_provider(
         provider_id,
         {
             k: v
             for k, v in req.items()
-            if v and k in ("apiKey", "baseUrl", "model", "smallFastModel")
+            if v and k in ("apiKey", "baseUrl", "model", "smallFastModel", "apiStyle")
         },
     )
     set_active_provider(provider_id)
@@ -438,6 +442,7 @@ async def api_set_key(req: dict, request: Request):
         "baseUrl": p.get("baseUrl", ""),
         "model": p.get("model", ""),
         "smallFastModel": p.get("smallFastModel", ""),
+        "apiStyle": p.get("apiStyle", ""),
     }
 
 
@@ -457,6 +462,7 @@ async def api_provider_switch(req: dict, request: Request):
         "baseUrl": p.get("baseUrl", ""),
         "model": p.get("model", ""),
         "smallFastModel": p.get("smallFastModel", ""),
+        "apiStyle": p.get("apiStyle", ""),
     }
 
 
@@ -834,12 +840,16 @@ async def api_doc_propose_recipe(req: dict, request: Request):
         raise HTTPException(400, "ocrText 必填")
     rows = (req or {}).get("rows")
     base_name = str((req or {}).get("baseName") or "")
+    model = get_small_fast_model() or get_model()
     try:
-        return await doc_interpret.propose_recipe_ai(
+        result = await doc_interpret.propose_recipe_ai(
             ocr_text,
             rows=rows if isinstance(rows, list) else None,
             base_name=base_name,
+            model=model,
         )
+        result["model"] = model
+        return result
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -851,10 +861,15 @@ async def api_doc_interpret(req: dict, request: Request):
     if not ocr_text:
         raise HTTPException(400, "ocrText 必填")
     rows = (req or {}).get("rows")
+    model = get_small_fast_model() or get_model()
     try:
-        return await doc_interpret.interpret_document(
-            ocr_text, rows=rows if isinstance(rows, list) else None
+        result = await doc_interpret.interpret_document(
+            ocr_text,
+            rows=rows if isinstance(rows, list) else None,
+            model=model,
         )
+        result["model"] = model
+        return result
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
