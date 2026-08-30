@@ -169,13 +169,15 @@ def test_parse_recipe_json_dedupes_sources_and_keeps_occurrence():
     assert names == ["价税合计（小写）", "购买方名称", "销售方名称"]
 
 def test_interpret_prompt_keeps_ids_as_text():
-    assert "编号类长数字串" in doc_interpret.SYSTEM_PROMPT
-    assert "科学计数法" in doc_interpret.SYSTEM_PROMPT
+    assert "必须保留前导零" in doc_interpret.SYSTEM_PROMPT
+    assert "编号/标识符类值" in doc_interpret.SYSTEM_PROMPT
 
 
 def test_scalar_keeps_large_integers_as_text():
     assert doc_interpret._scalar(661532633869) == "661532633869"
+    assert doc_interpret._scalar(661532633869.0) == "661532633869"
     assert doc_interpret._scalar(65047079890) == "65047079890"
+    assert doc_interpret._scalar(2948319) == "2948319"
     assert doc_interpret._scalar(108.1) == 108.1
     assert doc_interpret._scalar(1) == 1
     assert doc_interpret._scalar("031001700111") == "031001700111"

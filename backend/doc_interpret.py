@@ -20,7 +20,7 @@ SYSTEM_PROMPT = """你是文档解读助手。你会收到一段 OCR 识别出�
 2. 抬头键值放进 kvs（数组，每项 {"label": "字段名", "value": "值"}，label 用原文）。
 3. 明细表格放进 items（数组，每项 {"columns": ["表头1", ...], "rows": [["单元格", ...], ...]}）。
 4. 合计/总计类放进 totals（数组，每项 {"label": ..., "value": ...}）。
-5. 值类型规则：只有明确可计算的量（金额、数量、税率、百分比）才给数字或归一；编号类长数字串（发票号码/票号码/机器编号/订单号/校验码/纳税人识别号等）必须保持字符串——转数字会丢前导零或在 Excel 里变科学计数法。
+5. 值类型规则：只有明确可计算的量（金额、数量、税率、百分比）才给数字或归一；编号/标识符类值（发票号码、票号码、机器编号、订单号、校验码、纳税人识别号等）即使看起来是纯数字也**必须作为字符串返回（加引号）**，禁止转成 JSON number，且必须保留前导零（如 031001700111 应输出 "031001700111"，不得输出 31001700111）。
 6. OCR 疑似错字、乱码或不确定的内容在 notes（字符串数组）里说明，不要静默改值去"猜对"。
 只输出一个 JSON 对象，不要 Markdown 代码块，不要任何额外解释，不要输出思考过程。"""
 
@@ -146,13 +146,17 @@ def _strip_code_fence(text: str) -> str:
 #: Integers at/above this are identifiers (发票号码/机器编号/订单号…), not
 #: quantities: keep them as text so Excel does not use scientific notation or
 #: lose digits.  Generic rule — no business field names involved.
-_ID_TEXT_THRESHOLD = 10**10
+_ID_TEXT_THRESHOLD = 10**6
 
 
 def _scalar(value: Any) -> Any:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
+        # Identifiers are large integers without decimals (机器编号/订单号/税号…):
+        # keep them as text so Excel never shows scientific notation.  Amounts
+        # (floats or small ints) stay numeric so =SUM still works.
         if abs(value) >= _ID_TEXT_THRESHOLD:
-            return str(int(value)) if value == int(value) else str(value)
+            numeric = float(value)
+            return str(int(numeric)) if numeric.is_integer() else str(value)
         return value
     if value is None:
         return ""
