@@ -1940,3 +1940,18 @@ select:focus-visible {
 .pdf-interpret-notes li {
   margin: 2px 0;
 }
+
+.pdf-interpret-live {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  font-size: var(--fs-meta);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--muted);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  background: var(--paper);
+}

@@ -9,7 +9,7 @@ the document itself, never hardcoded business names.
 from __future__ import annotations
 
 import json
-from typing import Any, Awaitable, Callable
+from typing import Any, AsyncGenerator, Awaitable, Callable
 
 import ai_proxy
 from layout_doc import normalize_key
@@ -220,6 +220,42 @@ async def interpret_document(
     if text.startswith("Error:"):
         raise ValueError(text)
     return parse_interpret_json(text)
+
+
+async def interpret_document_stream(
+    ocr_text: str,
+    *,
+    rows: list[list[Any]] | None = None,
+    model: str | None = None,
+    model_call: Callable[..., AsyncGenerator[str, None]] | None = None,
+) -> AsyncGenerator[tuple[str, Any], None]:
+    """Stream the model's raw text, then yield the parsed interpretation.
+
+    Yields ``("delta", text)`` per token, then ``("result", parsed)`` or
+    ``("error", message)``.  The model's thinking blocks are not text deltas,
+    so reasoning models stream only the final answer.
+    """
+    call = model_call or ai_proxy.chat_stream
+    messages = build_interpret_messages(ocr_text, rows)
+    buffer: list[str] = []
+    try:
+        async for token in call(
+            messages,
+            system_prompt=SYSTEM_PROMPT,
+            model=model,
+            max_tokens=8192,
+            inject_web_search=False,
+        ):
+            if not isinstance(token, str):
+                continue
+            if token.startswith("Error:"):
+                yield ("error", token)
+                return
+            buffer.append(token)
+            yield ("delta", token)
+        yield ("result", parse_interpret_json("".join(buffer)))
+    except ValueError as exc:
+        yield ("error", str(exc))
 
 
 RECIPE_SYSTEM_PROMPT = """你是文档模板设计助手。你会收到一段 OCR 识别出的文档文本（可能含错字、噪声、碎片）。

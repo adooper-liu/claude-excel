@@ -234,3 +234,32 @@ def test_parse_interpret_json_tolerates_fullwidth_braces():
 def test_parse_interpret_json_error_includes_snippet():
     with pytest.raises(ValueError, match="原文片段"):
         doc_interpret.parse_interpret_json("完全没有 JSON 内容的一段话")
+
+def test_interpret_document_stream_yields_deltas_then_result():
+    async def fake_stream(messages, system_prompt=None, model=None, max_tokens=4096, tools=None, inject_web_search=True):
+        yield '{"kvs":[{"label":"发票号码","value":"123"}],"items":[],"totals":[],"notes":[]}'
+
+    events = []
+
+    async def collect():
+        async for event in doc_interpret.interpret_document_stream("x", model_call=fake_stream):
+            events.append(event)
+
+    asyncio.run(collect())
+    assert events[-1][0] == "result"
+    assert events[-1][1]["kvs"] == [{"label": "发票号码", "value": "123"}]
+
+
+def test_interpret_document_stream_surfaces_error():
+    async def fake_stream(messages, system_prompt=None, model=None, max_tokens=4096, tools=None, inject_web_search=True):
+        yield "Error: No API key configured."
+
+    events = []
+
+    async def collect():
+        async for event in doc_interpret.interpret_document_stream("x", model_call=fake_stream):
+            events.append(event)
+
+    asyncio.run(collect())
+    assert events[0][0] == "error"
+    assert "No API key" in events[0][1]

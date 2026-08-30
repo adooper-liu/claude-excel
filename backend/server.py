@@ -862,6 +862,37 @@ async def api_doc_interpret(req: dict, request: Request):
         raise HTTPException(400, "ocrText 必填")
     rows = (req or {}).get("rows")
     model = get_small_fast_model() or get_model()
+    if bool(req.get("stream")):
+
+        async def event_source():
+            yield "data: " + json.dumps({"type": "start", "model": model}) + "\n\n"
+            async for kind, payload in doc_interpret.interpret_document_stream(
+                ocr_text,
+                rows=rows if isinstance(rows, list) else None,
+                model=model,
+            ):
+                if kind == "delta":
+                    yield (
+                        "data: "
+                        + json.dumps({"type": "delta", "text": payload}, ensure_ascii=False)
+                        + "\n\n"
+                    )
+                elif kind == "result":
+                    result = dict(payload)
+                    result["model"] = model
+                    yield (
+                        "data: "
+                        + json.dumps({"type": "result", "data": result}, ensure_ascii=False)
+                        + "\n\n"
+                    )
+                elif kind == "error":
+                    yield (
+                        "data: "
+                        + json.dumps({"type": "error", "message": payload}, ensure_ascii=False)
+                        + "\n\n"
+                    )
+
+        return StreamingResponse(event_source(), media_type="text/event-stream")
     try:
         result = await doc_interpret.interpret_document(
             ocr_text,

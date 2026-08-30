@@ -133,6 +133,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
   const [interpretResult, setInterpretResult] = useState<InterpretResult | null>(null);
   const [interpretBusy, setInterpretBusy] = useState(false);
   const [interpretErr, setInterpretErr] = useState("");
+  const [interpretLive, setInterpretLive] = useState("");
   const [proposeBusy, setProposeBusy] = useState(false);
 
   const refreshTemplates = useCallback(async () => {
@@ -175,17 +176,50 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
     if (!p || !p.text || interpretBusy) return;
     setInterpretBusy(true);
     setInterpretErr("");
+    setInterpretLive("");
     try {
       const response = await fetch(API_BASE + "/api/doc/interpret", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ocrText: p.text, rows: p.rows || [] }),
+        body: JSON.stringify({ ocrText: p.text, rows: p.rows || [], stream: true }),
       });
-      const data = await readJson(response);
       if (!response.ok) {
+        const data = await readJson(response);
         throw new Error(String((data as { detail?: string }).detail || response.statusText || "解读失败"));
       }
-      setInterpretResult(data as unknown as InterpretResult);
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("无法读取解读流");
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        let sep = buffer.indexOf("\n\n");
+        while (sep >= 0) {
+          const raw = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          sep = buffer.indexOf("\n\n");
+          if (!raw.startsWith("data: ")) continue;
+          try {
+            const evt = JSON.parse(raw.slice(6)) as {
+              type?: string;
+              text?: string;
+              data?: InterpretResult;
+              message?: string;
+            };
+            if (evt.type === "delta" && evt.text) {
+              setInterpretLive((prev) => prev + evt.text);
+            } else if (evt.type === "result" && evt.data) {
+              setInterpretResult(evt.data);
+            } else if (evt.type === "error" && evt.message) {
+              setInterpretErr(evt.message);
+            }
+          } catch {
+            // ignore malformed SSE event
+          }
+        }
+      }
     } catch (e) {
       setInterpretErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -618,6 +652,9 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
           {pendingResult.text && (
             <div className="pdf-interpret">
               {interpretBusy && <p className="skill-install-note">AI 解读中…</p>}
+              {interpretBusy && interpretLive && (
+                <pre className="pdf-interpret-live">{interpretLive}</pre>
+              )}
               {interpretResult && (
                 <div className="pdf-interpret-body">
                   <p className="skill-install-note">

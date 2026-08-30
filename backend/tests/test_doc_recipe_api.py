@@ -163,6 +163,26 @@ def test_api_set_key_saves_openai_api_style_without_key(monkeypatch):
     assert validated["key"] == ""
 
 
+def test_doc_interpret_api_streams_sse(monkeypatch):
+    async def fake_stream(ocr_text, *, rows=None, model=None, model_call=None):
+        yield ("delta", "你好")
+        yield (
+            "result",
+            {"kvs": [{"label": "发票号码", "value": "123"}], "items": [], "totals": [], "notes": []},
+        )
+
+    monkeypatch.setattr(server.doc_interpret, "interpret_document_stream", fake_stream)
+    monkeypatch.setattr(server, "get_small_fast_model", lambda: "qwen2.5:7b")
+    monkeypatch.setattr(server, "get_model", lambda: "default")
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/interpret", json={"ocrText": "x", "stream": True})
+    assert response.status_code == 200
+    body = response.text
+    assert '"type": "delta"' in body
+    assert '"type": "result"' in body
+    assert "qwen2.5:7b" in body
+
+
 def test_doc_interpret_api_returns_normalized_json(monkeypatch):
     async def fake_interpret(ocr_text, *, rows=None, model=None, model_call=None):
         return {
