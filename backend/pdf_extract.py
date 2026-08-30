@@ -312,7 +312,7 @@ def extract_pdf(
             ocr_rows = _rows_from_ocr_text(ocr_text)
             if ocr_rows:
                 if template:
-                    ocr_rows = apply_template(ocr_rows, template)
+                    ocr_rows = apply_template(ocr_rows, template, has_header=False)
                 return _result(
                     kind="table", backend=backend, filename=filename,
                     rows=ocr_rows, tables=0, text=ocr_text, pages=1,
@@ -333,7 +333,7 @@ def extract_pdf(
             )
         if kind == "table":
             if rows and template:
-                rows = apply_template(rows, template)
+                rows = apply_template(rows, template, has_header=_looks_like_header(rows[0]))
             return _result(
                 kind="table", backend=None, filename=filename,
                 text=text, rows=rows, tables=table_count, pages=page_count,
@@ -346,7 +346,7 @@ def extract_pdf(
         ocr_rows = _rows_from_ocr_text(ocr_text)
         if ocr_rows:
             if template:
-                ocr_rows = apply_template(ocr_rows, template)
+                ocr_rows = apply_template(ocr_rows, template, has_header=False)
             return _result(
                 kind="table", backend=backend, filename=filename,
                 rows=ocr_rows, tables=table_count, text=ocr_text,

@@ -30,9 +30,10 @@ def _template() -> dict:
 def test_doc_recipe_list_create_delete(monkeypatch):
     saved = {}
 
-    def fake_save(raw, *, sample_data=None, sample_filename=""):
+    def fake_save(raw, *, original_name="", sample_data=None, sample_filename=""):
         saved.update(
             raw=raw,
+            original_name=original_name,
             sample_data=sample_data,
             sample_filename=sample_filename,
         )
@@ -123,3 +124,23 @@ def test_pdf_extract_api_rejects_missing_template(monkeypatch):
     )
     assert response.status_code == 400
     assert "模板不存在" in response.json()["detail"]
+
+
+def test_pdf_extract_api_rejects_corrupted_template(monkeypatch):
+    def fail_extract(*_args, **_kwargs):
+        raise AssertionError("corrupted template must not run extraction")
+
+    monkeypatch.setattr(pdf_extract, "extract_pdf", fail_extract)
+
+    def corrupted(_name):
+        raise ValueError("模板文件损坏")
+
+    monkeypatch.setattr(server, "load_doc_recipe", corrupted)
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/pdf/extract",
+        files={"file": ("invoice.pdf", b"%PDF-", "application/pdf")},
+        data={"ocr_backend": "local", "template": "broken"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "模板文件损坏"

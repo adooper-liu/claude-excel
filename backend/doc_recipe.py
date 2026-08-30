@@ -109,6 +109,7 @@ def _path_for(name: str) -> Path:
 def save_doc_recipe(
     raw: dict[str, Any],
     *,
+    original_name: str = "",
     sample_data: bytes | None = None,
     sample_filename: str = "",
 ) -> dict[str, Any]:
@@ -129,8 +130,15 @@ def save_doc_recipe(
             existing = validate_doc_recipe(json.loads(path.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError, ValueError):
             existing = None
-        if existing and existing.get("name") != incoming["name"]:
-            raise ValueError("模板名安全化后与已有模板冲突")
+        # Only the template being edited may be overwritten in place; renaming
+        # onto an unrelated template's name (or re-creating a duplicate) is a
+        # conflict, never a silent overwrite.
+        if (
+            not original_name
+            or not existing
+            or _template_key(existing["name"]) != _template_key(original_name)
+        ):
+            raise ValueError("模板名与已有模板冲突")
 
     now = datetime.now(timezone.utc).isoformat()
     incoming["createdAt"] = incoming["createdAt"] or now

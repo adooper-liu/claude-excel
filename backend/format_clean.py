@@ -40,8 +40,12 @@ def clean_number(
         return None
 
 
-def clean_date(value: Any, date_format: str) -> datetime | str | None:
-    """Parse user-selected date formats; without a format, preserve source text."""
+def clean_date(value: Any, date_format: str) -> str | None:
+    """Parse user-selected date formats; without a format, preserve source text.
+
+    Returns an ISO date string (no time component), so JSON serialization stays
+    a clean date rather than a timestamp.
+    """
     if value is None:
         return None
     text = str(value).strip()
@@ -51,29 +55,42 @@ def clean_date(value: Any, date_format: str) -> datetime | str | None:
     if not fmt:
         return text
     try:
-        return datetime.strptime(text, fmt)
+        return datetime.strptime(text, fmt).date().isoformat()
     except ValueError:
         return None
 
 
-def apply_template(rows: list[list[str]], template: dict[str, Any]) -> list[list[Any]]:
-    """Align source columns to template fields and clean each typed column."""
+def apply_template(
+    rows: list[list[str]], template: dict[str, Any], *, has_header: bool = True
+) -> list[list[Any]]:
+    """Align source columns to template fields and clean each typed column.
+
+    ``has_header`` says whether ``rows[0]`` is a source header to skip; callers
+    with headerless rows (OCR text) pass ``has_header=False`` so no data row is
+    dropped.
+    """
     fields = template.get("fields") if isinstance(template.get("fields"), list) else []
     width = len(fields)
     out: list[list[Any]] = [[field.get("name") or "" for field in fields]]
 
-    for row in rows[1:]:
+    data_rows = rows[1:] if (has_header and rows) else rows
+    for row in data_rows:
         cells: list[Any] = []
         for index, field in enumerate(fields):
             value = row[index] if index < len(row) else ""
             fmt = field.get("format") if isinstance(field.get("format"), dict) else {}
             field_type = str(field.get("type") or "").strip().lower()
             if field_type in ("number", "amount", "percent"):
+                strip = fmt.get("stripSymbols") if isinstance(fmt.get("stripSymbols"), list) else []
+                if field_type == "amount":
+                    strip = ["$", "€", "£", "¥", "￥"] + strip
+                elif field_type == "percent":
+                    strip = ["%"] + strip
                 cells.append(
                     clean_number(
                         value,
                         str(fmt.get("numberStyle") or ""),
-                        fmt.get("stripSymbols") if isinstance(fmt.get("stripSymbols"), list) else [],
+                        strip,
                         fmt.get("nullValues") if isinstance(fmt.get("nullValues"), list) else [],
                     )
                 )

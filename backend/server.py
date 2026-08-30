@@ -733,6 +733,8 @@ async def api_pdf_extract(
             selected_template = load_doc_recipe(template_name)
         except FileNotFoundError as exc:
             raise HTTPException(400, "模板不存在：" + template_name) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
     extraction_kwargs = {"template": selected_template} if selected_template else {}
     return await asyncio.to_thread(
         pdf_extract.extract_pdf,
@@ -801,6 +803,7 @@ async def api_doc_recipes_save(
     try:
         saved = save_doc_recipe(
             raw,
+            original_name=original_name,
             sample_data=sample_data,
             sample_filename=sample_filename,
         )

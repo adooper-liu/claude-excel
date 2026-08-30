@@ -25,7 +25,7 @@ type PdfResult = {
 type PendingLand = {
   file: File;
   text?: string;
-  rows?: string[][];
+  rows?: (string | number)[][];
   sheetName?: string;
   ocrBackend?: "local" | "cloud" | null;
 };
@@ -62,11 +62,15 @@ function postJson(path: string, body: object): Promise<Record<string, unknown>> 
   });
 }
 
-function resultRows(data: PdfResult): string[][] {
+function resultRows(data: PdfResult): (string | number)[][] {
   if (!Array.isArray(data.rows)) return [];
   return data.rows
     .filter(Array.isArray)
-    .map((row) => row.map((cell) => String(cell ?? "")));
+    .map((row) =>
+      row.map((cell) =>
+        cell === null || cell === undefined ? "" : typeof cell === "number" ? cell : String(cell)
+      )
+    );
 }
 
 function pickFileFromDrop(dt: DataTransfer | null): File | null {
@@ -187,7 +191,9 @@ export default function PdfAttachSection({ disabled, refreshKey }: Props): JSX.E
     setErr("");
     try {
       // OCR 文本里 `=` 开头的单元格可能被 Excel 误当公式，加零宽前缀转文本
-      const rows = p.rows.map((row) => row.map((c) => (c.startsWith("=") ? "​" + c : c)));
+      const rows = p.rows.map((row) =>
+        row.map((c) => (typeof c === "string" && c.startsWith("=") ? "​" + c : c))
+      );
       const written = await writeToNewSheet(p.sheetName || "文档", rows);
       setStatus("表已进簿：「" + written + "」（" + p.rows.length + " 行）");
       setPendingResult((prev) => (prev && prev.text ? { ...prev, rows: undefined } : null));

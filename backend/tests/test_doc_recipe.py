@@ -117,3 +117,36 @@ def test_sample_metadata_rejects_path_separators():
         pass
     else:
         raise AssertionError("sample traversal metadata accepted")
+
+
+def test_save_doc_recipe_rejects_rename_onto_existing_name(tmp_path, monkeypatch):
+    monkeypatch.setattr(doc_recipe, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(doc_recipe, "DOC_RECIPES_DIR", tmp_path / "doc-recipes")
+    save_doc_recipe(recipe(name="发票A", description="A"))
+    save_doc_recipe(recipe(name="发票B", description="B"))
+
+    try:
+        save_doc_recipe(recipe(name="发票B", description="renamed"), original_name="发票A")
+    except ValueError as exc:
+        assert "冲突" in str(exc)
+    else:
+        raise AssertionError("rename onto an existing template name was allowed")
+
+    # 原 发票B 内容不被覆盖，发票A 也仍可读
+    assert load_doc_recipe("发票B")["description"] == "B"
+    assert load_doc_recipe("发票A")["description"] == "A"
+
+
+def test_save_doc_recipe_rejects_duplicate_create(tmp_path, monkeypatch):
+    monkeypatch.setattr(doc_recipe, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(doc_recipe, "DOC_RECIPES_DIR", tmp_path / "doc-recipes")
+    save_doc_recipe(recipe(name="发票B", description="original"))
+
+    try:
+        save_doc_recipe(recipe(name="发票B", description="duplicate"))
+    except ValueError as exc:
+        assert "冲突" in str(exc)
+    else:
+        raise AssertionError("duplicate create was allowed")
+
+    assert load_doc_recipe("发票B")["description"] == "original"

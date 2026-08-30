@@ -80,22 +80,40 @@ function parseFieldsText(text: string): DocRecipeField[] {
     })
     .filter(Boolean)
     .map(function (line) {
-      const parts = line.split(/[:：]/).map(function (s) {
-        return s.trim();
-      });
-      const name = parts[0] || "";
-      const type = FIELD_TYPES.indexOf(parts[1] || "") >= 0 ? parts[1] as string : "text";
-      const field: DocRecipeField = { name: name, type: type };
-      const source = parts.slice(2).join(":").trim();
+      const sep = /[:：]/;
+      const first = line.search(sep);
+      let name = line;
+      let type = "text";
+      let source = "";
+      if (first >= 0) {
+        name = line.slice(0, first).trim();
+        const rest = line.slice(first + 1);
+        const second = rest.search(sep);
+        if (second >= 0) {
+          type = rest.slice(0, second).trim();
+          source = rest.slice(second + 1).trim();
+        } else {
+          type = rest.trim();
+        }
+      }
+      const field: DocRecipeField = {
+        name: name,
+        type: FIELD_TYPES.indexOf(type) >= 0 ? type : "text",
+      };
       if (source) field.source = source;
       return field;
     });
 }
 
 function fieldsToText(fields: DocRecipeField[]): string {
-  if (fields.some(function (f) {
-    return f.format && Object.keys(f.format).length > 0;
-  })) {
+  // The line format (字段名:类型:来源) cannot represent a name or source that
+  // contains a colon, so fall back to JSON to keep the round-trip lossless.
+  const needsJson = fields.some(function (f) {
+    const hasFormat = f.format && Object.keys(f.format).length > 0;
+    const hasColon = /[:：]/.test(f.name) || (f.source ? /[:：]/.test(f.source) : false);
+    return hasFormat || hasColon;
+  });
+  if (needsJson) {
     return JSON.stringify(fields);
   }
   return fields

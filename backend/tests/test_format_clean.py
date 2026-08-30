@@ -1,7 +1,5 @@
 """Behavioral contract for extraction-time format cleaning."""
 
-from datetime import datetime
-
 from format_clean import apply_template, clean_date, clean_number, is_null
 
 
@@ -26,8 +24,8 @@ def test_clean_number_returns_none_for_null_or_dirty_values():
 
 
 def test_clean_date_parses_format_and_preserves_plain_text_when_no_format():
-    assert clean_date("9/4/2018", "%m/%d/%Y") == datetime(2018, 9, 4)
-    assert clean_date("2026/08/30", "%Y/%m/%d") == datetime(2026, 8, 30)
+    assert clean_date("9/4/2018", "%m/%d/%Y") == "2018-09-04"
+    assert clean_date("2026/08/30", "%Y/%m/%d") == "2026-08-30"
     assert clean_date("9/4/2018", "%Y/%m/%d") is None
     assert clean_date("9/4/2018", "") == "9/4/2018"
 
@@ -53,6 +51,43 @@ def test_apply_template_replaces_header_and_aligns_cleaned_columns():
 
     assert apply_template(rows, template) == [
         ["名称", "金额", "日期", "缺失"],
-        ["Widget", 1234.56, datetime(2018, 9, 4), ""],
+        ["Widget", 1234.56, "2018-09-04", ""],
         ["Service", None, None, ""],
+    ]
+
+
+def test_apply_template_keeps_first_row_when_headerless():
+    template = {
+        "fields": [
+            {"name": "品名", "type": "text"},
+            {"name": "金额", "type": "number", "format": {"numberStyle": "us"}},
+        ]
+    }
+    rows = [
+        ["Widget", "1,234.56"],
+        ["Service", "56.00"],
+    ]
+
+    assert apply_template(rows, template, has_header=False) == [
+        ["品名", "金额"],
+        ["Widget", 1234.56],
+        ["Service", 56.0],
+    ]
+
+
+def test_apply_template_strips_percent_and_amount_symbols():
+    template = {
+        "fields": [
+            {"name": "折扣", "type": "percent"},
+            {"name": "金额", "type": "amount", "format": {"numberStyle": "us"}},
+        ]
+    }
+    rows = [
+        ["Rate", "Total"],
+        ["12%", "$1,234.56"],
+    ]
+
+    assert apply_template(rows, template) == [
+        ["折扣", "金额"],
+        [12.0, 1234.56],
     ]
