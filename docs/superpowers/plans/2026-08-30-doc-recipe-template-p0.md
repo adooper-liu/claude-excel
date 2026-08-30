@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 ---
 # 文档识别模板 P0（doc-recipe：文字说明模板 + 数据字典 + 格式清洗 + 手动选模板）（2026-08-30）
 
@@ -150,3 +150,5 @@ status: pending
    `git add backend/doc_recipe.py backend/format_clean.py backend/tests/test_doc_recipe.py backend/tests/test_format_clean.py backend/pdf_extract.py backend/server.py addin/src/taskpane/components/DocRecipeBar.tsx addin/src/taskpane/components/PdfAttachSection.tsx addin/src/taskpane/taskpane.css && git commit -m "feat(doc-recipe): 文档识别模板 P0（文字说明模板+数据字典+格式清洗+手动选模板）"`（挂载点改动一并 add）。
 4. 真机验收段留给管理员，Codex 不代跑、不标 done 时声称已验。
 5. 全部通过后：按 `docs/coordination.md`，review 交回 Claude 对照本 plan 逐粒核对。
+
+<!-- 进度 log（2026-08-30 Codex）：P0 已实现并合入 master（a9dfa08 + 修复 29edb47），门禁全绿；真机验收待管理员，review 交 Claude。 -->
