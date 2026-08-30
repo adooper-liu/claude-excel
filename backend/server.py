@@ -34,6 +34,7 @@ from extension_secrets import set_secret
 from user_extension_registry import list_extensions
 from user_fn_runner import run_user_fn
 import pdf_extract
+import doc_interpret
 from doc_recipe import (
     DOC_RECIPES_DIR,
     delete_doc_recipe,
@@ -823,6 +824,21 @@ async def api_doc_recipes_delete(name: str, request: Request):
     except FileNotFoundError as exc:
         raise HTTPException(404, "模板不存在") from exc
     return {"ok": True}
+
+
+@app.post("/api/doc/interpret")
+async def api_doc_interpret(req: dict, request: Request):
+    require_loopback(request)
+    ocr_text = str((req or {}).get("ocrText") or "").strip()
+    if not ocr_text:
+        raise HTTPException(400, "ocrText 必填")
+    rows = (req or {}).get("rows")
+    try:
+        return await doc_interpret.interpret_document(
+            ocr_text, rows=rows if isinstance(rows, list) else None
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/web-fetch-scan")

@@ -64,6 +64,40 @@ def test_doc_recipe_list_create_delete(monkeypatch):
     assert saved["deleted"] == "增值税发票"
 
 
+def test_doc_interpret_api_returns_normalized_json(monkeypatch):
+    async def fake_interpret(ocr_text, *, rows=None, model=None, model_call=None):
+        return {
+            "kvs": [{"label": "发票号码", "value": "12345678"}],
+            "items": [],
+            "totals": [],
+            "notes": [],
+        }
+
+    monkeypatch.setattr(server.doc_interpret, "interpret_document", fake_interpret)
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/interpret", json={"ocrText": "发票号码: 12345678"})
+    assert response.status_code == 200
+    assert response.json()["kvs"][0]["label"] == "发票号码"
+
+
+def test_doc_interpret_api_requires_ocr_text(monkeypatch):
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/interpret", json={"ocrText": "   "})
+    assert response.status_code == 400
+    assert "ocrText" in response.json()["detail"]
+
+
+def test_doc_interpret_api_maps_model_error(monkeypatch):
+    async def bad_interpret(ocr_text, *, rows=None, model=None, model_call=None):
+        raise ValueError("No API key configured")
+
+    monkeypatch.setattr(server.doc_interpret, "interpret_document", bad_interpret)
+    client = _client(monkeypatch)
+    response = client.post("/api/doc/interpret", json={"ocrText": "x"})
+    assert response.status_code == 400
+    assert "No API key" in response.json()["detail"]
+
+
 def test_doc_recipe_api_get_detail(monkeypatch):
     monkeypatch.setattr(server, "load_doc_recipe", lambda name: {"name": name, "fields": []})
     client = _client(monkeypatch)
