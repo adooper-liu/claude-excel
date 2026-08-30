@@ -392,6 +392,17 @@ def _attr(result: Any, name: str) -> Any:
     return getattr(result, name, None)
 
 
+def _attr_list(result: Any, name: str) -> list[Any]:
+    """Read a field and normalize to a list (None / ndarray safe)."""
+    value = _attr(result, name)
+    if value is None:
+        return []
+    try:
+        return list(value)
+    except TypeError:
+        return []
+
+
 def _is_table_region(label: Any) -> bool:
     key = normalize_key(label)
     return key in {normalize_key(item) for item in TABLE_REGION_LABELS}
@@ -409,7 +420,12 @@ def _is_text_region(label: Any) -> bool:
 
 def _quad_bbox(box: Any) -> tuple[float, float, float, float]:
     """Axis-aligned bbox (x1, y1, x2, y2) of a 4-point quad OCR box."""
-    points = [p for p in (box or []) if p is not None]
+    if box is None:
+        return (0.0, 0.0, 0.0, 0.0)
+    try:
+        points = [p for p in box if p is not None]
+    except TypeError:
+        points = []
     if not points:
         return (0.0, 0.0, 0.0, 0.0)
     xs = [float(p[0]) for p in points]
@@ -541,7 +557,7 @@ def _rapid_table_block(
         result = table_engine(crop)
     except Exception:
         return None
-    htmls = list(_attr(result, "pred_htmls") or [])
+    htmls = _attr_list(result, "pred_htmls")
     if not htmls:
         return None
     table = _table_from_html(str(htmls[0]), name=f"\u8868{index + 1}")
@@ -555,20 +571,16 @@ def _layout_from_rapid(
 ) -> LayoutDocument:
     """Run layout regions + table HTML + OCR text through LayoutDocument."""
     layout_result = layout_engine(image)
-    boxes = list(_attr(layout_result, "boxes") or [])
-    class_names = list(_attr(layout_result, "class_names") or [])
+    boxes = _attr_list(layout_result, "boxes")
+    class_names = _attr_list(layout_result, "class_names")
     if not boxes or len(boxes) != len(class_names):
         raise ValueError("RapidLayout returned no usable regions")
 
     ocr_result = ocr_engine(image)
-    ocr_boxes = (
-        list(_attr(ocr_result, "boxes") or []) if ocr_result is not None else []
-    )
-    ocr_txts = (
-        list(_attr(ocr_result, "txts") or []) if ocr_result is not None else []
-    )
+    ocr_boxes = _attr_list(ocr_result, "boxes") if ocr_result is not None else []
+    ocr_txts = _attr_list(ocr_result, "txts") if ocr_result is not None else []
     ocr_scores = (
-        list(_attr(ocr_result, "scores") or []) if ocr_result is not None else []
+        _attr_list(ocr_result, "scores") if ocr_result is not None else []
     )
 
     kvs: list[KVItem] = []

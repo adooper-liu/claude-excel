@@ -304,3 +304,4 @@ status: done
 ## 进度 log
 
 - 2026-08-30 Task 10 完成（分支 feat/ocr-rapid-layout）：`_rapid_available()` 三包检测（rapid_layout + rapid_table + rapidocr v2）；`extract_layout_from_image_rapid` 用 RapidLayout 区域分类 + RapidOCR 全图文本区抽键值 + RapidTable HTML→TableBlock（colspan 展开、分隔行跳过、首行表头）；任何异常静默回退 tesseract 词盒聚类。单测 test_layout_extract_rapid.py 9 项全绿，全量 pytest 329 passed。真机验收保留管理员（本机未装 rapid 三包，回退路径与 Task 1-9 一致）。
+- 2026-08-30 真机接收预验（本机）：backend\.venv 安装 rapid-layout 1.2.1 / rapid-table 3.0.2 / rapidocr 3.9.2，模型随 wheel 自带（rapid_table 的 slanet-plus.onnx 首次自动下载）；合成带边框发票图实测：RapidLayout 正确分类 text/表格区，文本区提取键值（发票号码/开票日期），表格区 RapidTable 得到表头+明细行，3.5s 运行完整。修复一个真 bug：RapidOCR.boxes 为 np.ndarray，原 `_attr(...) or []` 对 ndarray 做真值判断报 ambiguous；改为 `_attr_list`（None/ndarray 安全），并补 ndarray 回归单测，全量 330 passed。无边框合成表会被版面模型归为 text（模型行为），不影响真实发票。

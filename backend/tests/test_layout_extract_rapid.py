@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
+import pytest  # noqa: E402
 from PIL import Image  # noqa: E402
 
 import layout_extract  # noqa: E402
@@ -194,3 +195,20 @@ def test_rapid_table_region_crash_falls_back(monkeypatch):
     # KV from text region survives; table region crash must not kill the run
     assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
     assert layout.tables == []
+
+
+def test_rapid_handles_ndarray_ocr_boxes(monkeypatch):
+    """Real RapidOCR returns np.ndarray boxes; truthiness must not explode."""
+    np = pytest.importorskip("numpy")
+
+    class _NpOCREngine:
+        def __call__(self, image):
+            output = _FakeOCROutput()
+            output.boxes = np.array(_FakeOCROutput.boxes, dtype=float)
+            return output
+
+    _patch_engines(monkeypatch, ocr=_NpOCREngine())
+    layout = layout_extract.extract_layout_from_image_rapid(_image())
+    assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
+    assert layout.tables[0].headers == ["\u54c1\u540d", "\u91d1\u989d", "\u7a0e\u7387"]
+    assert layout.tables[0].rows == [["A\u4ea7\u54c1", "1,234.56", "13%"]]
