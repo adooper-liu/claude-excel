@@ -23,6 +23,12 @@ MAX_CLOUD_TASK_SECONDS = 120
 DASHSCOPE_BASE = "https://dashscope.aliyuncs.com/api/v1"
 
 
+def _dashscope_base() -> str:
+    """DashScope endpoint, configurable for private MaaS deployments."""
+    base = str(get_config().get("dashscopeBaseUrl") or "").strip().rstrip("/")
+    return base or DASHSCOPE_BASE
+
+
 def detect_kind(text_len: int, table_count: int) -> str:
     """Classify by structured table first, then text, then scanned."""
     if table_count > 0:
@@ -190,7 +196,7 @@ def extract_pdf_ocr_cloud(data: bytes, filename: str = "upload.pdf") -> str:
     try:
         with httpx.Client(timeout=60) as client:
             upload = client.post(
-                DASHSCOPE_BASE + "/uploads",
+                _dashscope_base() + "/uploads",
                 headers={**auth, "X-DashScope-Async": "enable"},
                 files={"file": (filename, data, "application/pdf")},
             )
@@ -201,7 +207,7 @@ def extract_pdf_ocr_cloud(data: bytes, filename: str = "upload.pdf") -> str:
                 raise ValueError("百炼上传接口未返回 oss_url/file_id，无法提交 doc-parse。")
 
             submit = client.post(
-                DASHSCOPE_BASE + "/services/doc_parse/doc-parse",
+                _dashscope_base() + "/services/doc_parse/doc-parse",
                 headers={**auth, "X-DashScope-Async": "enable"},
                 json={
                     "model": "doc-parse",
@@ -218,7 +224,7 @@ def extract_pdf_ocr_cloud(data: bytes, filename: str = "upload.pdf") -> str:
 
             deadline = time.monotonic() + MAX_CLOUD_TASK_SECONDS
             while time.monotonic() < deadline:
-                poll = client.get(DASHSCOPE_BASE + "/tasks/" + str(task_id), headers=auth)
+                poll = client.get(_dashscope_base() + "/tasks/" + str(task_id), headers=auth)
                 _raise_dashscope_error(poll, "查询 doc-parse 任务")
                 payload = poll.json()
                 status = str(_response_field(payload, ("task_status", "taskStatus")) or "").upper()

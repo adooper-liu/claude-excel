@@ -41,6 +41,7 @@ DEFAULT_CONFIG = {
     "providers": DEFAULT_PROVIDERS,
     "embeddingModel": "",
     "ocrBackend": "local",
+    "dashscopeBaseUrl": "",
 }
 
 _config: dict = {}
@@ -99,6 +100,7 @@ def load_config() -> dict:
         cfg["activeProvider"] = "deepseek"
     cfg.setdefault("embeddingModel", "")
     cfg.setdefault("ocrBackend", "local")
+    cfg.setdefault("dashscopeBaseUrl", "")
 
     _config = cfg
     return _config
