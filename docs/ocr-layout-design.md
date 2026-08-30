@@ -21,6 +21,12 @@
 
 4. **first_table 优先选带表头的表**（明细表），再按 行×列 大小兜底。
 
+5. **显示文本（正文预览 / AI 解读输入 / 入知识库）用 RapidOCR 输出**。
+   rapid 成功时 `extract_pdf` 的 `text` = `layout.raw_text`（RapidOCR 按位置排序，
+   一字段一行），不再用 tesseract `image_to_string`；同时「进工作簿」的 rows 改用
+   `layout.first_table()` 明细表（RapidOCR 文本是字段式，`_rows_from_ocr_text`
+   找不到多列表格行）。旧模板 `apply_template` 对 layout 明细表行传 `has_header=True`。
+   rapid 不可用/回退时保持 tesseract 文本原样，行为不变。
 ## 为什么（真机教训，别重踩）
 
 - RapidOCR 盒是**行级**粒度，喂给为 tesseract **词级**盒设计的聚类逻辑

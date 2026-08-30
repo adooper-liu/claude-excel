@@ -327,6 +327,24 @@ def _layout_from_result_rows(rows: Any) -> Any:
     return layout
 
 
+def _layout_table_rows(layout: Any) -> list[list[str]] | None:
+    """Flatten the layout's first table into flat rows (header + data).
+
+    Used so the "进工作簿" rows come from the real detail table when the
+    RapidStruct path produced one (RapidOCR text is one field per line, so the
+    legacy ``_rows_from_ocr_text`` parsing finds no multi-column rows there).
+    """
+    if layout is None:
+        return None
+    table = getattr(layout, "first_table", lambda: None)()
+    if table is None or (not table.headers and not table.rows):
+        return None
+    rows = ([list(table.headers)] if table.headers else []) + [
+        list(row) for row in table.rows
+    ]
+    return rows if len(rows) >= 2 else None
+
+
 def _enrich(
     result: dict[str, Any], layout: Any, template: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -385,15 +403,32 @@ def extract_pdf(
         if is_image:
             if backend == "local":
                 preprocessed = preprocess_image(data)
-                ocr_text = extract_image_ocr_local(data, preprocessed)
                 layout = _safe_layout(extract_layout_from_image, preprocessed)
+                if (
+                    layout is not None
+                    and getattr(layout, "engine", "") == "rapid"
+                    and layout.raw_text
+                ):
+                    # RapidStruct path: show the RapidOCR text (field per line)
+                    # instead of the tesseract image_to_string output.
+                    ocr_text = layout.raw_text
+                else:
+                    ocr_text = extract_image_ocr_local(data, preprocessed)
             else:
                 ocr_text = extract_pdf_ocr_cloud(data, filename)
                 layout = _safe_layout(doc_parse_to_layout, ocr_text)
             ocr_rows = _rows_from_ocr_text(ocr_text)
+            rows_have_header = False
+            if getattr(layout, "engine", "") == "rapid":
+                layout_rows = _layout_table_rows(layout)
+                if layout_rows:
+                    ocr_rows = layout_rows
+                    rows_have_header = True
             if ocr_rows:
                 if template:
-                    ocr_rows = apply_template(ocr_rows, template, has_header=False)
+                    ocr_rows = apply_template(
+                        ocr_rows, template, has_header=rows_have_header
+                    )
                 result = _result(
                     kind="table", backend=backend, filename=filename,
                     rows=ocr_rows, tables=0, text=ocr_text, pages=1,
@@ -429,15 +464,30 @@ def extract_pdf(
             )
 
         if backend == "local":
-            ocr_text = extract_pdf_ocr_local(data)
             layout = _safe_layout(extract_layout_from_pdf, data)
+            if (
+                layout is not None
+                and getattr(layout, "engine", "") == "rapid"
+                and layout.raw_text
+            ):
+                ocr_text = layout.raw_text
+            else:
+                ocr_text = extract_pdf_ocr_local(data)
         else:
             ocr_text = extract_pdf_ocr_cloud(data, filename)
             layout = _safe_layout(doc_parse_to_layout, ocr_text)
         ocr_rows = _rows_from_ocr_text(ocr_text)
+        rows_have_header = False
+        if getattr(layout, "engine", "") == "rapid":
+            layout_rows = _layout_table_rows(layout)
+            if layout_rows:
+                ocr_rows = layout_rows
+                rows_have_header = True
         if ocr_rows:
             if template:
-                ocr_rows = apply_template(ocr_rows, template, has_header=False)
+                ocr_rows = apply_template(
+                    ocr_rows, template, has_header=rows_have_header
+                )
             result = _result(
                 kind="table", backend=backend, filename=filename,
                 rows=ocr_rows, tables=table_count, text=ocr_text,

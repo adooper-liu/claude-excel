@@ -234,3 +234,36 @@ def test_doc_parse_text_prefers_markdown():
         {"output": {"result": {"markdown": "# Invoice\n\nAmount | Total", "raw": "x"}}}
     )
     assert text.startswith("# Invoice")
+
+
+def test_image_ocr_uses_rapid_layout_text_and_rows(monkeypatch):
+    """When the rapid layout succeeds, the shown text is RapidOCR output and the
+    worksheet rows come from the layout detail table (RapidOCR text is one
+    field per line, so legacy _rows_from_ocr_text finds no rows)."""
+    from layout_doc import KVItem, LayoutDocument, TableBlock
+
+    layout = LayoutDocument(
+        kvs=[KVItem("发票号码", "12345678")],
+        tables=[
+            TableBlock(
+                name="表",
+                headers=["品名", "金额"],
+                rows=[["A", "1.5"]],
+            )
+        ],
+        raw_text="发票号码: 12345678\n品名 金额\nA 1.5",
+        engine="rapid",
+    )
+    monkeypatch.setattr(pdf_extract, "preprocess_image", lambda data: object())
+    monkeypatch.setattr(pdf_extract, "extract_layout_from_image", lambda image: layout)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("tesseract text must not run when rapid layout works")
+
+    monkeypatch.setattr(pdf_extract, "extract_image_ocr_local", boom)
+    result = pdf_extract.extract_pdf(
+        b"\x89PNG\r\n\x1a\nxxxx", ocr_backend="local", filename="invoice.png"
+    )
+    assert result["kind"] == "table"
+    assert result["text"] == "发票号码: 12345678\n品名 金额\nA 1.5"
+    assert result["rows"] == [["品名", "金额"], ["A", "1.5"]]
