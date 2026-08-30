@@ -53,9 +53,10 @@ def test_parse_interpret_json_rejects_invalid():
 
 
 def test_interpret_document_uses_injected_model_call():
-    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
         assert "臆造" in system_prompt
         assert inject_web_search is False
+        assert max_tokens == 8192
         return {
             "content": [
                 {
@@ -72,7 +73,7 @@ def test_interpret_document_uses_injected_model_call():
 
 
 def test_interpret_document_surfaces_model_error():
-    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
         return {"content": [{"type": "text", "text": "Error: No API key configured."}]}
 
     with pytest.raises(ValueError, match="No API key"):
@@ -118,9 +119,10 @@ def test_parse_recipe_json_defaults_type_and_group():
 
 
 def test_propose_recipe_ai_uses_injected_model_call():
-    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
         assert "碎片" in system_prompt
         assert inject_web_search is False
+        assert max_tokens == 8192
         return {
             "content": [
                 {
@@ -141,7 +143,7 @@ def test_propose_recipe_ai_uses_injected_model_call():
 
 
 def test_propose_recipe_ai_surfaces_model_error():
-    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
         return {"content": [{"type": "text", "text": "Error: No API key configured."}]}
 
     with pytest.raises(ValueError, match="No API key"):
@@ -194,3 +196,13 @@ def test_parse_interpret_json_keeps_large_ids_as_text():
 def test_extract_text_accepts_parts_without_type():
     payload = {"content": [{"text": "第一段"}, {"text": "第二段"}]}
     assert doc_interpret._extract_text(payload) == "第一段\n第二段"
+
+def test_interpret_document_thinking_only_reports_content_types():
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
+        return {
+            "content": [{"type": "thinking", "thinking": "想很久..."}],
+            "stop_reason": "max_tokens",
+        }
+
+    with pytest.raises(ValueError, match="thinking"):
+        asyncio.run(doc_interpret.interpret_document("x", model_call=fake_call))

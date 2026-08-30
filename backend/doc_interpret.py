@@ -22,7 +22,7 @@ SYSTEM_PROMPT = """你是文档解读助手。你会收到一段 OCR 识别出�
 4. 合计/总计类放进 totals（数组，每项 {"label": ..., "value": ...}）。
 5. 值类型规则：只有明确可计算的量（金额、数量、税率、百分比）才给数字或归一；编号类长数字串（发票号码/票号码/机器编号/订单号/校验码/纳税人识别号等）必须保持字符串——转数字会丢前导零或在 Excel 里变科学计数法。
 6. OCR 疑似错字、乱码或不确定的内容在 notes（字符串数组）里说明，不要静默改值去"猜对"。
-只输出一个 JSON 对象，不要 Markdown 代码块，不要任何额外解释。"""
+只输出一个 JSON 对象，不要 Markdown 代码块，不要任何额外解释，不要输出思考过程。"""
 
 
 def build_interpret_messages(
@@ -148,13 +148,24 @@ async def interpret_document(
     call = model_call or ai_proxy.chat_complete
     messages = build_interpret_messages(ocr_text, rows)
     payload = await call(
-        messages, system_prompt=SYSTEM_PROMPT, model=model, inject_web_search=False
+        messages,
+        system_prompt=SYSTEM_PROMPT,
+        model=model,
+        max_tokens=8192,
+        inject_web_search=False,
     )
     text = _extract_text(payload)
     if not text:
+        content_types = [
+            str(part.get("type") or "?")
+            for part in (payload.get("content") or [])
+            if isinstance(part, dict)
+        ]
+        stop = payload.get("stop_reason")
         snippet = str(payload)[:200]
         raise ValueError(
-            "模型未返回可读内容（响应为空或格式不符，可切换模型/重试）；响应片段：" + snippet
+            "模型未返回可读内容（响应为空或格式不符，可切换模型/重试）；"
+            "content=%s stop_reason=%s 响应片段：%s" % (content_types[:5], stop, snippet)
         )
     if text.startswith("Error:"):
         raise ValueError(text)
@@ -171,7 +182,7 @@ RECIPE_SYSTEM_PROMPT = """你是文档模板设计助手。你会收到一段 OC
 4. source 必须唯一：文档里同一键名出现多次（如购买方与销售方都有「名称/纳税人识别号/地址、电话/开户行及账号」）时，用 "键名#1"、"键名#2" 区分（#N 表示该键第 N 次出现）；对不上原文就用字段名。不要给两个字段填相同 source。
 5. 明细只放真正的数据列；「合计/总计」行不当作列字段；价税合计只保留一条（优先保留小写）。
 6. 字段总数控制在 20 以内；重复、噪声、无意义字段丢弃。
-7. 只输出一个 JSON 对象 {"fields": [...], "notes": [...]}，不要 Markdown 代码块，不要额外解释。
+7. 只输出一个 JSON 对象 {"fields": [...], "notes": [...]}，不要 Markdown 代码块，不要额外解释，不要输出思考过程。
 """
 
 RECIPE_TYPES = ("text", "number", "date", "amount", "percent")
@@ -267,13 +278,24 @@ async def propose_recipe_ai(
     call = model_call or ai_proxy.chat_complete
     messages = build_recipe_messages(ocr_text, rows)
     payload = await call(
-        messages, system_prompt=RECIPE_SYSTEM_PROMPT, model=model, inject_web_search=False
+        messages,
+        system_prompt=RECIPE_SYSTEM_PROMPT,
+        model=model,
+        max_tokens=8192,
+        inject_web_search=False,
     )
     text = _extract_text(payload)
     if not text:
+        content_types = [
+            str(part.get("type") or "?")
+            for part in (payload.get("content") or [])
+            if isinstance(part, dict)
+        ]
+        stop = payload.get("stop_reason")
         snippet = str(payload)[:200]
         raise ValueError(
-            "模型未返回可读内容（响应为空或格式不符，可切换模型/重试）；响应片段：" + snippet
+            "模型未返回可读内容（响应为空或格式不符，可切换模型/重试）；"
+            "content=%s stop_reason=%s 响应片段：%s" % (content_types[:5], stop, snippet)
         )
     if text.startswith("Error:"):
         raise ValueError(text)
