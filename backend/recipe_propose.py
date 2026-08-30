@@ -7,11 +7,12 @@ proposal before it is saved as a doc-recipe.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 
 from format_clean import clean_number, is_null
-from layout_doc import LayoutDocument
+from layout_doc import LayoutDocument, normalize_key
 
 #: Date formats tried (left to right) when inferring the date type.
 DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%Y.%m.%d")
@@ -19,6 +20,23 @@ DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%Y.%m.%d")
 MAX_SAMPLES = 3
 #: Currency symbols that mark a column as ``amount``.
 CURRENCY_SYMBOLS = ("$", "€", "£", "¥", "￥")
+#: At least one letter or CJK char makes a token a plausible field name.
+_WORD_RE = re.compile(r"[A-Za-z\u4e00-\u9fff]")
+
+
+def _is_usable_field_name(name: Any) -> bool:
+    """Drop OCR noise as a proposed field name (generic, no business names).
+
+    - ``label: value`` merged by OCR is not a clean field name.
+    - A run of digits/symbols with no letter/CJK (phone/invoice numbers OCR'd
+      as one token) is noise, not a column header.
+    """
+    text = str(name or "").strip()
+    if not text:
+        return False
+    if ":" in text or "：" in text:
+        return False
+    return bool(_WORD_RE.search(text))
 
 
 def _samples(values: list[Any]) -> list[str]:
@@ -89,6 +107,8 @@ def _detail_fields(layout: LayoutDocument) -> list[dict[str, Any]]:
     fields: list[dict[str, Any]] = []
     if headers:
         for index, header in enumerate(headers):
+            if not _is_usable_field_name(header):
+                continue
             values = [row[index] for row in table.rows if index < len(row)]
             fields.append(
                 {
@@ -117,6 +137,8 @@ def propose_recipe(layout: LayoutDocument, *, base_name: str = "") -> dict[str, 
     """Build a template candidate from a layout's headers and key-values."""
     fields: list[dict[str, Any]] = _detail_fields(layout)
     for kv in layout.kvs:
+        if not _is_usable_field_name(kv.label):
+            continue
         fields.append(
             {
                 "name": kv.label,
@@ -125,6 +147,17 @@ def propose_recipe(layout: LayoutDocument, *, base_name: str = "") -> dict[str, 
                 "group": "header",
             }
         )
+    # Deduplicate by normalized name (detail first): the same label often
+    # appears both as a table header and as a key-value pair.
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for field in fields:
+        key = normalize_key(field.get("name") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(field)
+    fields = deduped
     raw_head = (layout.raw_text or "").strip().replace("\n", " ")[:20]
     name = (base_name or "").strip() or raw_head or "新模板"
     return {

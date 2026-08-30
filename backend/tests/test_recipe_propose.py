@@ -48,6 +48,37 @@ def test_propose_recipe_adds_header_fields_from_kvs():
     ]
 
 
+def test_propose_recipe_filters_noise_headers():
+    layout = LayoutDocument(
+        tables=[
+            TableBlock(
+                name="表",
+                headers=["购买方", "名", "名称: 个人", "BR", "4920//289<69>176<78-9386\\*+1"],
+                rows=[["ABC", "个人", "个人", "x", "123"]],
+            )
+        ]
+    )
+    recipe = propose_recipe(layout)
+    detail = [f["name"] for f in recipe["fields"] if f["group"] == "detail"]
+    assert detail == ["购买方", "名", "BR"]
+
+
+def test_propose_recipe_skips_noise_kv_labels():
+    layout = LayoutDocument(kvs=[KVItem("发票号码", "12345678"), KVItem("1234//<>*", "9")])
+    recipe = propose_recipe(layout)
+    assert [f["name"] for f in recipe["fields"]] == ["发票号码"]
+
+
+def test_propose_recipe_dedupes_detail_and_header_fields():
+    layout = LayoutDocument(
+        kvs=[KVItem("金额", "1,234.56")],
+        tables=[TableBlock(name="表", headers=["金额"], rows=[["1,234.56"]])],
+    )
+    recipe = propose_recipe(layout)
+    assert len(recipe["fields"]) == 1
+    assert recipe["fields"][0]["group"] == "detail"
+
+
 def test_propose_recipe_empty_layout_does_not_crash():
     recipe = propose_recipe(LayoutDocument(), base_name="空文档")
     assert recipe["name"] == "空文档"
