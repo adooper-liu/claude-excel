@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 ---
 # 文档 OCR 从「可用」到「真正好用」：布局感知 + 上传图片 AI 生成模板 + 两 Sheet 还原（2026-08-30）
 
@@ -260,3 +260,4 @@ status: in-progress
    - Task 9: `git commit -m "feat(ocr): 大写金额/全角归一/多格式日期"`
 4. 真机验收段留给管理员，Codex 不代跑、不标 done 时声称已验。
 5. 全部通过后：按 `docs/coordination.md`，review 交回 Claude 对照本 plan 逐粒核对。
+<!-- 进度 log（2026-08-30 Codex）：实现完成并合入 master（cb4a1ec）；真机验收待管理员，review 交 Claude。 -->

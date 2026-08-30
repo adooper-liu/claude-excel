@@ -1,9 +1,9 @@
 ---
-status: pending
+status: done
 ---
 # 文档 AI 结构化解读（doc-interpret：OCR 字面 → 模型含义 → 落表）（2026-08-30）
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 在 OCR/布局管线（字面层）之上加**语义解读层**：把识别出的 `raw_text`/`rows` 交给已配置的模型，返回**文档无关的结构化 JSON**（`kvs`/`items`/`totals`/`notes`），前端可展示并在新 Sheet 落表。字段名跟随文档原文，**不硬编码任何业务字段**；模型只读 OCR 输出，不参与模板存储/管理。
 
@@ -48,11 +48,11 @@ status: pending
 
 **现状缺陷：** 无语义解读层；OCR 结果不喂模型。
 
-- [ ] **Step 1: 模块** — `build_interpret_messages`（system=通用提示词：只整理原文字段/不臆造/错字进 notes/只输出 JSON；user=OCR 文本+可选 rows JSON）。
-- [ ] **Step 2: 解析** — `_extract_text`（兼容 Anthropic `content[]` 与 OpenAI `choices[].message.content`）；`parse_interpret_json`（去 markdown 围栏、`json.loads`、shape 校验：kvs/totals 为 label/value 数组、items 为 columns+rows 数组、notes 为字符串数组；非法抛 `ValueError`）。
-- [ ] **Step 3: 主函数** — `interpret_document`：调 `model_call(messages, system_prompt=SYSTEM_PROMPT, model=model)` → 提取文本 → 空/`Error:` 开头抛 `ValueError` → `parse_interpret_json`。
-- [ ] **Step 4: 路由** — `POST /api/doc/interpret`：`ocrText` 必填（空 → 400「ocrText 必填」）；`rows` 非列表忽略；`ValueError` → 400。
-- [ ] **Step 5: 单测** — `test_doc_interpret.py`：提示词含「不臆造」且 user 含 OCR 文本；`parse_interpret_json` 正常/围栏/非法 JSON/形状错；`interpret_document` 用注入 `model_call` 验成功与 `Error:` 抛错。API 测试：mock `doc_interpret` 的 model_call → 200 返回 `{kvs,items,totals,notes}`；空 ocrText → 400。`pytest tests/ -q` → exit 0。
+- [x] **Step 1: 模块** — `build_interpret_messages`（system=通用提示词：只整理原文字段/不臆造/错字进 notes/只输出 JSON；user=OCR 文本+可选 rows JSON）。
+- [x] **Step 2: 解析** — `_extract_text`（兼容 Anthropic `content[]` 与 OpenAI `choices[].message.content`）；`parse_interpret_json`（去 markdown 围栏、`json.loads`、shape 校验：kvs/totals 为 label/value 数组、items 为 columns+rows 数组、notes 为字符串数组；非法抛 `ValueError`）。
+- [x] **Step 3: 主函数** — `interpret_document`：调 `model_call(messages, system_prompt=SYSTEM_PROMPT, model=model)` → 提取文本 → 空/`Error:` 开头抛 `ValueError` → `parse_interpret_json`。
+- [x] **Step 4: 路由** — `POST /api/doc/interpret`：`ocrText` 必填（空 → 400「ocrText 必填」）；`rows` 非列表忽略；`ValueError` → 400。
+- [x] **Step 5: 单测** — `test_doc_interpret.py`：提示词含「不臆造」且 user 含 OCR 文本；`parse_interpret_json` 正常/围栏/非法 JSON/形状错；`interpret_document` 用注入 `model_call` 验成功与 `Error:` 抛错。API 测试：mock `doc_interpret` 的 model_call → 200 返回 `{kvs,items,totals,notes}`；空 ocrText → 400。`pytest tests/ -q` → exit 0。
 
 ---
 
@@ -68,11 +68,11 @@ status: pending
 
 **现状缺陷：** 解析卡片无 AI 解读入口。
 
-- [ ] **Step 1: 状态** — `interpretResult`/`interpretBusy`/`interpretErr`；类型 `InterpretResult = { kvs:{label,value}[]; items:{columns:string[];rows:(string|number)[][]}[]; totals:{label,value}[]; notes:string[] }`。
-- [ ] **Step 2: 按钮** — 卡片里 `pendingResult.text` 存在时显示「AI 解读」；点击 POST `{ocrText: text, rows}`；失败 `setInterpretErr`。
-- [ ] **Step 3: 摘要展示** — kvs 数量、items 各表行列数、totals、notes 前几条；可折叠或直接展示文本。
-- [ ] **Step 4: 落表** — 「解读进工作簿」：拼一个 Sheet（kvs 字段/值两列；items 每表一个表头+数据块；totals 字段/值；notes 备注列），`writeToNewSheet(sheetName + "-解读", rows)`。
-- [ ] **Step 5: 门禁** — `npm run typecheck` → exit 0；`npm run test:unit` → 全绿；`npm run build` → exit 0。
+- [x] **Step 1: 状态** — `interpretResult`/`interpretBusy`/`interpretErr`；类型 `InterpretResult = { kvs:{label,value}[]; items:{columns:string[];rows:(string|number)[][]}[]; totals:{label,value}[]; notes:string[] }`。
+- [x] **Step 2: 按钮** — 卡片里 `pendingResult.text` 存在时显示「AI 解读」；点击 POST `{ocrText: text, rows}`；失败 `setInterpretErr`。
+- [x] **Step 3: 摘要展示** — kvs 数量、items 各表行列数、totals、notes 前几条；可折叠或直接展示文本。
+- [x] **Step 4: 落表** — 「解读进工作簿」：拼一个 Sheet（kvs 字段/值两列；items 每表一个表头+数据块；totals 字段/值；notes 备注列），`writeToNewSheet(sheetName + "-解读", rows)`。
+- [x] **Step 5: 门禁** — `npm run typecheck` → exit 0；`npm run test:unit` → 全绿；`npm run build` → exit 0。
 
 ---
 
@@ -94,12 +94,12 @@ status: pending
 
 **现状缺陷：** 启发式 `propose_recipe` 会把 OCR 碎片/噪声当字段（购/名/BR），模板不友好。
 
-- [ ] **Step 1: 提示词** — 让模型整理干净字段字典：每项 `{name, type, source, group}`；type 限 `text|number|date|amount|percent`，group 限 `header|detail`；OCR 碎片合并（购/名→购买方名称）、纯噪声丢弃；只输出 JSON。
-- [ ] **Step 2: 归一化** — `_normalize_recipe_field`（type/group 白名单、source 空回退 name、字段名过滤冒号/纯符号）、`parse_recipe_json`（去围栏、按 `normalize_key` 去重、notes）。
-- [ ] **Step 3: 主函数 + 路由** — `propose_recipe_ai`（注入 model_call；空/`Error:` 抛 ValueError）；`POST /api/doc/propose-recipe`（`ocrText` 必填，`rows?`/`baseName?`；ValueError→400）。
-- [ ] **Step 4: 单测** — 提示词含「碎片」；parse 正常/噪声丢弃/type、group 默认/去重；注入 call 成功与 Error；API 200/400。
-- [ ] **Step 5: 前端** — 卡片加「AI 生成模板」按钮（有 `text` 时显示），调 propose-recipe → `onProposeRecipe` 预填 DocRecipeBar。
-- [ ] **Step 6: 门禁** — `pytest tests/ -q` → exit 0；`npm run typecheck`/`test:unit`/`build` → 全绿。
+- [x] **Step 1: 提示词** — 让模型整理干净字段字典：每项 `{name, type, source, group}`；type 限 `text|number|date|amount|percent`，group 限 `header|detail`；OCR 碎片合并（购/名→购买方名称）、纯噪声丢弃；只输出 JSON。
+- [x] **Step 2: 归一化** — `_normalize_recipe_field`（type/group 白名单、source 空回退 name、字段名过滤冒号/纯符号）、`parse_recipe_json`（去围栏、按 `normalize_key` 去重、notes）。
+- [x] **Step 3: 主函数 + 路由** — `propose_recipe_ai`（注入 model_call；空/`Error:` 抛 ValueError）；`POST /api/doc/propose-recipe`（`ocrText` 必填，`rows?`/`baseName?`；ValueError→400）。
+- [x] **Step 4: 单测** — 提示词含「碎片」；parse 正常/噪声丢弃/type、group 默认/去重；注入 call 成功与 Error；API 200/400。
+- [x] **Step 5: 前端** — 卡片加「AI 生成模板」按钮（有 `text` 时显示），调 propose-recipe → `onProposeRecipe` 预填 DocRecipeBar。
+- [x] **Step 6: 门禁** — `pytest tests/ -q` → exit 0；`npm run typecheck`/`test:unit`/`build` → 全绿。
 
 ## 真机验收（管理员 / 桌面 Excel，不代跑）
 
@@ -121,3 +121,4 @@ status: pending
    - plan 文档：`git commit -m "docs(plan): 文档 AI 结构化解读"`
 4. 真机验收段留给管理员，Codex 不代跑、不标 done 时声称已验。
 5. 全部通过后：按 `docs/coordination.md`，review 交回 Claude 对照本 plan 逐粒核对。
+<!-- 进度 log（2026-08-30 Codex）：实现完成并合入 master（cb4a1ec）；真机验收待管理员，review 交 Claude。 -->
