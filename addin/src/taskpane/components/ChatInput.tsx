@@ -7,6 +7,7 @@ import PromptMenu from './PromptMenu';
 import FetchBar, { type FetchRows } from './FetchBar';
 import KnowledgeBar from './KnowledgeBar';
 import PdfAttachSection from './PdfAttachSection';
+import DocRecipeBar from './DocRecipeBar';
 import { filterSlashSkills, parseSlashCommand, slashQuery, type SlashSkill } from '../../services/slash-skills';
 import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
 import { operatorCatalogByGroup } from '../../services/operator-catalog';
@@ -35,6 +36,8 @@ export default function ChatInput({
   const [showFetch, setShowFetch] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [showPdf, setShowPdf] = useState(false);
+  const [showDocRecipe, setShowDocRecipe] = useState(false);
+  const [docRecipeVersion, setDocRecipeVersion] = useState(0);
   const [installPasteOpen, setInstallPasteOpen] = useState(false);
   const [showOperatorRef, setShowOperatorRef] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -208,8 +211,17 @@ export default function ChatInput({
       {showKnowledge && (
         <KnowledgeBar disabled={disabled || isStreaming} />
       )}
+      {showDocRecipe && (
+        <DocRecipeBar
+          disabled={disabled || isStreaming}
+          onChanged={() => setDocRecipeVersion((v) => v + 1)}
+        />
+      )}
       {showPdf && (
-        <PdfAttachSection disabled={disabled || isStreaming} />
+        <PdfAttachSection
+          disabled={disabled || isStreaming}
+          refreshKey={docRecipeVersion}
+        />
       )}
     <div className="chat-input-area">
       <div className="chat-input-tools">
@@ -245,6 +257,14 @@ export default function ChatInput({
           title="附加文档"
           aria-label="附加文档"
         >附</button>
+        <button
+          type="button"
+          className={`icon-btn${showDocRecipe ? " on" : ""}`}
+          disabled={disabled || isStreaming}
+          onClick={() => setShowDocRecipe((v) => !v)}
+          title="识别模板"
+          aria-label="识别模板"
+        >模</button>
         {showPrompts && (
           <PromptMenu
             draft={text}

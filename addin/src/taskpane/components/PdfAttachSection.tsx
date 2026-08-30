@@ -3,9 +3,10 @@
  * choose where it lands: text -> knowledge base, table -> a new sheet (or both).
  */
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "../../services/api-config";
 import { writeToNewSheet } from "../../excel";
+import { type DocRecipeSummary } from "./DocRecipeBar";
 
 type OcrBackend = "local" | "cloud";
 
@@ -31,6 +32,7 @@ type PendingLand = {
 
 interface Props {
   disabled: boolean;
+  refreshKey?: number;
 }
 
 const DOC_EXT = /\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i;
@@ -74,7 +76,7 @@ function pickFileFromDrop(dt: DataTransfer | null): File | null {
   return item?.kind === "file" ? item.getAsFile() : null;
 }
 
-export default function PdfAttachSection({ disabled }: Props): JSX.Element {
+export default function PdfAttachSection({ disabled, refreshKey }: Props): JSX.Element {
   const [backend, setBackend] = useState<OcrBackend>("local");
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -83,6 +85,23 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingResult, setPendingResult] = useState<PendingLand | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [templates, setTemplates] = useState<DocRecipeSummary[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+
+  const refreshTemplates = useCallback(async () => {
+    try {
+      const response = await fetch(API_BASE + "/api/doc-recipes");
+      if (!response.ok) return;
+      const data = (await response.json()) as { recipes?: DocRecipeSummary[] };
+      setTemplates(data.recipes || []);
+    } catch {
+      // template selection is optional; keep the last known list
+    }
+  }, []);
+
+  useEffect(function () {
+    void refreshTemplates();
+  }, [refreshTemplates, refreshKey]);
 
   const extract = useCallback(async (file: File, useBackend: OcrBackend): Promise<PdfResult> => {
     const form = new FormData();
@@ -90,6 +109,9 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
     form.append("ocr_backend", useBackend);
     if (useBackend === "cloud") {
       form.append("cloudConfirmed", "true");
+    }
+    if (selectedTemplate) {
+      form.append("template", selectedTemplate);
     }
     const response = await fetch(API_BASE + "/api/pdf/extract", {
       method: "POST",
@@ -100,7 +122,7 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
       throw new Error(String(data.detail || response.statusText || "解析失败"));
     }
     return data as PdfResult;
-  }, []);
+  }, [selectedTemplate]);
 
   const process = useCallback(
     async (file: File, useBackend: OcrBackend) => {
@@ -264,6 +286,29 @@ export default function PdfAttachSection({ disabled }: Props): JSX.Element {
             云端 OCR
           </button>
         </div>
+      </div>
+
+      <div className="fetch-row pdf-template-row">
+        <label className="pdf-template-label" htmlFor="pdf-template-select">
+          模板
+        </label>
+        <select
+          id="pdf-template-select"
+          className="pdf-template-select"
+          value={selectedTemplate}
+          onChange={(e) => setSelectedTemplate(e.target.value)}
+          disabled={disabled || busy}
+          aria-label="识别模板"
+        >
+          <option value="">无模板（原始提取）</option>
+          {templates.map(function (t) {
+            return (
+              <option key={t.name} value={t.name}>
+                {t.name}（{t.fieldCount} 字段）
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       <div

@@ -16,6 +16,7 @@ import pypdfium2 as pdfium
 from pypdf import PdfReader
 
 from config_store import get_config
+from format_clean import apply_template
 
 TEXT_MIN_LEN = 40
 OCR_DPI = 200
@@ -284,6 +285,7 @@ def extract_pdf(
     data: bytes,
     ocr_backend: str = "local",
     filename: str = "upload.pdf",
+    template: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     backend = (ocr_backend or "local").strip().lower()
     if backend not in ("local", "cloud"):
@@ -309,6 +311,8 @@ def extract_pdf(
             )
             ocr_rows = _rows_from_ocr_text(ocr_text)
             if ocr_rows:
+                if template:
+                    ocr_rows = apply_template(ocr_rows, template)
                 return _result(
                     kind="table", backend=backend, filename=filename,
                     rows=ocr_rows, tables=0, text=ocr_text, pages=1,
@@ -328,6 +332,8 @@ def extract_pdf(
                 text=text, pages=page_count,
             )
         if kind == "table":
+            if rows and template:
+                rows = apply_template(rows, template)
             return _result(
                 kind="table", backend=None, filename=filename,
                 text=text, rows=rows, tables=table_count, pages=page_count,
@@ -339,6 +345,8 @@ def extract_pdf(
             ocr_text = extract_pdf_ocr_cloud(data, filename)
         ocr_rows = _rows_from_ocr_text(ocr_text)
         if ocr_rows:
+            if template:
+                ocr_rows = apply_template(ocr_rows, template)
             return _result(
                 kind="table", backend=backend, filename=filename,
                 rows=ocr_rows, tables=table_count, text=ocr_text,

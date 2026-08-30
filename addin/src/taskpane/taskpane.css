@@ -1830,3 +1830,81 @@ select:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---- doc-recipe (识别模板) ---- */
+.doc-recipe-bar {
+  border-top: 1px dashed var(--rule);
+  padding-top: 8px;
+}
+.doc-recipe-head {
+  align-items: center;
+  justify-content: space-between;
+}
+.doc-recipe-edit {
+  border: none;
+  background: transparent;
+  color: var(--fx);
+  font-size: var(--fs-meta);
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.doc-recipe-edit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.doc-recipe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--cell);
+  padding: 8px;
+}
+.doc-recipe-fields {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 84px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  font-size: var(--fs-meta);
+  font-family: inherit;
+  background: var(--paper);
+  color: var(--ink);
+  resize: vertical;
+}
+.doc-recipe-fields:focus {
+  outline: none;
+  border-color: var(--fx);
+  box-shadow: 0 0 0 3px var(--fx-fill);
+}
+.doc-recipe-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pdf-template-row {
+  align-items: center;
+}
+.pdf-template-label {
+  font-size: var(--fs-meta);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pdf-template-select {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  font-size: var(--fs-meta);
+  background: var(--paper);
+  color: var(--ink);
+}
+.pdf-template-select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

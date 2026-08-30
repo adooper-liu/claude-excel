@@ -104,6 +104,33 @@ def test_extract_pdf_text_layer():
     assert result["preview"].startswith("This is")
 
 
+def test_extract_pdf_applies_table_template_only_when_provided(monkeypatch):
+    template = {
+        "fields": [
+            {"name": "名称", "type": "text"},
+            {
+                "name": "金额",
+                "type": "number",
+                "format": {"numberStyle": "eu", "stripSymbols": ["€"]},
+            },
+        ]
+    }
+    source_rows = [["Old", "Old"], ["Widget", "€1.234,56"]]
+    monkeypatch.setattr(pdf_extract, "count_pdf_pages", lambda _data: 1)
+    monkeypatch.setattr(pdf_extract, "extract_pdf_text", lambda _data: "extracted text")
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_pdf_tables",
+        lambda _data: (source_rows, 1),
+    )
+
+    cleaned = pdf_extract.extract_pdf(b"%PDF-", template=template)
+    assert cleaned["rows"] == [["名称", "金额"], ["Widget", 1234.56]]
+
+    untouched = pdf_extract.extract_pdf(b"%PDF-")
+    assert untouched["rows"] == source_rows
+
+
 def test_scanned_pdf_local_missing_tesseract_returns_readable_error(monkeypatch):
     monkeypatch.setattr(pdf_extract, "_find_tesseract", lambda: None)
     result = pdf_extract.extract_pdf(_text_pdf(""), filename="scan.pdf", ocr_backend="local")

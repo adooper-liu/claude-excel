@@ -34,6 +34,13 @@ from extension_secrets import set_secret
 from user_extension_registry import list_extensions
 from user_fn_runner import run_user_fn
 import pdf_extract
+from doc_recipe import (
+    DOC_RECIPES_DIR,
+    delete_doc_recipe,
+    list_doc_recipes,
+    load_doc_recipe,
+    save_doc_recipe,
+)
 from web_tools import fetch_url_content
 from web_ingest import ack_ingest, pending_ingest, push_ingest
 from knowledge_store import delete_document, ingest_document, ingest_document_from_path, list_documents, search, status
@@ -707,6 +714,7 @@ async def api_pdf_extract(
     file: UploadFile = File(...),
     ocr_backend: str = Form(""),
     cloudConfirmed: bool = Form(False),
+    template: str = Form(""),
 ):
     require_loopback(request)
     data = await file.read()
@@ -718,12 +726,100 @@ async def api_pdf_extract(
     if backend == "cloud" and cloudConfirmed is not True:
         return {"error": "云 OCR 需前端确认授权"}
     filename = file.filename or "upload.pdf"
+    selected_template = None
+    template_name = (template or "").strip()
+    if template_name:
+        try:
+            selected_template = load_doc_recipe(template_name)
+        except FileNotFoundError as exc:
+            raise HTTPException(400, "模板不存在：" + template_name) from exc
+    extraction_kwargs = {"template": selected_template} if selected_template else {}
     return await asyncio.to_thread(
         pdf_extract.extract_pdf,
         data,
         backend,
         filename,
+        **extraction_kwargs,
     )
+
+
+@app.get("/api/doc-recipes")
+async def api_doc_recipes_list(request: Request):
+    require_loopback(request)
+    return {"recipes": list_doc_recipes()}
+
+
+@app.get("/api/doc-recipes/{name}")
+async def api_doc_recipes_get(name: str, request: Request):
+    require_loopback(request)
+    try:
+        return load_doc_recipe(name)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "模板不存在") from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/doc-recipes")
+async def api_doc_recipes_save(
+    request: Request,
+    template: str = Form(...),
+    originalName: str = Form(""),
+    sample: UploadFile = File(None),
+):
+    require_loopback(request)
+    try:
+        raw = json.loads(template)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, "template 须为 JSON 字符串") from exc
+    if not isinstance(raw, dict):
+        raise HTTPException(400, "template 须为 JSON 对象")
+
+    original_name = (originalName or "").strip()
+    existing = None
+    if original_name:
+        try:
+            existing = load_doc_recipe(original_name)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, "模板不存在：" + original_name) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        raw["createdAt"] = existing.get("createdAt") or ""
+
+    sample_data = None
+    sample_filename = ""
+    if sample is not None:
+        sample_data = await sample.read()
+        sample_filename = sample.filename or ""
+    elif existing and existing.get("sample"):
+        sample_name = str(existing["sample"])
+        sample_path = DOC_RECIPES_DIR / "samples" / sample_name
+        if sample_path.is_file():
+            sample_data = sample_path.read_bytes()
+            sample_filename = sample_name
+
+    try:
+        saved = save_doc_recipe(
+            raw,
+            sample_data=sample_data,
+            sample_filename=sample_filename,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    if existing and existing.get("name") != saved.get("name"):
+        delete_doc_recipe(str(existing["name"]))
+    return saved
+
+
+@app.delete("/api/doc-recipes/{name}")
+async def api_doc_recipes_delete(name: str, request: Request):
+    require_loopback(request)
+    try:
+        delete_doc_recipe(name)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "模板不存在") from exc
+    return {"ok": True}
 
 
 @app.post("/api/web-fetch-scan")

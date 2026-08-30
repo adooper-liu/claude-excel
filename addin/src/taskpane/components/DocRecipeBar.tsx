@@ -1,0 +1,367 @@
+/**
+ * DocRecipeBar — document-recognition templates (doc-recipe).
+ * User-authored field dictionaries + format rules used when extracting a
+ * document. P0: list / create / rename / delete via a text editor.
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { API_BASE } from "../../services/api-config";
+
+export type DocRecipeSummary = {
+  name: string;
+  description?: string;
+  fieldCount: number;
+  updatedAt?: string;
+  sample?: string;
+};
+
+export type DocRecipeField = {
+  name: string;
+  type: string;
+  source?: string;
+  format?: Record<string, unknown>;
+};
+
+interface Props {
+  disabled: boolean;
+  onChanged?: () => void;
+}
+
+const FIELD_TYPES = ["text", "number", "date", "amount", "percent"];
+
+async function readJson(r: Response): Promise<Record<string, unknown>> {
+  const text = await r.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { detail: text };
+  }
+}
+
+async function getJson(path: string): Promise<Record<string, unknown>> {
+  const r = await fetch(API_BASE + path);
+  const data = await readJson(r);
+  if (!r.ok) {
+    throw new Error(String((data as { detail?: string }).detail || r.statusText || "请求失败"));
+  }
+  return data;
+}
+
+function parseFieldsText(text: string): DocRecipeField[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("[")) {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!Array.isArray(parsed)) {
+      throw new Error("字段 JSON 必须是数组");
+    }
+    return parsed.map(function (item, i) {
+      const f = item as { name?: unknown; type?: unknown; source?: unknown; format?: unknown };
+      if (!f || typeof f !== "object" || !f.name) {
+        throw new Error("第 " + (i + 1) + " 个字段缺少 name");
+      }
+      const type = String(f.type || "text").toLowerCase();
+      const field: DocRecipeField = {
+        name: String(f.name),
+        type: FIELD_TYPES.indexOf(type) >= 0 ? type : "text",
+      };
+      if (f.source) field.source = String(f.source);
+      if (f.format && typeof f.format === "object") {
+        field.format = f.format as Record<string, unknown>;
+      }
+      return field;
+    });
+  }
+  return trimmed
+    .split("\n")
+    .map(function (line) {
+      return line.trim();
+    })
+    .filter(Boolean)
+    .map(function (line) {
+      const parts = line.split(/[:：]/).map(function (s) {
+        return s.trim();
+      });
+      const name = parts[0] || "";
+      const type = FIELD_TYPES.indexOf(parts[1] || "") >= 0 ? parts[1] as string : "text";
+      const field: DocRecipeField = { name: name, type: type };
+      const source = parts.slice(2).join(":").trim();
+      if (source) field.source = source;
+      return field;
+    });
+}
+
+function fieldsToText(fields: DocRecipeField[]): string {
+  if (fields.some(function (f) {
+    return f.format && Object.keys(f.format).length > 0;
+  })) {
+    return JSON.stringify(fields);
+  }
+  return fields
+    .map(function (f) {
+      const type = FIELD_TYPES.indexOf(f.type) >= 0 ? f.type : "text";
+      return f.source ? f.name + ":" + type + ":" + f.source : f.name + ":" + type;
+    })
+    .join("\n");
+}
+
+export default function DocRecipeBar({ disabled, onChanged }: Props): JSX.Element {
+  const [recipes, setRecipes] = useState<DocRecipeSummary[]>([]);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [originalName, setOriginalName] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [fieldsText, setFieldsText] = useState("");
+  const [sampleFile, setSampleFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const sampleRef = useRef<HTMLInputElement>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await getJson("/api/doc-recipes");
+      setRecipes((data.recipes as DocRecipeSummary[]) || []);
+      setErr("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  useEffect(function () {
+    void refresh();
+  }, [refresh]);
+
+  const openCreate = useCallback(() => {
+    setOriginalName("");
+    setName("");
+    setDescription("");
+    setFieldsText("");
+    setSampleFile(null);
+    if (sampleRef.current) sampleRef.current.value = "";
+    setErr("");
+    setFormOpen(true);
+  }, []);
+
+  const openEdit = useCallback(
+    (r: DocRecipeSummary) => {
+      setOriginalName(r.name);
+      setName(r.name);
+      setDescription(r.description || "");
+      setFieldsText("");
+      setSampleFile(null);
+      if (sampleRef.current) sampleRef.current.value = "";
+      setErr("");
+      setFormOpen(true);
+      void (async () => {
+        try {
+          const data = await getJson("/api/doc-recipes/" + encodeURIComponent(r.name));
+          const fields = (data as { fields?: DocRecipeField[] }).fields || [];
+          setFieldsText(fieldsToText(fields));
+        } catch (e) {
+          setErr(e instanceof Error ? e.message : String(e));
+        }
+      })();
+    },
+    []
+  );
+
+  const save = useCallback(async () => {
+    if (saving || disabled) return;
+    const templateName = name.trim();
+    if (!templateName) {
+      setErr("请填写模板名");
+      return;
+    }
+    let fields: DocRecipeField[];
+    try {
+      fields = parseFieldsText(fieldsText);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    if (!fields.length) {
+      setErr("请至少填写一个字段（每行：字段名:类型:来源，或粘贴 JSON 数组）");
+      return;
+    }
+    setSaving(true);
+    setErr("");
+    try {
+      const form = new FormData();
+      form.append(
+        "template",
+        JSON.stringify({ name: templateName, description: description.trim(), fields: fields })
+      );
+      if (originalName) form.append("originalName", originalName);
+      if (sampleFile) form.append("sample", sampleFile, sampleFile.name);
+      const r = await fetch(API_BASE + "/api/doc-recipes", { method: "POST", body: form });
+      const data = await readJson(r);
+      if (!r.ok) {
+        throw new Error(String((data as { detail?: string }).detail || r.statusText || "保存失败"));
+      }
+      setFormOpen(false);
+      setOriginalName("");
+      if (sampleRef.current) sampleRef.current.value = "";
+      setSampleFile(null);
+      await refresh();
+      onChanged?.();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, disabled, name, description, fieldsText, originalName, sampleFile, refresh, onChanged]);
+
+  const remove = useCallback(
+    async (templateName: string) => {
+      if (disabled || busy) return;
+      if (!window.confirm("删除模板「" + templateName + "」？")) return;
+      setBusy(true);
+      setErr("");
+      try {
+        const r = await fetch(API_BASE + "/api/doc-recipes/" + encodeURIComponent(templateName), {
+          method: "DELETE",
+        });
+        const data = await readJson(r);
+        if (!r.ok) {
+          throw new Error(String((data as { detail?: string }).detail || r.statusText || "删除失败"));
+        }
+        if (originalName === templateName) {
+          setFormOpen(false);
+          setOriginalName("");
+        }
+        await refresh();
+        onChanged?.();
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [disabled, busy, originalName, refresh, onChanged]
+  );
+
+  return (
+    <div className="fetch-bar doc-recipe-bar">
+      <div className="fetch-row doc-recipe-head">
+        <span className="knowledge-title">识别模板</span>
+        <button type="button" className="knowledge-upload-btn" disabled={disabled || busy} onClick={openCreate}>
+          + 新建
+        </button>
+      </div>
+      {recipes.length > 0 && (
+        <ul className="knowledge-doc-list">
+          {recipes.map(function (r) {
+            return (
+              <li key={r.name}>
+                <span className="knowledge-doc-name" title={r.name}>
+                  {r.name}
+                  {r.sample ? " · 样例" : ""}
+                </span>
+                <span className="knowledge-doc-meta">
+                  {r.fieldCount} 字段{r.updatedAt ? " · " + String(r.updatedAt).slice(0, 10) : ""}
+                </span>
+                <button
+                  type="button"
+                  className="doc-recipe-edit"
+                  disabled={disabled || busy}
+                  aria-label={"编辑 " + r.name}
+                  onClick={() => openEdit(r)}
+                >
+                  改
+                </button>
+                <button
+                  type="button"
+                  className="prompt-del"
+                  disabled={disabled || busy}
+                  aria-label={"删除 " + r.name}
+                  onClick={() => void remove(r.name)}
+                >
+                  ✕
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {!recipes.length && !err && (
+        <p className="skill-install-note">
+          还没有识别模板。新建一个：填字段名/类型/来源，上传文档时选它自动清洗。
+        </p>
+      )}
+      {formOpen && (
+        <div className="doc-recipe-form">
+          <input
+            className="knowledge-path-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="模板名（唯一）"
+            aria-label="模板名"
+            disabled={saving}
+          />
+          <input
+            className="knowledge-path-input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="说明（可选）"
+            aria-label="模板说明"
+            disabled={saving}
+          />
+          <textarea
+            className="doc-recipe-fields"
+            rows={5}
+            value={fieldsText}
+            onChange={(e) => setFieldsText(e.target.value)}
+            placeholder={"字段字典，每行：字段名:类型:来源\n类型：text / number / date / amount / percent\n或直接粘贴 JSON 数组"}
+            aria-label="字段字典"
+            disabled={saving}
+          />
+          <div className="doc-recipe-form-actions">
+            <input
+              ref={sampleRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.tif,.tiff,.bmp,.pdf,image/*,application/pdf"
+              className="skill-file-input"
+              onChange={(e) => setSampleFile(e.target.files?.[0] || null)}
+              aria-label="参考样例"
+            />
+            <button
+              type="button"
+              className="knowledge-upload-btn"
+              disabled={saving}
+              onClick={() => sampleRef.current?.click()}
+            >
+              {sampleFile ? "样例：已选" : "上传样例"}
+            </button>
+            <button
+              type="button"
+              className="pdf-confirm-cancel"
+              disabled={saving}
+              onClick={() => {
+                setFormOpen(false);
+                setOriginalName("");
+                setSampleFile(null);
+                setErr("");
+              }}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="pdf-confirm-ok"
+              disabled={saving || !name.trim()}
+              onClick={() => void save()}
+            >
+              {saving ? "保存中…" : originalName ? "保存改动" : "创建"}
+            </button>
+          </div>
+          <p className="skill-install-note">
+            样例只存不解析（P0）。number 字段按 numberStyle 归一化千分位/小数点。
+          </p>
+        </div>
+      )}
+      {err && <p className="fetch-err">{err}</p>}
+    </div>
+  );
+}
