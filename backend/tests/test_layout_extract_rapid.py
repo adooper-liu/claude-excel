@@ -58,27 +58,34 @@ class _FakeTableEngine:
 
 
 class _FakeOCROutput:
+    # line-level boxes (RapidOCR semantic): one text line per box
     boxes = [
-        _quad(15, 15, 75, 27),     # \u53d1\u7968\u53f7\u7801:
-        _quad(150, 15, 220, 27),   # 12345678
-        _quad(20, 70, 40, 82),     # \u54c1\u540d (table cell)
-        _quad(120, 70, 140, 82),   # \u91d1\u989d (table cell)
-        _quad(240, 70, 260, 82),   # \u7a0e\u7387 (table cell)
-        _quad(20, 100, 50, 112),   # A\u4ea7\u54c1 (table cell)
-        _quad(120, 100, 160, 112), # 1,234.56 (table cell)
-        _quad(240, 100, 264, 112), # 13% (table cell)
+        _quad(15, 12, 240, 26),    # \u53d1\u7968\u53f7\u7801: 12345678
+        _quad(15, 30, 240, 44),    # \u5f00\u7968\u65e5\u671f: 2026-08-30
+        _quad(20, 70, 50, 82),     # \u54c1\u540d (table header)
+        _quad(120, 70, 150, 82),   # \u91d1\u989d
+        _quad(240, 70, 270, 82),   # \u7a0e\u7387
+        _quad(20, 100, 60, 112),   # A\u4ea7\u54c1 (data)
+        _quad(120, 100, 170, 112), # 1,234.56
+        _quad(240, 100, 274, 112), # 13%
+        _quad(20, 130, 60, 142),   # B\u4ea7\u54c1 (data)
+        _quad(120, 130, 160, 142), # 56.00
+        _quad(240, 130, 274, 142), # 13%
     ]
     txts = [
-        "\u53d1\u7968\u53f7\u7801:",
-        "12345678",
+        "\u53d1\u7968\u53f7\u7801: 12345678",
+        "\u5f00\u7968\u65e5\u671f: 2026-08-30",
         "\u54c1\u540d",
         "\u91d1\u989d",
         "\u7a0e\u7387",
         "A\u4ea7\u54c1",
         "1,234.56",
         "13%",
+        "B\u4ea7\u54c1",
+        "56.00",
+        "13%",
     ]
-    scores = [0.99] * 8
+    scores = [0.99] * 11
 
 
 class _FakeOCREngine:
@@ -141,10 +148,16 @@ def test_rapid_malformed_html_never_raises():
     assert table.rows == []
 
 
-def test_rapid_empty_table_html_drops_table(monkeypatch):
+def test_rapid_empty_table_html_falls_back_to_positional(monkeypatch):
     _patch_engines(monkeypatch, table=_FakeTableEngine(pred_htmls=[]))
     layout = layout_extract.extract_layout_from_image_rapid(_image())
-    assert layout.tables == []
+    # RapidTable gave nothing -> positional rows from OCR boxes still build the table
+    assert len(layout.tables) == 1
+    assert layout.tables[0].headers == ["\u54c1\u540d", "\u91d1\u989d", "\u7a0e\u7387"]
+    assert layout.tables[0].rows == [
+        ["A\u4ea7\u54c1", "1,234.56", "13%"],
+        ["B\u4ea7\u54c1", "56.00", "13%"],
+    ]
     assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
 
 
@@ -188,16 +201,18 @@ def test_rapid_raise_falls_back_not_crash(monkeypatch):
     assert calls == [image]
 
 
-def test_rapid_table_region_crash_falls_back(monkeypatch):
+def test_rapid_table_region_crash_falls_back_to_positional(monkeypatch):
     class _BrokenTableEngine:
         def __call__(self, image):
             raise RuntimeError("table engine boom")
 
     _patch_engines(monkeypatch, table=_BrokenTableEngine())
     layout = layout_extract.extract_layout_from_image_rapid(_image())
-    # KV from text region survives; table region crash must not kill the run
+    # KV survives and the table is rebuilt from positional OCR boxes
     assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
-    assert layout.tables == []
+    assert len(layout.tables) == 1
+    assert layout.tables[0].headers == ["\u54c1\u540d", "\u91d1\u989d", "\u7a0e\u7387"]
+    assert len(layout.tables[0].rows) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -303,3 +318,59 @@ def test_tesseract_path_sets_engine(monkeypatch):
     monkeypatch.setattr(layout_extract, "_rapid_available", lambda: False)
     layout = layout_extract.extract_layout_from_image(_image())
     assert layout.engine == "tesseract"
+
+
+def test_whole_form_table_region_skips_rapidtable_and_rebuilds(monkeypatch):
+    """A table region covering most of the page (dense invoice form) must not
+    be fed to RapidTable (garbled grid); positional rows rebuild the table."""
+    calls = []
+
+    class _WholeFormLayoutOutput:
+        boxes = [[0, 0, 600, 200]]  # whole page = table
+        class_names = ["table"]
+        scores = [0.95]
+
+    class _WholeFormLayoutEngine:
+        def __call__(self, image):
+            return _WholeFormLayoutOutput()
+
+    class _SpyTableEngine:
+        def __call__(self, image):
+            calls.append(image)
+            return _FakeTableOutput()
+
+    _patch_engines(monkeypatch, layout=_WholeFormLayoutEngine(), table=_SpyTableEngine())
+    layout = layout_extract.extract_layout_from_image_rapid(_image())
+    assert calls == []  # RapidTable must not run on a whole-page form
+    assert len(layout.tables) == 1
+    assert layout.tables[0].headers == ["\u54c1\u540d", "\u91d1\u989d", "\u7a0e\u7387"]
+    assert layout.tables[0].rows == [
+        ["A\u4ea7\u54c1", "1,234.56", "13%"],
+        ["B\u4ea7\u54c1", "56.00", "13%"],
+    ]
+    assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
+
+
+def test_rapid_ocr_lines_preserves_reading_order():
+    boxes = [_quad(150, 15, 220, 27), _quad(15, 12, 90, 26), _quad(10, 60, 60, 75)]
+    txts = ["middle", "first", "third"]
+    assert layout_extract._rapid_ocr_lines(boxes, txts) == [
+        "first",
+        "middle",
+        "third",
+    ]
+
+
+def test_positional_rows_split_on_cell_count_divergence():
+    """A short noise row must not join the following detail table (regression:
+    flush() used to keep the short run and merge it into the next table)."""
+    rows = [
+        ["a", "b", "c"],
+        ["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"],
+        ["d1", "d2", "d3", "d4", "d5", "d6", "d7"],
+    ]
+    tables = layout_extract._tables_from_positional_rows(rows)
+    assert len(tables) == 1
+    assert tables[0].headers == ["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"]
+    assert len(tables[0].rows) == 1
+    assert tables[0].rows[0] == ["d1", "d2", "d3", "d4", "d5", "d6", "d7"]

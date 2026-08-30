@@ -70,10 +70,17 @@ class LayoutDocument:
     engine: str = ""
 
     def first_table(self) -> TableBlock | None:
-        """The largest/most relevant table, or None when no table was found."""
+        """The most relevant table: prefers a header row (detail table), then
+        size (rows x columns).  None when no table was found."""
         if not self.tables:
             return None
-        return max(self.tables, key=lambda t: len(t.rows) * max((len(r) for r in t.rows), default=0))
+        return max(
+            self.tables,
+            key=lambda t: (
+                len(t.headers),
+                len(t.rows) * max((len(r) for r in t.rows), default=0),
+            ),
+        )
 
     def kv(self, label: str) -> str | None:
         """Value for the N-th KV item whose label matches (normalized).

@@ -367,6 +367,13 @@ RAPID_PACKAGES = ("rapid_layout", "rapid_table", "rapidocr")
 #: Layout class names treated as table regions (EN + ZH).
 TABLE_REGION_LABELS = {"table", "\u8868\u683c"}
 
+#: A "table" region covering more than this share of the image is a whole-page
+#: dense form (invoices) — RapidTable on it yields a garbled grid; fall back to
+#: positional row reconstruction from the OCR boxes instead.
+WHOLE_FORM_AREA_RATIO = 0.5
+#: Minimum number of cells for a positional row to count as a table row.
+MIN_TABLE_CELLS = 3
+
 #: Layout class names whose OCR text never holds header KVs (figures/stamps).
 NON_TEXT_REGION_LABELS = {
     "figure", "figure_caption", "image", "picture", "logo", "stamp", "seal",
@@ -461,35 +468,93 @@ def _box_overlap(
     return (ix * iy) / area >= min_ratio
 
 
-def _group_ocr_lines(
-    ocr_boxes: list[Any],
-    ocr_txts: list[str],
-    ocr_scores: list[Any],
-    region: tuple[float, float, float, float] | None = None,
+def _rapid_ocr_lines(
+    ocr_boxes: list[Any], ocr_txts: list[Any]
 ) -> list[str]:
-    """Group OCR boxes (optionally inside a region) into text lines."""
-    items: list[tuple[float, float, float, float, str]] = []
+    """RapidOCR lines in reading order (top-to-bottom, left-to-right).
+
+    RapidOCR boxes are line-level already, so we must NOT re-cluster them with
+    the tesseract word-box logic (vertical-overlap grouping merges dense forms
+    into one giant line).  Sort by position and take the text as-is.
+    """
+    items: list[tuple[float, float, str]] = []
     for box, txt in zip(ocr_boxes, ocr_txts):
         text = str(txt or "").strip()
         if not text:
             continue
-        bbox = _quad_bbox(box)
-        if region is not None and not _box_overlap(region, bbox):
+        x1, y1, _x2, _y2 = _quad_bbox(box)
+        items.append((y1, x1, text))
+    items.sort(key=lambda it: (it[0], it[1]))
+    return [text for _y, _x, text in items]
+
+
+def _rows_from_rapid_ocr(
+    ocr_boxes: list[Any], ocr_txts: list[Any]
+) -> list[list[str]]:
+    """Group RapidOCR line-level boxes into positional rows (one cell each).
+
+    Boxes are grouped by TOP edge proximity (``y1``) with a tolerance based on
+    the GLOBAL median box height, so one tall title box does not inflate the
+    tolerance and swallow whole rows of a dense form.
+    """
+    items: list[tuple[float, float, float, str]] = []
+    for box, txt in zip(ocr_boxes, ocr_txts):
+        text = str(txt or "").strip()
+        if not text:
             continue
-        items.append((bbox[0], bbox[1], bbox[2], bbox[3], text))
-    words = [
-        {
-            "left": x1,
-            "top": y1,
-            "width": max(1.0, x2 - x1),
-            "height": max(1.0, y2 - y1),
-            "conf": -1,
-            "text": text,
-        }
-        for x1, y1, x2, y2, text in items
+        x1, y1, x2, y2 = _quad_bbox(box)
+        items.append((y1, (x1 + x2) / 2.0, y2 - y1, text))
+    if not items:
+        return []
+    heights = sorted(height for _y1, _xc, height, _t in items)
+    median_height = heights[len(heights) // 2]
+    tolerance = max(8.0, median_height * 0.6)
+    items.sort(key=lambda it: (it[0], it[1]))
+
+    rows: list[list[tuple[float, str]]] = []
+    current: list[tuple[float, float, str]] = []
+    for y1, xc, _height, text in items:
+        if current and y1 - current[0][0] > tolerance:
+            rows.append(current)
+            current = []
+        current.append((y1, xc, text))
+    if current:
+        rows.append(current)
+    return [
+        [text for _y1, _xc, text in sorted(cells, key=lambda c: c[1])]
+        for cells in rows
     ]
-    lines = _cluster_lines(words)
-    return [" ".join(w["text"] for w in line["words"]) for line in lines]
+
+
+def _tables_from_positional_rows(rows: list[list[str]]) -> list[TableBlock]:
+    """Build TableBlocks from rows that have enough cells (>= MIN_TABLE_CELLS)."""
+    from pdf_extract import _looks_like_header
+
+    table_indices = [
+        index for index, row in enumerate(rows) if len(row) >= MIN_TABLE_CELLS
+    ]
+    tables: list[TableBlock] = []
+    run: list[int] = []
+
+    def flush() -> None:
+        nonlocal run
+        if len(run) >= 2:
+            cells = [rows[index] for index in run]
+            headers = list(cells[0]) if _looks_like_header(cells[0]) else []
+            data_rows = cells[1:] if headers else cells
+            tables.append(TableBlock(name="\u8868", headers=headers, rows=data_rows))
+        run = []
+
+    for index in table_indices:
+        if run:
+            # a row whose cell count diverges from the run's row breaks the table
+            if index != run[-1] + 1 or abs(
+                len(rows[index]) - len(rows[run[-1]])
+            ) > 1:
+                flush()
+        run.append(index)
+    flush()
+    return tables
 
 
 class _TableHtmlParser(HTMLParser):
@@ -578,10 +643,32 @@ def _rapid_table_block(
     return table
 
 
+def _region_area_ratio(
+    region: tuple[float, float, float, float], image: Any
+) -> float:
+    """Share of the image covered by a layout region (0..1)."""
+    try:
+        width, height = image.size
+    except Exception:
+        width = height = 0.0
+    area = max(1.0, float(width) * float(height)) if width and height else 1.0
+    rx1, ry1, rx2, ry2 = region
+    return max(0.0, (rx2 - rx1) * (ry2 - ry1)) / area
+
+
 def _layout_from_rapid(
     image: Any, layout_engine: Any, table_engine: Any, ocr_engine: Any
 ) -> LayoutDocument:
-    """Run layout regions + table HTML + OCR text through LayoutDocument."""
+    """Run RapidOCR text + layout regions + table HTML through LayoutDocument.
+
+    Dense invoice forms are classified by the layout model as one giant
+    "table" region, so:
+    - raw_text / kvs come from the FULL RapidOCR text (position order), not
+      from "text regions" the layout model may not produce;
+    - RapidTable is only trusted for scoped table regions (< 50% of the
+      image); whole-form regions fall back to positional row reconstruction
+      from the RapidOCR boxes (one cell per line-level box).
+    """
     layout_result = layout_engine(image)
     boxes = _attr_list(layout_result, "boxes")
     class_names = _attr_list(layout_result, "class_names")
@@ -595,24 +682,26 @@ def _layout_from_rapid(
         _attr_list(ocr_result, "scores") if ocr_result is not None else []
     )
 
-    kvs: list[KVItem] = []
-    for box, label in zip(boxes, class_names):
-        if not _is_text_region(label):
-            continue
-        region = tuple(float(v) for v in box[:4])  # type: ignore[index]
-        lines = _group_ocr_lines(ocr_boxes, ocr_txts, ocr_scores, region)
-        kvs.extend(_kvs_from_text("\n".join(lines)))
+    # Full-document text + key-values (layout classification is unreliable on
+    # dense forms, so do not restrict KV extraction to "text regions").
+    raw_text = "\n".join(_rapid_ocr_lines(ocr_boxes, ocr_txts))
+    kvs = _kvs_from_text(raw_text)
 
+    # Tables: RapidTable for scoped table regions, positional fallback else.
     tables: list[TableBlock] = []
     for index, (box, label) in enumerate(zip(boxes, class_names)):
         if not _is_table_region(label):
             continue
         region = tuple(float(v) for v in box[:4])  # type: ignore[index]
+        if _region_area_ratio(region, image) > WHOLE_FORM_AREA_RATIO:
+            continue
         table = _rapid_table_block(image, table_engine, region, index)
         if table is not None:
             tables.append(table)
+    if not tables:
+        rows = _rows_from_rapid_ocr(ocr_boxes, ocr_txts)
+        tables = _tables_from_positional_rows(rows)
 
-    raw_text = "\n".join(_group_ocr_lines(ocr_boxes, ocr_txts, ocr_scores))
     layout = LayoutDocument(kvs=kvs, tables=tables, raw_text=raw_text)
     layout.engine = "rapid"
     return layout
