@@ -18,6 +18,30 @@ def _headers(api_key: str) -> dict[str, str]:
     }
 
 
+def _api_error_text(status_code: int, body_text: str) -> str:
+    """Turn an upstream error body into a friendly one-line error.
+
+    Prefers the provider's ``error.message`` (e.g. the rate-limit reset hint)
+    over dumping raw JSON, and special-cases 429 so the user knows it is a
+    quota issue rather than a bug.
+    """
+    message = ""
+    try:
+        payload = json.loads(body_text or "{}")
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                message = str(error.get("message") or "").strip()
+            if not message:
+                message = str(payload.get("message") or "").strip()
+    except (TypeError, ValueError):
+        message = ""
+    detail = (message or (body_text or "").strip())[:300]
+    if status_code == 429:
+        return "Error: 模型限流（429），已达使用上限：%s" % detail
+    return "Error: API 返回 %s：%s" % (status_code, detail)
+
+
 def _payload(
     messages: list[dict],
     system_prompt: Optional[Any],
@@ -137,7 +161,7 @@ async def chat_complete(
                     "content": [
                         {
                             "type": "text",
-                            "text": f"Error: API returned {resp.status_code}: {resp.text[:300]}",
+                            "text": _api_error_text(resp.status_code, resp.text),
                         }
                     ]
                 }
@@ -170,7 +194,7 @@ async def chat_stream(
             ) as resp:
                 if resp.status_code != 200:
                     text = await resp.aread()
-                    yield f"Error: API returned {resp.status_code}: {text.decode()[:300]}"
+                    yield _api_error_text(resp.status_code, text.decode(errors="replace"))
                     return
 
                 async for line in resp.aiter_lines():
