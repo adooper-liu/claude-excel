@@ -177,7 +177,7 @@ def _patch_local_image_pipeline(monkeypatch, layout):
     monkeypatch.setattr(
         pdf_extract,
         "extract_image_ocr_local",
-        lambda data: "发票号码: 12345678\nA\t1,234.56\nB\t56.00",
+        lambda data, image=None: "发票号码: 12345678\nA\t1,234.56\nB\t56.00",
     )
 
 

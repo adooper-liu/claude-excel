@@ -104,6 +104,37 @@ def test_extract_pdf_text_layer():
     assert result["preview"].startswith("This is")
 
 
+def test_local_image_preprocesses_once(monkeypatch):
+    from io import BytesIO
+
+    from layout_doc import LayoutDocument
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("L", (32, 32), 255).save(buffer, "PNG")
+    png = buffer.getvalue()
+
+    calls = {"n": 0}
+    real_preprocess = pdf_extract.preprocess_image
+
+    def counting(data):
+        calls["n"] += 1
+        return real_preprocess(data)
+
+    monkeypatch.setattr(pdf_extract, "preprocess_image", counting)
+    monkeypatch.setattr(
+        pdf_extract, "extract_layout_from_image", lambda image: LayoutDocument()
+    )
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_image_ocr_local",
+        lambda data, image=None: "Item\tAmount\nWidget\t1,234.56",
+    )
+    result = pdf_extract.extract_pdf(png, ocr_backend="local", filename="invoice.png")
+    assert result["kind"] == "table"
+    assert calls["n"] == 1
+
+
 def test_proposed_recipe_falls_back_to_flat_rows_when_layout_empty(monkeypatch):
     from layout_doc import LayoutDocument
 
@@ -114,7 +145,7 @@ def test_proposed_recipe_falls_back_to_flat_rows_when_layout_empty(monkeypatch):
     monkeypatch.setattr(
         pdf_extract,
         "extract_image_ocr_local",
-        lambda data: "Item\tAmount\nWidget\t1,234.56",
+        lambda data, image=None: "Item\tAmount\nWidget\t1,234.56",
     )
     result = pdf_extract.extract_pdf(
         b"\x89PNG\r\n\x1a\nxxxx", ocr_backend="local", filename="invoice.png"
@@ -135,7 +166,7 @@ def test_proposed_recipe_falls_back_when_layout_extraction_raises(monkeypatch):
     monkeypatch.setattr(
         pdf_extract,
         "extract_image_ocr_local",
-        lambda data: "Item\tAmount\nWidget\t1,234.56",
+        lambda data, image=None: "Item\tAmount\nWidget\t1,234.56",
     )
     result = pdf_extract.extract_pdf(
         b"\x89PNG\r\n\x1a\nxxxx", ocr_backend="local", filename="invoice.png"

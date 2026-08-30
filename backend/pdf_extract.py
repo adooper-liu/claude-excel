@@ -270,7 +270,14 @@ def _is_image(data: bytes) -> bool:
     return any(data.startswith(magic) for magic in _IMAGE_MAGIC)
 
 
-def extract_image_ocr_local(data: bytes) -> str:
+def extract_image_ocr_local(
+    data: bytes, image: Any | None = None
+) -> str:
+    """OCR an image; preprocesses ``data`` unless a preprocessed image is given.
+
+    Callers that also need the preprocessed image for layout extraction pass
+    it in so preprocessing runs exactly once per upload.
+    """
     tesseract_cmd = _find_tesseract()
     if tesseract_cmd is None:
         raise ValueError(
@@ -279,11 +286,11 @@ def extract_image_ocr_local(data: bytes) -> str:
         )
     try:
         import pytesseract
-        from PIL import Image
     except ImportError as exc:
         raise ValueError("pytesseract/Pillow 未安装，本地 OCR 不可用。") from exc
     pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
-    image = preprocess_image(data)
+    if image is None:
+        image = preprocess_image(data)
     text = pytesseract.image_to_string(image, lang="chi_sim+eng")
     return str(text or "").replace("\x0c", "\n").strip()
 
@@ -373,16 +380,12 @@ def extract_pdf(
     page_count = 0
     try:
         if is_image:
-            ocr_text = (
-                extract_image_ocr_local(data)
-                if backend == "local"
-                else extract_pdf_ocr_cloud(data, filename)
-            )
             if backend == "local":
-                layout = _safe_layout(
-                    extract_layout_from_image, preprocess_image(data)
-                )
+                preprocessed = preprocess_image(data)
+                ocr_text = extract_image_ocr_local(data, preprocessed)
+                layout = _safe_layout(extract_layout_from_image, preprocessed)
             else:
+                ocr_text = extract_pdf_ocr_cloud(data, filename)
                 layout = _safe_layout(doc_parse_to_layout, ocr_text)
             ocr_rows = _rows_from_ocr_text(ocr_text)
             if ocr_rows:
