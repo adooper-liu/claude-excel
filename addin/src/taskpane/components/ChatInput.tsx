@@ -7,7 +7,7 @@ import PromptMenu from './PromptMenu';
 import FetchBar, { type FetchRows } from './FetchBar';
 import KnowledgeBar from './KnowledgeBar';
 import PdfAttachSection from './PdfAttachSection';
-import DocRecipeBar from './DocRecipeBar';
+import DocRecipeBar, { type DocRecipeProposal } from './DocRecipeBar';
 import { filterSlashSkills, parseSlashCommand, slashQuery, type SlashSkill } from '../../services/slash-skills';
 import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../services/user-skills';
 import { operatorCatalogByGroup } from '../../services/operator-catalog';
@@ -38,6 +38,7 @@ export default function ChatInput({
   const [showPdf, setShowPdf] = useState(false);
   const [showDocRecipe, setShowDocRecipe] = useState(false);
   const [docRecipeVersion, setDocRecipeVersion] = useState(0);
+  const [docRecipeDraft, setDocRecipeDraft] = useState<DocRecipeProposal | null>(null);
   const [installPasteOpen, setInstallPasteOpen] = useState(false);
   const [showOperatorRef, setShowOperatorRef] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -214,13 +215,22 @@ export default function ChatInput({
       {showDocRecipe && (
         <DocRecipeBar
           disabled={disabled || isStreaming}
-          onChanged={() => setDocRecipeVersion((v) => v + 1)}
+          onChanged={() => {
+            setDocRecipeVersion((v) => v + 1);
+            setDocRecipeDraft(null);
+          }}
+          draft={docRecipeDraft}
         />
       )}
       {showPdf && (
         <PdfAttachSection
           disabled={disabled || isStreaming}
           refreshKey={docRecipeVersion}
+          onProposeRecipe={(recipe) => {
+            setDocRecipeDraft(recipe);
+            setShowDocRecipe(true);
+            setShowPdf(false);
+          }}
         />
       )}
     <div className="chat-input-area">

@@ -6,9 +6,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "../../services/api-config";
 import { writeToNewSheet } from "../../excel";
-import { type DocRecipeSummary } from "./DocRecipeBar";
+import { type DocRecipeField, type DocRecipeSummary } from "./DocRecipeBar";
 
 type OcrBackend = "local" | "cloud";
+
+type PdfSheet = {
+  name: string;
+  rows: (string | number)[][];
+};
+
+type DocRecipeProposal = {
+  name: string;
+  description?: string;
+  fields: DocRecipeField[];
+};
 
 type PdfResult = {
   kind: "text" | "table" | "scanned";
@@ -20,6 +31,8 @@ type PdfResult = {
   tables?: number;
   ocrBackend?: "local" | "cloud" | null;
   error?: string;
+  sheets?: PdfSheet[];
+  proposedRecipe?: DocRecipeProposal;
 };
 
 type PendingLand = {
@@ -28,11 +41,14 @@ type PendingLand = {
   rows?: (string | number)[][];
   sheetName?: string;
   ocrBackend?: "local" | "cloud" | null;
+  sheets?: PdfSheet[];
+  proposedRecipe?: DocRecipeProposal;
 };
 
 interface Props {
   disabled: boolean;
   refreshKey?: number;
+  onProposeRecipe?: (recipe: DocRecipeProposal) => void;
 }
 
 const DOC_EXT = /\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i;
@@ -73,6 +89,22 @@ function resultRows(data: PdfResult): (string | number)[][] {
     );
 }
 
+function resultSheets(data: PdfResult): PdfSheet[] {
+  if (!Array.isArray(data.sheets)) return [];
+  return data.sheets
+    .filter((s) => s && typeof s.name === "string" && Array.isArray(s.rows))
+    .map((s) => ({
+      name: s.name,
+      rows: s.rows
+        .filter(Array.isArray)
+        .map((row) =>
+          row.map((cell) =>
+            cell === null || cell === undefined ? "" : typeof cell === "number" ? cell : String(cell)
+          )
+        ),
+    }));
+}
+
 function pickFileFromDrop(dt: DataTransfer | null): File | null {
   if (!dt) return null;
   if (dt.files?.length) return dt.files[0];
@@ -80,7 +112,7 @@ function pickFileFromDrop(dt: DataTransfer | null): File | null {
   return item?.kind === "file" ? item.getAsFile() : null;
 }
 
-export default function PdfAttachSection({ disabled, refreshKey }: Props): JSX.Element {
+export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe }: Props): JSX.Element {
   const [backend, setBackend] = useState<OcrBackend>("local");
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -142,8 +174,9 @@ export default function PdfAttachSection({ disabled, refreshKey }: Props): JSX.E
         } else {
           const data = await extract(file, useBackend);
           const rows = resultRows(data);
+          const sheets = resultSheets(data);
           const text = String(data.text || "").trim();
-          if (!rows.length && !text) {
+          if (!rows.length && !sheets.length && !text) {
             throw new Error(String(data.error || "没有可用的文本或表格。"));
           }
           setPendingResult({
@@ -152,6 +185,8 @@ export default function PdfAttachSection({ disabled, refreshKey }: Props): JSX.E
             rows: rows.length ? rows : undefined,
             sheetName: String(data.sheetName || file.name).slice(0, 28),
             ocrBackend: data.ocrBackend,
+            sheets: sheets.length ? sheets : undefined,
+            proposedRecipe: data.proposedRecipe,
           });
         }
         setPendingFile(null);
@@ -186,17 +221,30 @@ export default function PdfAttachSection({ disabled, refreshKey }: Props): JSX.E
 
   const landSheet = useCallback(async () => {
     const p = pendingResult;
-    if (!p || !p.rows || busy) return;
+    if (!p || busy) return;
+    if (!p.rows && !(p.sheets && p.sheets.length)) return;
     setBusy(true);
     setErr("");
     try {
       // OCR 文本里 `=` 开头的单元格可能被 Excel 误当公式，加零宽前缀转文本
-      const rows = p.rows.map((row) =>
-        row.map((c) => (typeof c === "string" && c.startsWith("=") ? "​" + c : c))
-      );
-      const written = await writeToNewSheet(p.sheetName || "文档", rows);
-      setStatus("表已进簿：「" + written + "」（" + p.rows.length + " 行）");
-      setPendingResult((prev) => (prev && prev.text ? { ...prev, rows: undefined } : null));
+      const escapeRow = (row: (string | number)[]) =>
+        row.map((c) => (typeof c === "string" && c.startsWith("=") ? "​" + c : c));
+      if (p.sheets && p.sheets.length) {
+        const writtenNames: string[] = [];
+        let totalRows = 0;
+        for (const sheet of p.sheets) {
+          const rows = sheet.rows.map(escapeRow);
+          const written = await writeToNewSheet(sheet.name || p.sheetName || "文档", rows);
+          writtenNames.push(written);
+          totalRows += rows.length;
+        }
+        setStatus("已写入 " + writtenNames.length + " 张表：「" + writtenNames.join("」「") + "」（共 " + totalRows + " 行）");
+      } else if (p.rows) {
+        const rows = p.rows.map(escapeRow);
+        const written = await writeToNewSheet(p.sheetName || "文档", rows);
+        setStatus("表已进簿：「" + written + "」（" + p.rows.length + " 行）");
+      }
+      setPendingResult((prev) => (prev && prev.text ? { ...prev, rows: undefined, sheets: undefined } : null));
     } catch (e) {
       const err = e as { code?: string; name?: string; message?: string; errorLocation?: string };
       const parts = [err.code, err.name, err.message, err.errorLocation].filter(Boolean);
@@ -417,6 +465,16 @@ export default function PdfAttachSection({ disabled, refreshKey }: Props): JSX.E
                 disabled={busy}
               >
                 进工作簿
+              </button>
+            )}
+            {pendingResult.proposedRecipe && (
+              <button
+                type="button"
+                className="pdf-confirm-alt"
+                onClick={() => onProposeRecipe?.(pendingResult.proposedRecipe!)}
+                disabled={busy}
+              >
+                据此生成模板
               </button>
             )}
           </div>

@@ -22,9 +22,16 @@ export type DocRecipeField = {
   format?: Record<string, unknown>;
 };
 
+export type DocRecipeProposal = {
+  name: string;
+  description?: string;
+  fields: DocRecipeField[];
+};
+
 interface Props {
   disabled: boolean;
   onChanged?: () => void;
+  draft?: DocRecipeProposal | null;
 }
 
 const FIELD_TYPES = ["text", "number", "date", "amount", "percent"];
@@ -124,7 +131,7 @@ function fieldsToText(fields: DocRecipeField[]): string {
     .join("\n");
 }
 
-export default function DocRecipeBar({ disabled, onChanged }: Props): JSX.Element {
+export default function DocRecipeBar({ disabled, onChanged, draft }: Props): JSX.Element {
   const [recipes, setRecipes] = useState<DocRecipeSummary[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -161,6 +168,23 @@ export default function DocRecipeBar({ disabled, onChanged }: Props): JSX.Elemen
     setErr("");
     setFormOpen(true);
   }, []);
+
+  // A draft (auto-generated template from an OCR result) opens the create
+  // form pre-filled; the user can still rename/edit fields before saving.
+  useEffect(
+    function () {
+      if (!draft) return;
+      setOriginalName("");
+      setName(draft.name || "");
+      setDescription(draft.description || "");
+      setFieldsText(fieldsToText(Array.isArray(draft.fields) ? draft.fields : []));
+      setSampleFile(null);
+      if (sampleRef.current) sampleRef.current.value = "";
+      setErr("");
+      setFormOpen(true);
+    },
+    [draft]
+  );
 
   const openEdit = useCallback(
     (r: DocRecipeSummary) => {
