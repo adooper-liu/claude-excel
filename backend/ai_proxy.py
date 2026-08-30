@@ -84,6 +84,7 @@ def _payload_openai(
     max_tokens: int,
     tools: Optional[list],
     stream: bool,
+    inject_web_search: bool = True,
 ) -> dict:
     system_parts = _collect_system(system_prompt, messages)
     api_messages: list[dict[str, Any]] = []
@@ -103,7 +104,7 @@ def _payload_openai(
         "stream": stream,
     }
     merged = list(tools or [])
-    if should_inject_web_search(get_base_url()):
+    if inject_web_search and should_inject_web_search(get_base_url()):
         merged = merge_web_search(merged)
     if merged:
         body["tools"] = _tools_openai(merged)
@@ -188,6 +189,7 @@ def _payload(
     max_tokens: int,
     tools: Optional[list],
     stream: bool,
+    inject_web_search: bool = True,
 ) -> dict:
     system_parts: list[str] = []
     if isinstance(system_prompt, str) and system_prompt:
@@ -219,7 +221,7 @@ def _payload(
     if system_parts:
         body["system"] = [{"type": "text", "text": s} for s in system_parts]
     merged = list(tools or [])
-    if should_inject_web_search(get_base_url()):
+    if inject_web_search and should_inject_web_search(get_base_url()):
         merged = merge_web_search(merged)
     if merged:
         body["tools"] = merged
@@ -274,6 +276,7 @@ async def chat_complete(
     model: Optional[str] = None,
     max_tokens: int = 4096,
     tools: Optional[list] = None,
+    inject_web_search: bool = True,
 ) -> dict:
     """Non-streaming proxy. Returns an Anthropic-style messages response dict."""
     base_url = get_base_url()
@@ -287,9 +290,15 @@ async def chat_complete(
         }
 
     body = (
-        _payload_openai(messages, system_prompt, model, max_tokens, tools, stream=False)
+        _payload_openai(
+            messages, system_prompt, model, max_tokens, tools, stream=False,
+            inject_web_search=inject_web_search,
+        )
         if openai
-        else _payload(messages, system_prompt, model, max_tokens, tools, stream=False)
+        else _payload(
+            messages, system_prompt, model, max_tokens, tools, stream=False,
+            inject_web_search=inject_web_search,
+        )
     )
     endpoint = f"{base_url}/v1/chat/completions" if openai else f"{base_url}/v1/messages"
     try:
@@ -315,6 +324,7 @@ async def chat_stream(
     model: Optional[str] = None,
     max_tokens: int = 4096,
     tools: Optional[list] = None,
+    inject_web_search: bool = True,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat completion, yielding text deltas (OpenAI- and Anthropic-style)."""
     base_url = get_base_url()
@@ -325,9 +335,15 @@ async def chat_stream(
         return
 
     body = (
-        _payload_openai(messages, system_prompt, model, max_tokens, tools, stream=True)
+        _payload_openai(
+            messages, system_prompt, model, max_tokens, tools, stream=True,
+            inject_web_search=inject_web_search,
+        )
         if openai
-        else _payload(messages, system_prompt, model, max_tokens, tools, stream=True)
+        else _payload(
+            messages, system_prompt, model, max_tokens, tools, stream=True,
+            inject_web_search=inject_web_search,
+        )
     )
     endpoint = f"{base_url}/v1/chat/completions" if openai else f"{base_url}/v1/messages"
     try:

@@ -155,3 +155,16 @@ def test_openai_to_anthropic_accepts_content_parts_list():
         }
     )
     assert out["content"] == [{"type": "text", "text": "你好"}]
+
+def test_payload_web_search_injection_flag(monkeypatch):
+    monkeypatch.setattr(ai_proxy, "get_base_url", lambda: "https://api.deepseek.com/anthropic")
+    body_on = ai_proxy._payload(
+        [{"role": "user", "content": "hi"}], "sys", "m", 100, [], False,
+        inject_web_search=True,
+    )
+    assert any(t.get("name") == "web_search" for t in body_on["tools"])
+    body_off = ai_proxy._payload(
+        [{"role": "user", "content": "hi"}], "sys", "m", 100, [], False,
+        inject_web_search=False,
+    )
+    assert "tools" not in body_off

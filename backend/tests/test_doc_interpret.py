@@ -53,8 +53,9 @@ def test_parse_interpret_json_rejects_invalid():
 
 
 def test_interpret_document_uses_injected_model_call():
-    async def fake_call(messages, system_prompt=None, model=None):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
         assert "臆造" in system_prompt
+        assert inject_web_search is False
         return {
             "content": [
                 {
@@ -71,7 +72,7 @@ def test_interpret_document_uses_injected_model_call():
 
 
 def test_interpret_document_surfaces_model_error():
-    async def fake_call(messages, system_prompt=None, model=None):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
         return {"content": [{"type": "text", "text": "Error: No API key configured."}]}
 
     with pytest.raises(ValueError, match="No API key"):
@@ -117,8 +118,9 @@ def test_parse_recipe_json_defaults_type_and_group():
 
 
 def test_propose_recipe_ai_uses_injected_model_call():
-    async def fake_call(messages, system_prompt=None, model=None):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
         assert "碎片" in system_prompt
+        assert inject_web_search is False
         return {
             "content": [
                 {
@@ -139,7 +141,7 @@ def test_propose_recipe_ai_uses_injected_model_call():
 
 
 def test_propose_recipe_ai_surfaces_model_error():
-    async def fake_call(messages, system_prompt=None, model=None):
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True):
         return {"content": [{"type": "text", "text": "Error: No API key configured."}]}
 
     with pytest.raises(ValueError, match="No API key"):

@@ -147,10 +147,15 @@ async def interpret_document(
     """Ask the configured model to interpret OCR text into normalized JSON."""
     call = model_call or ai_proxy.chat_complete
     messages = build_interpret_messages(ocr_text, rows)
-    payload = await call(messages, system_prompt=SYSTEM_PROMPT, model=model)
+    payload = await call(
+        messages, system_prompt=SYSTEM_PROMPT, model=model, inject_web_search=False
+    )
     text = _extract_text(payload)
     if not text:
-        raise ValueError("模型未返回可读内容（模型响应为空或格式不符，可切换模型/重试）")
+        snippet = str(payload)[:200]
+        raise ValueError(
+            "模型未返回可读内容（响应为空或格式不符，可切换模型/重试）；响应片段：" + snippet
+        )
     if text.startswith("Error:"):
         raise ValueError(text)
     return parse_interpret_json(text)
@@ -261,10 +266,15 @@ async def propose_recipe_ai(
     """Ask the model to clean up OCR noise into a doc-recipe template candidate."""
     call = model_call or ai_proxy.chat_complete
     messages = build_recipe_messages(ocr_text, rows)
-    payload = await call(messages, system_prompt=RECIPE_SYSTEM_PROMPT, model=model)
+    payload = await call(
+        messages, system_prompt=RECIPE_SYSTEM_PROMPT, model=model, inject_web_search=False
+    )
     text = _extract_text(payload)
     if not text:
-        raise ValueError("模型未返回可读内容（模型响应为空或格式不符，可切换模型/重试）")
+        snippet = str(payload)[:200]
+        raise ValueError(
+            "模型未返回可读内容（响应为空或格式不符，可切换模型/重试）；响应片段：" + snippet
+        )
     if text.startswith("Error:"):
         raise ValueError(text)
     parsed = parse_recipe_json(text)
