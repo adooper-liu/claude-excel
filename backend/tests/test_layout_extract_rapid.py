@@ -9,10 +9,12 @@ or raise.  Rapid classes are mocked — no real models are loaded here.
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-import pytest  # noqa: E402
+import types  # noqa: E402
 from PIL import Image  # noqa: E402
 
 import layout_extract  # noqa: E402
@@ -99,6 +101,7 @@ def _patch_engines(monkeypatch, table=None, ocr=None, layout=None):
 def test_rapid_builds_table_and_kvs(monkeypatch):
     _patch_engines(monkeypatch)
     layout = layout_extract.extract_layout_from_image_rapid(_image())
+    assert layout.engine == "rapid"
     assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
     # table cell text must not leak into kvs
     assert layout.kv("\u54c1\u540d") is None
@@ -197,6 +200,78 @@ def test_rapid_table_region_crash_falls_back(monkeypatch):
     assert layout.tables == []
 
 
+# ---------------------------------------------------------------------------
+# Real-machine smoke tests (Task 10). The tests above mock ``_rapid_engines``,
+# so they cannot catch a wrong import name or result attribute name in the
+# real packages. These run only when the optional RapidStruct packages are
+# installed (CI auto-skips via ``importorskip``) and lock the REAL API surface
+# the production code depends on. First run instantiates real models and may
+# download weights.
+# ---------------------------------------------------------------------------
+
+
+def _exposes(obj, name):
+    """True when obj (dict-like or attribute object) exposes ``name``."""
+    if isinstance(obj, dict):
+        return name in obj
+    return hasattr(obj, name)
+
+
+def _smoke_image():
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (640, 160), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((20, 30), "Invoice 12345678", fill="black")
+    draw.text((20, 60), "Amount 1,234.56", fill="black")
+    return image
+
+
+def test_rapid_real_engines_api_surface():
+    """Real import names and result attribute names must match production."""
+    pytest.importorskip("rapid_layout")
+    pytest.importorskip("rapid_table")
+    pytest.importorskip("rapidocr")
+
+    image = _smoke_image()
+
+    # Real import names must resolve and instantiate (locks _rapid_engines).
+    layout_engine, table_engine, ocr_engine = layout_extract._rapid_engines()
+
+    # Real result objects must expose the attribute names _attr() reads.
+    layout_result = layout_engine(image)
+    assert _exposes(layout_result, "boxes")
+    assert _exposes(layout_result, "class_names")
+
+    ocr_result = ocr_engine(image)
+    assert _exposes(ocr_result, "boxes")
+    assert _exposes(ocr_result, "txts")
+    assert _exposes(ocr_result, "scores")
+
+    table_result = table_engine(image)
+    assert _exposes(table_result, "pred_htmls")
+
+
+def test_rapid_real_path_does_not_fall_back(monkeypatch):
+    """End-to-end: the rapid path must not silently drop to tesseract.
+
+    Requires models to be downloaded and the synthetic image to be detected by
+    RapidLayout; a real document image is the stronger check on a dev machine.
+    """
+    pytest.importorskip("rapid_layout")
+    pytest.importorskip("rapid_table")
+    pytest.importorskip("rapidocr")
+
+    image = _smoke_image()
+
+    def boom(_image):
+        raise AssertionError("rapid path silently fell back to tesseract")
+
+    monkeypatch.setattr(layout_extract, "_extract_layout_tesseract", boom)
+    layout = layout_extract.extract_layout_from_image_rapid(image)
+    assert isinstance(layout, LayoutDocument)
+
+
 def test_rapid_handles_ndarray_ocr_boxes(monkeypatch):
     """Real RapidOCR returns np.ndarray boxes; truthiness must not explode."""
     np = pytest.importorskip("numpy")
@@ -212,3 +287,19 @@ def test_rapid_handles_ndarray_ocr_boxes(monkeypatch):
     assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
     assert layout.tables[0].headers == ["\u54c1\u540d", "\u91d1\u989d", "\u7a0e\u7387"]
     assert layout.tables[0].rows == [["A\u4ea7\u54c1", "1,234.56", "13%"]]
+
+
+def test_tesseract_path_sets_engine(monkeypatch):
+    """The word-box fallback must label the layout as tesseract."""
+    import sys
+    import types
+
+    fake = types.SimpleNamespace()
+    fake.Output = types.SimpleNamespace(DICT="dict")
+    fake.image_to_data = lambda image, lang, output_type: {
+        "left": [], "top": [], "width": [], "height": [], "conf": [], "text": []
+    }
+    monkeypatch.setitem(sys.modules, "pytesseract", fake)
+    monkeypatch.setattr(layout_extract, "_rapid_available", lambda: False)
+    layout = layout_extract.extract_layout_from_image(_image())
+    assert layout.engine == "tesseract"

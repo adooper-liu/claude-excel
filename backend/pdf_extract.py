@@ -319,10 +319,12 @@ def _layout_from_result_rows(rows: Any) -> Any:
     data_rows = table_rows[1:] if headers else table_rows
     if not headers and not data_rows:
         return None
-    return LayoutDocument(
+    layout = LayoutDocument(
         tables=[TableBlock(name="表1", headers=headers, rows=data_rows)],
         raw_text="\n".join(" ".join(str(c) for c in r) for r in table_rows),
     )
+    layout.engine = "rows"
+    return layout
 
 
 def _enrich(
@@ -343,6 +345,7 @@ def _enrich(
                 layout = from_rows
     if layout is None:
         return result
+    result["layoutEngine"] = getattr(layout, "engine", "") or None
     has_group = any(
         isinstance(field, dict) and field.get("group")
         for field in (template.get("fields") if isinstance(template, dict) else [])

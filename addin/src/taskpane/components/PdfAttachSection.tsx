@@ -37,6 +37,7 @@ type PdfResult = {
   pages?: number;
   tables?: number;
   ocrBackend?: "local" | "cloud" | null;
+  layoutEngine?: string | null;
   error?: string;
   sheets?: PdfSheet[];
   proposedRecipe?: DocRecipeProposal;
@@ -48,6 +49,7 @@ type PendingLand = {
   rows?: (string | number)[][];
   sheetName?: string;
   ocrBackend?: "local" | "cloud" | null;
+  layoutEngine?: string | null;
   sheets?: PdfSheet[];
   proposedRecipe?: DocRecipeProposal;
 };
@@ -110,6 +112,23 @@ function resultSheets(data: PdfResult): PdfSheet[] {
           )
         ),
     }));
+}
+
+function layoutEngineLabel(engine: string): string {
+  switch (engine) {
+    case "rapid":
+      return "RapidStruct（版面+表格）";
+    case "tesseract":
+      return "tesseract 词盒聚类（回退）";
+    case "doc-parse":
+      return "云 doc-parse 结构化";
+    case "pdf-text":
+      return "PDF 文本层";
+    case "rows":
+      return "表格行兜底";
+    default:
+      return engine;
+  }
 }
 
 function pickFileFromDrop(dt: DataTransfer | null): File | null {
@@ -259,6 +278,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
             rows: rows.length ? rows : undefined,
             sheetName: String(data.sheetName || file.name).slice(0, 28),
             ocrBackend: data.ocrBackend,
+            layoutEngine: data.layoutEngine || undefined,
             sheets: sheets.length ? sheets : undefined,
             proposedRecipe: data.proposedRecipe,
           };
@@ -598,6 +618,11 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
           )}
           {pendingResult.rows && (
             <p className="skill-install-note">表格 {pendingResult.rows.length} 行，可写入工作簿。</p>
+          )}
+          {pendingResult.layoutEngine && (
+            <p className="skill-install-note">
+              识别引擎：{layoutEngineLabel(pendingResult.layoutEngine)}
+            </p>
           )}
           <div className="pdf-confirm-actions">
             <button

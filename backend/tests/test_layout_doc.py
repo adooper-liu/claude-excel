@@ -20,8 +20,10 @@ def test_to_dict_from_dict_round_trip():
             )
         ],
         raw_text="发票号码: 12345678",
+        engine="rapid",
     )
     assert LayoutDocument.from_dict(doc.to_dict()) == doc
+    assert LayoutDocument.from_dict(doc.to_dict()).engine == "rapid"
 
 
 def test_empty_document_has_no_first_table():

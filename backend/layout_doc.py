@@ -65,6 +65,9 @@ class LayoutDocument:
     kvs: list[KVItem] = field(default_factory=list)
     tables: list[TableBlock] = field(default_factory=list)
     raw_text: str = ""
+    #: Which extraction engine produced this layout: rapid / tesseract /
+    #: doc-parse / pdf-text / rows ("" = unknown).
+    engine: str = ""
 
     def first_table(self) -> TableBlock | None:
         """The largest/most relevant table, or None when no table was found."""
@@ -109,6 +112,7 @@ class LayoutDocument:
                 for table in self.tables
             ],
             "raw_text": self.raw_text,
+            "engine": self.engine,
         }
 
     @classmethod
@@ -133,4 +137,5 @@ class LayoutDocument:
             kvs=kvs,
             tables=tables,
             raw_text=str(data.get("raw_text") or ""),
+            engine=str(data.get("engine") or ""),
         )

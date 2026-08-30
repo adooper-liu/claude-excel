@@ -211,7 +211,9 @@ def _extract_layout_tesseract(image: Any) -> LayoutDocument:
                 "text": text,
             }
         )
-    return cluster_words(words)
+    layout = cluster_words(words)
+    layout.engine = "tesseract"
+    return layout
 
 
 def extract_layout_from_image(image: Any) -> LayoutDocument:
@@ -272,6 +274,7 @@ def extract_layout_from_pdf(data: bytes) -> LayoutDocument:
     rows, _count = extract_pdf_tables(data)
     if rows or (text and len(text.strip()) >= 10):
         layout = LayoutDocument(raw_text=text)
+        layout.engine = "pdf-text"
         layout.kvs = _kvs_from_text(text)
         if rows:
             headers = list(rows[0]) if _looks_like_header(rows[0]) else []
@@ -286,6 +289,7 @@ def extract_layout_from_pdf(data: bytes) -> LayoutDocument:
         return layout
 
     layout = LayoutDocument()
+    page_engines: list[str] = []
     for image in _render_pdf_pages(data):
         page_layout = extract_layout_from_image(image)
         layout.kvs.extend(page_layout.kvs)
@@ -294,6 +298,12 @@ def extract_layout_from_pdf(data: bytes) -> LayoutDocument:
             layout.raw_text = (
                 (layout.raw_text + "\n" + page_layout.raw_text).strip()
             )
+        if page_layout.engine:
+            page_engines.append(page_layout.engine)
+    if "rapid" in page_engines:
+        layout.engine = "rapid"
+    elif "tesseract" in page_engines:
+        layout.engine = "tesseract"
     return layout
 
 
@@ -341,7 +351,9 @@ def doc_parse_to_layout(payload: Any) -> LayoutDocument:
         text = _longest_text(payload) or ""
     else:
         text = str(payload or "")
-    return _layout_from_markdown(text)
+    layout = _layout_from_markdown(text)
+    layout.engine = "doc-parse"
+    return layout
 
 # ---------------------------------------------------------------------------
 # RapidStruct path (Task 10): layout regions + table HTML -> LayoutDocument.
@@ -601,7 +613,9 @@ def _layout_from_rapid(
             tables.append(table)
 
     raw_text = "\n".join(_group_ocr_lines(ocr_boxes, ocr_txts, ocr_scores))
-    return LayoutDocument(kvs=kvs, tables=tables, raw_text=raw_text)
+    layout = LayoutDocument(kvs=kvs, tables=tables, raw_text=raw_text)
+    layout.engine = "rapid"
+    return layout
 
 
 def extract_layout_from_image_rapid(image: Any) -> LayoutDocument:
