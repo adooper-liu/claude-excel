@@ -110,14 +110,27 @@ def _payload_openai(
     return body
 
 
+def _openai_text(value: Any) -> str:
+    """OpenAI ``message.content`` may be a string or a list of text parts."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts: list[str] = []
+        for part in value:
+            if isinstance(part, dict) and part.get("text"):
+                parts.append(str(part.get("text")))
+        return "".join(parts)
+    return ""
+
+
 def _openai_to_anthropic(data: dict) -> dict:
     """Convert an OpenAI chat completion into an Anthropic-style response."""
     choice = (data.get("choices") or [{}])[0]
     message = choice.get("message") or {}
     finish = choice.get("finish_reason")
     content: list[dict[str, Any]] = []
-    text = message.get("content")
-    if isinstance(text, str) and text:
+    text = _openai_text(message.get("content"))
+    if text:
         content.append({"type": "text", "text": text})
     tool_calls = message.get("tool_calls") or []
     for tc in tool_calls:

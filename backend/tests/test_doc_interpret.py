@@ -188,3 +188,7 @@ def test_parse_interpret_json_keeps_large_ids_as_text():
         {"label": "机器编号", "value": "661532633869"},
         {"label": "价税合计", "value": 108.1},
     ]
+
+def test_extract_text_accepts_parts_without_type():
+    payload = {"content": [{"text": "第一段"}, {"text": "第二段"}]}
+    assert doc_interpret._extract_text(payload) == "第一段\n第二段"

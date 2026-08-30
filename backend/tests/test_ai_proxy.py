@@ -135,3 +135,23 @@ def test_chat_complete_openai_branch_allows_empty_key(monkeypatch):
 
     result = asyncio.run(ai_proxy.chat_complete([{"role": "user", "content": "hi"}]))
     assert result["content"] == [{"type": "text", "text": "hi"}]
+
+def test_openai_text_handles_string_and_parts_list():
+    assert ai_proxy._openai_text("hi") == "hi"
+    assert ai_proxy._openai_text([{"type": "text", "text": "你"}, {"type": "text", "text": "好"}]) == "你好"
+    assert ai_proxy._openai_text([{"text": "no-type"}]) == "no-type"
+    assert ai_proxy._openai_text(None) == ""
+
+
+def test_openai_to_anthropic_accepts_content_parts_list():
+    out = ai_proxy._openai_to_anthropic(
+        {
+            "choices": [
+                {
+                    "message": {"content": [{"type": "text", "text": "你好"}]},
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+    )
+    assert out["content"] == [{"type": "text", "text": "你好"}]

@@ -42,7 +42,7 @@ def _extract_text(payload: dict[str, Any]) -> str:
         parts = [
             str(part.get("text") or "")
             for part in content
-            if isinstance(part, dict) and part.get("type") == "text"
+            if isinstance(part, dict) and part.get("text")
         ]
         if parts:
             return "\n".join(parts)
@@ -150,7 +150,7 @@ async def interpret_document(
     payload = await call(messages, system_prompt=SYSTEM_PROMPT, model=model)
     text = _extract_text(payload)
     if not text:
-        raise ValueError("模型未返回可读内容")
+        raise ValueError("模型未返回可读内容（模型响应为空或格式不符，可切换模型/重试）")
     if text.startswith("Error:"):
         raise ValueError(text)
     return parse_interpret_json(text)
@@ -264,7 +264,7 @@ async def propose_recipe_ai(
     payload = await call(messages, system_prompt=RECIPE_SYSTEM_PROMPT, model=model)
     text = _extract_text(payload)
     if not text:
-        raise ValueError("模型未返回可读内容")
+        raise ValueError("模型未返回可读内容（模型响应为空或格式不符，可切换模型/重试）")
     if text.startswith("Error:"):
         raise ValueError(text)
     parsed = parse_recipe_json(text)
