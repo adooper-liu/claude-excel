@@ -296,7 +296,11 @@ async def interpret_document_stream(
             return
         # Empty stream = thinking consumed the whole budget -> retry once.
         messages = build_interpret_messages(ocr_text, rows, anti_thinking=True)
-    yield ("error", "模型未返回可读内容（思考过长或空回复，请切换非思考模型或重试）")
+    yield (
+        "error",
+        "模型未返回可读内容（思考过长或空回复；建议在设置里把小快模型配成非思考模型，"
+        "如 deepseek-chat / qwen-turbo / glm-4-flash / ollama qwen2.5:7b，或稍后重试）",
+    )
 
 
 RECIPE_SYSTEM_PROMPT = """你是文档模板设计助手。你会收到一段 OCR 识别出的文档文本（可能含错字、噪声、碎片）。
