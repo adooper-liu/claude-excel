@@ -32,6 +32,7 @@ export interface ProviderConfig {
   baseUrl: string;
   model: string;
   smallFastModel: string;
+  apiStyle: string;
 }
 
 const API_VERSION = '2023-06-01';
@@ -41,6 +42,7 @@ const DEFAULT_CONFIG: ProviderConfig = {
   baseUrl: 'https://api.deepseek.com/anthropic',
   model: '',
   smallFastModel: '',
+  apiStyle: '',
 };
 
 let apiMode: ApiMode = 'proxy';

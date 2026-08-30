@@ -38,12 +38,14 @@ export async function setupDirectMode(key: string): Promise<AuthState> {
 export async function setupProxyMode(url: string, apiKey: string, provider = 'custom'): Promise<AuthState> {
   const trimmedUrl = url.trim();
   if (!trimmedUrl) return { status: 'error', error: 'Proxy URL is empty.' };
-  if (!apiKey.trim()) return { status: 'error', error: 'API key is empty.' };
 
   // In proxy mode, let the backend validate the key (avoids CORS issues)
   setProxyUrl(trimmedUrl);
 
   const config = getProviderConfig();
+  const openai = config.apiStyle === 'openai';
+  if (!apiKey.trim() && !openai) return { status: 'error', error: 'API key is empty.' };
+
   try {
     const resp = await fetch(`${trimmedUrl}/api/key/set`, {
       method: 'POST',
@@ -54,6 +56,7 @@ export async function setupProxyMode(url: string, apiKey: string, provider = 'cu
         baseUrl: config.baseUrl,
         model: config.model,
         smallFastModel: config.smallFastModel,
+        apiStyle: config.apiStyle,
       }),
     });
     if (!resp.ok) {
@@ -71,6 +74,7 @@ export interface SwitchResult extends AuthState {
   baseUrl?: string;
   model?: string;
   smallFastModel?: string;
+  apiStyle?: string;
 }
 
 /** 切换当前生效的 provider（后端按 activeProvider 路由所有 AI 请求）。 */
@@ -90,12 +94,14 @@ export async function switchProvider(proxyUrl: string, provider: string): Promis
       baseUrl?: string;
       model?: string;
       smallFastModel?: string;
+      apiStyle?: string;
     };
     return {
       status: 'ready',
       baseUrl: data.baseUrl,
       model: data.model,
       smallFastModel: data.smallFastModel,
+      apiStyle: data.apiStyle,
     };
   } catch {
     return { status: 'error', error: 'Cannot connect to backend. Check the URL and ensure the server is running.' };

@@ -19,6 +19,7 @@ interface Props {
 interface ProviderPreset {
   name: string;
   baseUrl: string;
+  apiStyle?: string;
 }
 
 const PRESETS: Record<string, ProviderPreset> = {
@@ -27,6 +28,7 @@ const PRESETS: Record<string, ProviderPreset> = {
   glm: { name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/anthropic' },
   minimax: { name: 'MiniMax', baseUrl: 'https://api.minimax.chat/anthropic' },
   custom: { name: 'Custom (手动输入)', baseUrl: '' },
+  ollama: { name: 'Ollama（本机）', baseUrl: 'http://localhost:11434', apiStyle: 'openai' },
 };
 
 export default function SettingsPanel({ onReady }: Props): JSX.Element {
@@ -37,11 +39,12 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
   const [baseUrl, setBaseUrlState] = useState(PRESETS.deepseek.baseUrl);
   const [model, setModelState] = useState('');
   const [smallFastModel, setSmallFastModelState] = useState('');
+  const [apiStyle, setApiStyle] = useState('');
   const [models, setModels] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [status, setStatus] = useState<{ type: AuthStatus; msg?: string }>({ type: 'unconfigured' });
   const [loading, setLoading] = useState(false);
-  const [configuredProviders, setConfiguredProviders] = useState<Record<string, { hasKey: boolean; baseUrl: string; model: string }>>({});
+  const [configuredProviders, setConfiguredProviders] = useState<Record<string, { hasKey: boolean; baseUrl: string; model: string; apiStyle?: string }>>({});
   const [activeProvider, setActiveProvider] = useState('deepseek');
 
   // 切换 preset 只填 baseUrl，模型清空待重新获取
@@ -49,6 +52,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
     setPreset(key);
     const p = PRESETS[key];
     if (p && p.baseUrl) setBaseUrlState(p.baseUrl);
+    setApiStyle((p && p.apiStyle) || '');
     setModelState('');
     setSmallFastModelState('');
     setModels([]);
@@ -60,7 +64,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       const r = await fetch(`${proxyUrl}/api/config`);
       if (r.ok) {
         const c = (await r.json()) as {
-          providers?: Record<string, { hasKey: boolean; baseUrl: string; model: string }>;
+          providers?: Record<string, { hasKey: boolean; baseUrl: string; model: string; apiStyle?: string }>;
           activeProvider?: string;
         };
         if (c.providers) setConfiguredProviders(c.providers);
@@ -77,7 +81,8 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
 
   // 用 key 从云端拉取该 provider 的模型列表
   const handleFetchModels = useCallback(async () => {
-    if (!baseUrl.trim() || !apiKey.trim()) {
+    const openai = apiStyle === 'openai';
+    if (!baseUrl.trim() || (!apiKey.trim() && !openai)) {
       setStatus({ type: 'error', msg: '请先填 baseUrl 和 API Key' });
       return;
     }
@@ -86,7 +91,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
       const r = await fetch(`${proxyUrl}/api/models/list`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ baseUrl, apiKey }),
+        body: JSON.stringify({ baseUrl, apiKey, apiStyle }),
       });
       if (!r.ok) {
         const err = await r.text();
@@ -115,7 +120,7 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
 
     try {
       // Save provider config globally
-      setProviderConfig({ baseUrl, model, smallFastModel });
+      setProviderConfig({ baseUrl, model, smallFastModel, apiStyle });
       setMode(mode);
 
       let result: { status: AuthStatus; error?: string };
@@ -150,10 +155,12 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
         if (res.baseUrl) setBaseUrlState(res.baseUrl);
         if (res.model) setModelState(res.model);
         if (res.smallFastModel) setSmallFastModelState(res.smallFastModel);
+        if (res.apiStyle) setApiStyle(res.apiStyle);
         setProviderConfig({
           baseUrl: res.baseUrl || '',
           model: res.model || '',
           smallFastModel: res.smallFastModel || '',
+          apiStyle: res.apiStyle || '',
         });
         if (PRESETS[pid]) setPreset(pid);
         setActiveProvider(pid);
@@ -207,7 +214,10 @@ export default function SettingsPanel({ onReady }: Props): JSX.Element {
             </option>
           ))}
         </select>
-        <button onClick={handleFetchModels} disabled={loadingModels || !apiKey.trim()}>
+        <button
+          onClick={handleFetchModels}
+          disabled={loadingModels || (!apiKey.trim() && apiStyle !== 'openai')}
+        >
           {loadingModels ? '获取中...' : '获取模型列表'}
         </button>
       </div>
