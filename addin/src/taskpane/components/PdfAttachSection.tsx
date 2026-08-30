@@ -171,6 +171,34 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
     return data as PdfResult;
   }, [selectedTemplate]);
 
+  const runInterpret = useCallback(async (p: PendingLand) => {
+    if (!p || !p.text || interpretBusy) return;
+    setInterpretBusy(true);
+    setInterpretErr("");
+    try {
+      const response = await fetch(API_BASE + "/api/doc/interpret", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ocrText: p.text, rows: p.rows || [] }),
+      });
+      const data = await readJson(response);
+      if (!response.ok) {
+        throw new Error(String((data as { detail?: string }).detail || response.statusText || "解读失败"));
+      }
+      setInterpretResult(data as unknown as InterpretResult);
+    } catch (e) {
+      setInterpretErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setInterpretBusy(false);
+    }
+  }, [interpretBusy]);
+
+  const interpret = useCallback(async () => {
+    const p = pendingResult;
+    if (!p) return;
+    await runInterpret(p);
+  }, [pendingResult, runInterpret]);
+
   const process = useCallback(
     async (file: File, useBackend: OcrBackend) => {
       if (disabled || busy) return;
@@ -178,10 +206,11 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
       setErr("");
       setStatus("正在解析：" + file.name);
       try {
+        let pending: PendingLand;
         if (TEXT_EXT.test(file.name)) {
           const text = await file.text();
           if (!text.trim()) throw new Error("文件没有可索引的正文");
-          setPendingResult({ file, text });
+          pending = { file, text };
         } else {
           const data = await extract(file, useBackend);
           const rows = resultRows(data);
@@ -190,7 +219,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
           if (!rows.length && !sheets.length && !text) {
             throw new Error(String(data.error || "没有可用的文本或表格。"));
           }
-          setPendingResult({
+          pending = {
             file,
             text: text || undefined,
             rows: rows.length ? rows : undefined,
@@ -198,9 +227,13 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
             ocrBackend: data.ocrBackend,
             sheets: sheets.length ? sheets : undefined,
             proposedRecipe: data.proposedRecipe,
-          });
+          };
         }
+        setPendingResult(pending);
         setPendingFile(null);
+        if (pending.text) {
+          void runInterpret(pending);
+        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
         setStatus("");
@@ -208,7 +241,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
         setBusy(false);
       }
     },
-    [busy, disabled, extract]
+    [busy, disabled, extract, runInterpret]
   );
 
   const landKnowledge = useCallback(async () => {
@@ -327,28 +360,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
     [busy]
   );
 
-  const interpret = useCallback(async () => {
-    const p = pendingResult;
-    if (!p || !p.text || busy || interpretBusy) return;
-    setInterpretBusy(true);
-    setInterpretErr("");
-    try {
-      const response = await fetch(API_BASE + "/api/doc/interpret", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ocrText: p.text, rows: p.rows || [] }),
-      });
-      const data = await readJson(response);
-      if (!response.ok) {
-        throw new Error(String((data as { detail?: string }).detail || response.statusText || "解读失败"));
-      }
-      setInterpretResult(data as unknown as InterpretResult);
-    } catch (e) {
-      setInterpretErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setInterpretBusy(false);
-    }
-  }, [pendingResult, busy, interpretBusy]);
+
 
   const interpretLandSheet = useCallback(async () => {
     const p = pendingResult;
@@ -605,14 +617,7 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
           </div>
           {pendingResult.text && (
             <div className="pdf-interpret">
-              <button
-                type="button"
-                className="pdf-confirm-alt"
-                disabled={busy || interpretBusy || proposeBusy}
-                onClick={() => void interpret()}
-              >
-                {interpretBusy ? "解读中…" : interpretResult ? "重新解读" : "AI 解读"}
-              </button>
+              {interpretBusy && <p className="skill-install-note">AI 解读中…</p>}
               {interpretResult && (
                 <div className="pdf-interpret-body">
                   <p className="skill-install-note">
@@ -637,7 +642,29 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
                   </button>
                 </div>
               )}
-              {interpretErr && <p className="fetch-err">{interpretErr}</p>}
+              {interpretErr && (
+                <>
+                  <p className="fetch-err">{interpretErr}</p>
+                  <button
+                    type="button"
+                    className="pdf-confirm-alt"
+                    disabled={busy || interpretBusy || proposeBusy}
+                    onClick={() => void interpret()}
+                  >
+                    重试 AI 解读
+                  </button>
+                </>
+              )}
+              {!interpretBusy && !interpretResult && !interpretErr && (
+                <button
+                  type="button"
+                  className="pdf-confirm-alt"
+                  disabled={busy || interpretBusy || proposeBusy}
+                  onClick={() => void interpret()}
+                >
+                  AI 解读
+                </button>
+              )}
             </div>
           )}
         </div>
