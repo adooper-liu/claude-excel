@@ -79,32 +79,11 @@ def _normalize_fields(raw: Any) -> list[dict[str, Any]]:
         source = str(raw_field.get("source") or "").strip()
         if source:
             field["source"] = source[:100]
-        # position is an optional normalized spatial anchor: [x1, y1, x2, y2]
-        # in 0..1 (relative to the document; detail may be relative to the
-        # table x-extent).  Invalid values are dropped, never fail the recipe.
-        position = _normalize_position(raw_field.get("position"))
-        if position:
-            field["position"] = position
         fmt = _normalize_format(raw_field.get("format"))
         if fmt:
             field["format"] = fmt
         fields.append(field)
     return fields
-
-
-def _normalize_position(raw: Any) -> list[float] | None:
-    """Validate a position anchor: 4 floats each in [0, 1] (or empty)."""
-    if raw is None or raw == "":
-        return None
-    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
-        return None
-    try:
-        values = [float(v) for v in raw]
-    except (TypeError, ValueError):
-        return None
-    if not all(0.0 <= v <= 1.0 for v in values):
-        return None
-    return values
 
 
 def _normalize_sample(raw: Any) -> str:

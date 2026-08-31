@@ -267,3 +267,94 @@ def test_image_ocr_uses_rapid_layout_text_and_rows(monkeypatch):
     assert result["kind"] == "table"
     assert result["text"] == "发票号码: 12345678\n品名 金额\nA 1.5"
     assert result["rows"] == [["品名", "金额"], ["A", "1.5"]]
+
+
+def test_image_extract_template_uses_light_path(monkeypatch):
+    """With a template + rapid available, the full layout path must not run."""
+    from layout_doc import KVItem, LayoutDocument, TableBlock
+
+    layout = LayoutDocument(
+        kvs=[KVItem("\u53d1\u7968\u53f7\u7801", "12345678")],
+        tables=[
+            TableBlock(
+                name="\u8868",
+                headers=["\u54c1\u540d", "\u91d1\u989d"],
+                rows=[["A", "1.5"]],
+            )
+        ],
+        raw_text="\u53d1\u7968\u53f7\u7801: 12345678\n\u54c1\u540d \u91d1\u989d\nA 1.5",
+        engine="rapid",
+    )
+    template = {
+        "name": "t",
+        "fields": [
+            {
+                "name": "\u54c1\u540d",
+                "type": "text",
+                "source": "\u54c1\u540d",
+                "group": "detail",
+            }
+        ],
+    }
+    monkeypatch.setattr(pdf_extract, "preprocess_image", lambda data: object())
+    monkeypatch.setattr(pdf_extract, "_rapid_available", lambda: True)
+    monkeypatch.setattr(
+        pdf_extract, "extract_layout_from_image_light", lambda image: layout
+    )
+
+    def boom(*args, **kwargs):
+        raise AssertionError("full layout path must not run in template light mode")
+
+    monkeypatch.setattr(pdf_extract, "extract_layout_from_image", boom)
+    result = pdf_extract.extract_pdf(
+        b"\x89PNG\r\n\x1a\nxxxx",
+        ocr_backend="local",
+        filename="invoice.png",
+        template=template,
+    )
+    assert result["sheets"] is not None
+    assert result["text"] == layout.raw_text
+
+
+def test_image_extract_template_falls_back_when_light_has_no_table(monkeypatch):
+    """Light path with no table falls back to the full layout path."""
+    from layout_doc import KVItem, LayoutDocument
+
+    light_layout = LayoutDocument(raw_text="\u65e0\u8868\u683c", engine="rapid")
+    full_layout = LayoutDocument(
+        kvs=[KVItem("\u53d1\u7968\u53f7\u7801", "12345678")],
+        raw_text="\u53d1\u7968\u53f7\u7801: 12345678",
+        engine="rapid",
+    )
+    template = {
+        "name": "t",
+        "fields": [
+            {
+                "name": "\u53d1\u7968\u53f7\u7801",
+                "type": "text",
+                "source": "\u53d1\u7968\u53f7\u7801",
+                "group": "header",
+            }
+        ],
+    }
+    monkeypatch.setattr(pdf_extract, "preprocess_image", lambda data: object())
+    monkeypatch.setattr(pdf_extract, "_rapid_available", lambda: True)
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_layout_from_image_light",
+        lambda image: light_layout,
+    )
+    calls = []
+    monkeypatch.setattr(
+        pdf_extract,
+        "extract_layout_from_image",
+        lambda image: (calls.append(1), full_layout)[1],
+    )
+    result = pdf_extract.extract_pdf(
+        b"\x89PNG\r\n\x1a\nxxxx",
+        ocr_backend="local",
+        filename="invoice.png",
+        template=template,
+    )
+    assert calls == [1]
+    assert result["sheets"] is not None

@@ -19,8 +19,10 @@ from config_store import get_config
 from format_clean import apply_recipe, apply_template
 from image_preprocess import preprocess_image
 from layout_extract import (
+    _rapid_available,
     doc_parse_to_layout,
     extract_layout_from_image,
+    extract_layout_from_image_light,
     extract_layout_from_pdf,
 )
 from recipe_propose import propose_recipe
@@ -403,7 +405,20 @@ def extract_pdf(
         if is_image:
             if backend == "local":
                 preprocessed = preprocess_image(data)
-                layout = _safe_layout(extract_layout_from_image, preprocessed)
+                if template and _rapid_available():
+                    # Template mode: one RapidOCR pass is enough (semantic
+                    # source + position anchors); skip RapidLayout/RapidTable.
+                    layout = _safe_layout(
+                        extract_layout_from_image_light, preprocessed
+                    )
+                    if layout is None or not layout.tables:
+                        layout = _safe_layout(
+                            extract_layout_from_image, preprocessed
+                        )
+                else:
+                    layout = _safe_layout(
+                        extract_layout_from_image, preprocessed
+                    )
                 if (
                     layout is not None
                     and getattr(layout, "engine", "") == "rapid"

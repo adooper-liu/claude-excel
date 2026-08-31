@@ -129,48 +129,6 @@ def _clean_field(field: dict[str, Any], value: Any) -> Any:
     return "" if value is None else str(value)
 
 
-def _kv_by_position(
-    layout: Any, position: list[float], tolerance: float = 0.15
-) -> str | None:
-    """Value of the KV whose normalized bbox center is nearest ``position``.
-
-    Spatial fallback only — never a hard gate: nothing found within the
-    tolerance returns None and the field stays empty (same as today).
-    """
-    px = (float(position[0]) + float(position[2])) / 2.0
-    py = (float(position[1]) + float(position[3])) / 2.0
-    best_value: str | None = None
-    best_dist = tolerance
-    for kv in getattr(layout, "kvs", []) or []:
-        if not kv.position:
-            continue
-        cx = (kv.position[0] + kv.position[2]) / 2.0
-        cy = (kv.position[1] + kv.position[3]) / 2.0
-        dist = max(abs(cx - px), abs(cy - py))
-        if dist < best_dist:
-            best_dist = dist
-            best_value = kv.value
-    return best_value
-
-
-def _column_by_position(
-    table: Any, position: list[float], tolerance: float = 0.2
-) -> int | None:
-    """Index of the column whose normalized x-center is nearest ``position[0]``."""
-    column_positions = getattr(table, "column_positions", None)
-    if not column_positions or not position:
-        return None
-    target = float(position[0])
-    best: int | None = None
-    best_dist = tolerance
-    for index, xc in enumerate(column_positions):
-        dist = abs(float(xc) - target)
-        if dist < best_dist:
-            best_dist = dist
-            best = index
-    return best
-
-
 def _detail_sheet(
     layout: LayoutDocument, template_name: str, fields: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -184,8 +142,6 @@ def _detail_sheet(
     for index, field in enumerate(fields):
         source = str(field.get("source") or "").strip()
         column = table.column(source) if source else None
-        if column is None and field.get("position"):
-            column = _column_by_position(table, field["position"])
         indices.append(column if column is not None else index)
     for data_row in table.rows:
         cells = [
@@ -205,8 +161,6 @@ def _header_sheet(
         label = str(field.get("name") or "")
         source = str(field.get("source") or "").strip()
         raw = layout.kv(source) if source else layout.kv(label)
-        if raw is None and field.get("position"):
-            raw = _kv_by_position(layout, field["position"])
         rows.append([label, _clean_field(field, raw if raw is not None else "")])
     return {"name": template_name + "-抬头", "rows": rows}
 

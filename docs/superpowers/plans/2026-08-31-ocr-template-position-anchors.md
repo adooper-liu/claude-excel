@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: closed
 ---
 # 模板 position 锚点：语义为主、位置兜底（2026-08-31）
 
@@ -60,3 +60,6 @@ status: in-progress
   真机：发票 7/14 键值带位置、明细表 8 列 column_positions、proposal 15/21 带 position、
   语义 source 故意改错仍经位置取到 02948319。门禁：后端 347 passed + 2 skip，venv 28 passed。
   效率优化「模板模式跳过布局模型」留 roadmap ⑧ 子项，未做。
+> **结案（2026-08-31 方向 B）**：position 锚点经评估价值低（前端不透传、语义已覆盖、
+> 漂移会静默错值），已按 `refactor(ocr)` 提交回退删除；位置重建表格/列对齐/噪声块/
+> 模板轻量路径保留。本 plan 不再执行。

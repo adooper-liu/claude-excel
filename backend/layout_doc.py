@@ -35,30 +35,19 @@ def normalize_key(text: Any) -> str:
 
 @dataclass
 class KVItem:
-    """A header key-value pair (e.g. 发票号码 -> 12345678).
-
-    ``position`` is the normalized (0..1 relative to the document) bbox of the
-    OCR box this key-value was read from, when known.  Used as a spatial
-    fallback/disambiguator by templates with position anchors.
-    """
+    """A header key-value pair (e.g. 发票号码 -> 12345678)."""
 
     label: str
     value: str
-    position: tuple[float, float, float, float] | None = None
 
 
 @dataclass
 class TableBlock:
-    """One detected table with a normalized header row and data rows.
-
-    ``column_positions`` holds each column's x-center normalized to the
-    table's x-extent (0..1), when the table was reconstructed positionally.
-    """
+    """One detected table with a normalized header row and data rows."""
 
     name: str
     headers: list[str] = field(default_factory=list)
     rows: list[list[str]] = field(default_factory=list)
-    column_positions: list[float] | None = None
 
     def column(self, name: str) -> int | None:
         """Index of the header matching ``name`` (normalized), else None."""
@@ -121,23 +110,13 @@ class LayoutDocument:
         """JSON-serializable dict (kvs / tables / raw_text)."""
         return {
             "kvs": [
-                {
-                    "label": kv.label,
-                    "value": kv.value,
-                    "position": list(kv.position) if kv.position else None,
-                }
-                for kv in self.kvs
+                {"label": kv.label, "value": kv.value} for kv in self.kvs
             ],
             "tables": [
                 {
                     "name": table.name,
                     "headers": list(table.headers),
                     "rows": [list(row) for row in table.rows],
-                    "column_positions": (
-                        list(table.column_positions)
-                        if table.column_positions
-                        else None
-                    ),
                 }
                 for table in self.tables
             ],
@@ -148,20 +127,8 @@ class LayoutDocument:
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "LayoutDocument":
         data = data or {}
-        def _position(value: Any) -> tuple[float, float, float, float] | None:
-            if not isinstance(value, (list, tuple)) or len(value) != 4:
-                return None
-            try:
-                return tuple(float(v) for v in value)  # type: ignore[return-value]
-            except (TypeError, ValueError):
-                return None
-
         kvs = [
-            KVItem(
-                str(item.get("label", "")),
-                str(item.get("value", "")),
-                _position(item.get("position")),
-            )
+            KVItem(str(item.get("label", "")), str(item.get("value", "")))
             for item in (data.get("kvs") or [])
             if isinstance(item, dict)
         ]
@@ -174,20 +141,7 @@ class LayoutDocument:
                 [str(cell) for cell in (row or [])]
                 for row in item.get("rows") or []
             ]
-            column_positions = item.get("column_positions")
-            if isinstance(column_positions, (list, tuple)):
-                try:
-                    column_positions = [float(v) for v in column_positions]
-                except (TypeError, ValueError):
-                    column_positions = None
-            tables.append(
-                TableBlock(
-                    str(item.get("name") or ""),
-                    headers,
-                    rows,
-                    column_positions,
-                )
-            )
+            tables.append(TableBlock(str(item.get("name") or ""), headers, rows))
         return cls(
             kvs=kvs,
             tables=tables,

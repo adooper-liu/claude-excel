@@ -446,3 +446,21 @@ def test_align_row_to_columns_fills_missing_cells():
     assert aligned == [
         "算法导论", "无", "", "1", "108.10", "108.10", "免税", "*x*",
     ]
+
+
+def test_light_path_builds_kvs_and_tables(monkeypatch):
+    """Template-mode light path: only RapidOCR, still yields kvs + positional table."""
+    class _FakeOCREngine2:
+        def __call__(self, image):
+            return _FakeOCROutput()
+
+    monkeypatch.setattr(layout_extract, "_rapid_ocr_engine", lambda: _FakeOCREngine2())
+    layout = layout_extract.extract_layout_from_image_light(_image())
+    assert layout.engine == "rapid"
+    assert layout.kv("\u53d1\u7968\u53f7\u7801") == "12345678"
+    assert len(layout.tables) == 1
+    assert layout.tables[0].headers == ["\u54c1\u540d", "\u91d1\u989d", "\u7a0e\u7387"]
+    assert layout.tables[0].rows == [
+        ["A\u4ea7\u54c1", "1,234.56", "13%"],
+        ["B\u4ea7\u54c1", "56.00", "13%"],
+    ]

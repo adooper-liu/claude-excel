@@ -171,5 +171,5 @@ def test_field_group_whitelist_and_source_locator():
     assert "group" not in fields["坏组"]
     # old templates without group keep no group key -> legacy single-sheet
     assert "group" not in fields["旧字段"]
-    # empty source is kept empty (no key), position fallback applies
+    # empty source is kept empty (no key); apply_recipe falls back to index alignment
     assert "source" not in fields["空来源"]
