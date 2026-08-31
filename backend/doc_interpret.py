@@ -9,6 +9,7 @@ the document itself, never hardcoded business names.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, AsyncGenerator, Awaitable, Callable
 
 import ai_proxy
@@ -155,6 +156,10 @@ def _scalar(value: Any) -> Any:
         # keep them as text so Excel never shows scientific notation.  Amounts
         # (floats or small ints) stay numeric so =SUM still works.
         if abs(value) >= _ID_TEXT_THRESHOLD:
+            if isinstance(value, int):
+                # Python ints are exact — never round-trip through float,
+                # or >15-digit identifiers (校验码/机器编号) lose digits.
+                return str(value)
             numeric = float(value)
             return str(int(numeric)) if numeric.is_integer() else str(value)
         return value
@@ -215,6 +220,39 @@ def parse_interpret_json(raw: str) -> dict[str, Any]:
     }
 
 
+def _repair_digit_values(result: dict[str, Any], ocr_text: str) -> dict[str, Any]:
+    """Recover identifier digits (leading zeros / longer runs) from OCR text.
+
+    Models sometimes return identifier-like values as JSON numbers, which
+    drops leading zeros (031001700111 -> 31001700111) and cannot be undone by
+    ``_scalar`` alone.  For every digit-only kv/total value, find the OCR line
+    whose label matches and prefer the longest digit run found there, so
+    发票代码/发票号码/校验码 keep their leading zeros and full length.
+    """
+    text = str(ocr_text or "")
+    if not text:
+        return result
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for group in ("kvs", "totals"):
+        for item in result.get(group) or []:
+            value = str(item.get("value") or "").strip()
+            if not value.isdigit() or len(value) < 6:
+                continue
+            key = normalize_key(item.get("label") or "")
+            if not key:
+                continue
+            best = value
+            for line in lines:
+                if normalize_key(line).find(key) < 0:
+                    continue
+                for run in re.findall(r"\d{6,}", line):
+                    if len(run) > len(best):
+                        best = run
+            if best != value:
+                item["value"] = best
+    return result
+
+
 async def interpret_document(
     ocr_text: str,
     *,
@@ -257,7 +295,7 @@ async def interpret_document(
         )
     if text.startswith("Error:"):
         raise ValueError(text)
-    return parse_interpret_json(text)
+    return _repair_digit_values(parse_interpret_json(text), ocr_text)
 
 
 async def interpret_document_stream(
@@ -293,7 +331,10 @@ async def interpret_document_stream(
                 buffer.append(token)
                 yield ("delta", token)
             if buffer:
-                yield ("result", parse_interpret_json("".join(buffer)))
+                parsed = _repair_digit_values(
+                    parse_interpret_json("".join(buffer)), ocr_text
+                )
+                yield ("result", parsed)
                 return
         except ValueError as exc:
             yield ("error", str(exc))

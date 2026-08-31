@@ -301,3 +301,47 @@ def test_interpret_document_stream_retries_when_empty():
     assert events[-1][1]["kvs"] == [{"label": "发票号码", "value": "123"}]
     assert len(attempts) == 2
     assert "禁止任何思考" in attempts[1][0]["content"]
+
+
+def test_scalar_never_roundtrips_large_int_through_float():
+    # 20-digit identifier must keep every digit (float would lose precision)
+    assert doc_interpret._scalar(54712936090321790480) == "54712936090321790480"
+    assert doc_interpret._scalar(661533632869) == "661533632869"
+
+
+def test_repair_digit_values_recovers_leading_zeros_from_ocr():
+    ocr = (
+        "发票代码：031001700111\n"
+        "发票号码：02948319\n"
+        "机器编号：661533632869\n"
+        "校验码: 54712936090321790480"
+    )
+    result = {
+        "kvs": [
+            {"label": "发票代码", "value": "31001700111"},
+            {"label": "发票号码", "value": "2948319"},
+            {"label": "机器编号", "value": "661533632869"},
+            {"label": "校验码", "value": "54712936090321790480"},
+        ],
+        "items": [],
+        "totals": [],
+        "notes": [],
+    }
+    fixed = doc_interpret._repair_digit_values(result, ocr)
+    values = {item["label"]: item["value"] for item in fixed["kvs"]}
+    assert values["发票代码"] == "031001700111"
+    assert values["发票号码"] == "02948319"
+    assert values["机器编号"] == "661533632869"
+    assert values["校验码"] == "54712936090321790480"
+
+
+def test_repair_digit_values_leaves_amounts_untouched():
+    ocr = "价税合计：108.10\n数量：1"
+    result = {
+        "kvs": [{"label": "价税合计", "value": 108.1}],
+        "items": [],
+        "totals": [],
+        "notes": [],
+    }
+    fixed = doc_interpret._repair_digit_values(result, ocr)
+    assert fixed["kvs"][0]["value"] == 108.1
