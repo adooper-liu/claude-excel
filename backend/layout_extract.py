@@ -891,15 +891,14 @@ def extract_layout_from_image_rapid(image: Any) -> LayoutDocument:
         return _extract_layout_tesseract(image)
 
 
-def extract_layout_from_image_light(image: Any) -> LayoutDocument:
-    """RapidOCR-only layout for template mode (skip RapidLayout/RapidTable).
+def extract_layout_from_image_light(image: Any, ocr_engine: Any = None) -> LayoutDocument:
+    """RapidOCR-only layout (skip RapidLayout/RapidTable).
 
-    A template already tells us what to look for (semantic ``source`` +
-    normalized ``position`` anchors), so the layout-classification and table-
-    structure models are unnecessary: full-text kvs + positional tables from
-    the single RapidOCR pass are enough.  Roughly 13s -> ~5s per parse.
+    Template mode (and weak-table PDFs) only need full-text kvs + positional
+    tables from one RapidOCR pass.  ``ocr_engine`` may be shared across pages
+    to avoid reloading the ONNX models per page.
     """
-    ocr_engine = _rapid_ocr_engine()
+    ocr_engine = ocr_engine or _rapid_ocr_engine()
     ocr_result = ocr_engine(image)
     ocr_boxes = _attr_list(ocr_result, "boxes") if ocr_result is not None else []
     ocr_txts = _attr_list(ocr_result, "txts") if ocr_result is not None else []

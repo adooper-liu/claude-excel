@@ -360,13 +360,6 @@ def test_image_extract_template_falls_back_when_light_has_no_table(monkeypatch):
     assert result["sheets"] is not None
 
 
-def test_pdfplumber_rows_weak():
-    assert pdf_extract._pdfplumber_rows_weak([["", "", "ers", "LLC"], ["Description", "Unit Price", "", "Total"]])
-    assert pdf_extract._pdfplumber_rows_weak([])
-    assert not pdf_extract._pdfplumber_rows_weak(
-        [["H1", "H2"], ["a", "1"], ["b", "2"], ["c", "3"]]
-    )
-
 
 def test_pdf_weak_table_uses_rapid_rendered_layout(monkeypatch):
     """A text PDF whose pdfplumber rows are sparse must be read via the rendered
@@ -410,27 +403,17 @@ def test_pdf_weak_table_uses_rapid_rendered_layout(monkeypatch):
     ]
 
 
-def test_pdf_good_table_keeps_pdfplumber(monkeypatch):
-    """A PDF with a real pdfplumber table must not take the slow rendered path."""
-    good_rows = [
-        ["Item", "Amount"],
-        ["Widget", "1,234.56"],
-        ["Gadget", "2.00"],
-        ["Sprocket", "3.50"],
-    ]
+def test_text_kind_pdf_keeps_pdfplumber(monkeypatch):
+    """A text-kind PDF (no table) must keep the fast exact-text pdfplumber path."""
     monkeypatch.setattr(pdf_extract, "_rapid_available", lambda: True)
-    monkeypatch.setattr(
-        pdf_extract, "extract_pdf_tables", lambda data: (good_rows, 2)
-    )
-    monkeypatch.setattr(pdf_extract, "detect_kind", lambda a, b: "table")
-    monkeypatch.setattr(pdf_extract, "_pdfplumber_rows_weak", lambda rows: False)
+    monkeypatch.setattr(pdf_extract, "detect_kind", lambda a, b: "text")
 
     def boom(*args, **kwargs):
-        raise AssertionError("rendered rapid path must not run for a good table")
+        raise AssertionError("rendered rapid path must not run for a text-kind PDF")
 
     monkeypatch.setattr(pdf_extract, "_pdf_pages_rapid_layout", boom)
     result = pdf_extract.extract_pdf(
-        _text_pdf("Item Amount"), ocr_backend="local", filename="inv.pdf"
+        _text_pdf("Invoice : opb-aos-09"), ocr_backend="local", filename="inv.pdf"
     )
-    assert result["kind"] == "table"
-    assert "Widget" in " ".join(str(c) for row in (result["rows"] or []) for c in row)
+    assert result["kind"] == "text"
+    assert result["layoutEngine"] == "pdf-text"
