@@ -374,3 +374,64 @@ def test_parse_recipe_json_keeps_any_language_names_and_sources():
         ("Rechnungsnr", "Num\u00e9ro de facture", "header"),
         ("Menge", "Quantit\u00e9", "detail"),
     ]
+
+
+def test_bounded_ocr_text_truncates_head_tail():
+    long = "x" * 30000
+    b = doc_interpret._bounded_ocr_text(long)
+    assert len(b) < 13000
+    assert "中间省略" in b
+    assert b.startswith("x" * 100)
+    assert b.endswith("x" * 100)
+
+
+def test_interpret_and_recipe_prompts_have_example():
+    assert "示例" in doc_interpret.SYSTEM_PROMPT
+    assert "示例" in doc_interpret.RECIPE_SYSTEM_PROMPT
+
+
+def test_interpret_document_retries_on_bad_json():
+    calls = []
+
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
+        calls.append(messages)
+        if len(calls) == 1:
+            return {"content": [{"type": "text", "text": "not json at all"}]}
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": '{"kvs": [{"label": "\u53d1\u7968\u53f7\u7801", "value": "12345678"}], "items": [], "totals": [], "notes": []}',
+                }
+            ]
+        }
+
+    result = asyncio.run(
+        doc_interpret.interpret_document("\u53d1\u7968\u53f7\u7801: 12345678", model_call=fake_call)
+    )
+    assert result["kvs"] == [{"label": "\u53d1\u7968\u53f7\u7801", "value": "12345678"}]
+    assert len(calls) == 2
+    assert "合法" in calls[1][0]["content"]  # strict-JSON hint present
+
+
+def test_propose_recipe_retries_on_bad_json():
+    calls = []
+
+    async def fake_call(messages, system_prompt=None, model=None, inject_web_search=True, max_tokens=4096):
+        calls.append(messages)
+        if len(calls) == 1:
+            return {"content": [{"type": "text", "text": "oops"}]}
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": '{"fields": [{"name": "\u53d1\u7968\u53f7\u7801", "type": "text", "source": "\u53d1\u7968\u53f7\u7801", "group": "header"}], "notes": []}',
+                }
+            ]
+        }
+
+    result = asyncio.run(
+        doc_interpret.propose_recipe_ai("\u53d1\u7968\u53f7\u7801: 12345678", model_call=fake_call)
+    )
+    assert result["fields"][0]["name"] == "\u53d1\u7968\u53f7\u7801"
+    assert len(calls) == 2

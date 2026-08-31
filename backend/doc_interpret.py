@@ -23,7 +23,13 @@ SYSTEM_PROMPT = """你是文档解读助手。你会收到一段 OCR 识别出�
 4. 合计/总计类放进 totals（数组，每项 {"label": ..., "value": ...}）。
 5. 值类型规则：只有明确可计算的量（金额、数量、税率、百分比）才给数字或归一；编号/标识符类值（发票号码、票号码、机器编号、订单号、校验码、纳税人识别号等）即使看起来是纯数字也**必须作为字符串返回（加引号）**，禁止转成 JSON number，且必须保留前导零（如 031001700111 应输出 "031001700111"，不得输出 31001700111）。
 6. OCR 疑似错字、乱码或不确定的内容在 notes（字符串数组）里说明，不要静默改值去"猜对"。
-只输出一个 JSON 对象，不要 Markdown 代码块，不要任何额外解释，不要输出思考过程。"""
+只输出一个 JSON 对象，不要 Markdown 代码块，不要任何额外解释，不要输出思考过程。
+
+示例（仅示范结构；字段名必须以你的文档为准，不要照抄）：
+{"kvs":[{"label":"发票号码","value":"12345678"}],
+ "items":[{"columns":["品名","金额"],"rows":[["A","1.5"]]}],
+ "totals":[{"label":"合计","value":108.1}],
+ "notes":["备注示例"]}"""
 
 
 _INTERPRET_MAX_TOKENS = 16384
@@ -45,18 +51,40 @@ def _is_thinking_truncation(payload: dict[str, Any]) -> bool:
     )
 
 
+#: Cap OCR text sent to the model (head + tail) to bound token cost.
+_MAX_OCR_CHARS = 12000
+
+
+def _bounded_ocr_text(ocr_text: str, max_chars: int = _MAX_OCR_CHARS) -> str:
+    """Truncate very long OCR text (head + tail) to bound token cost."""
+    text = str(ocr_text or "")
+    if len(text) <= max_chars:
+        return text
+    half = max_chars // 2
+    return text[:half] + "\n……[中间省略]……\n" + text[-half:]
+
+
+_STRICT_JSON_HINT = (
+    " 注意：上次输出无法解析为 JSON。请只输出一个合法的 JSON 对象"
+    "（不要 Markdown 代码块、不要前后夹带文字、不要尾随逗号、所有字符串用双引号）。"
+)
+
+
 def build_interpret_messages(
     ocr_text: str,
     rows: list[list[Any]] | None = None,
     *,
     anti_thinking: bool = False,
+    strict_json: bool = False,
 ) -> list[dict[str, str]]:
     """Compose the model messages: generic system prompt + OCR text (and rows)."""
-    user = "OCR 文本：\n" + str(ocr_text or "")
+    user = "OCR 文本：\n" + _bounded_ocr_text(ocr_text)
     if rows:
         user += "\n\n识别出的表格行（可能含噪声）：\n" + json.dumps(rows, ensure_ascii=False)
     if anti_thinking:
         user += _ANTI_THINKING_HINT
+    if strict_json:
+        user += _STRICT_JSON_HINT
     return [{"role": "user", "content": user}]
 
 
@@ -295,7 +323,26 @@ async def interpret_document(
         )
     if text.startswith("Error:"):
         raise ValueError(text)
-    return _repair_digit_values(parse_interpret_json(text), ocr_text)
+
+    def _parse(raw: str) -> dict[str, Any]:
+        return _repair_digit_values(parse_interpret_json(raw), ocr_text)
+
+    try:
+        return _parse(text)
+    except ValueError as exc:
+        # One clean retry with a strict-JSON hint (no deltas leaked here).
+        messages = build_interpret_messages(ocr_text, rows, strict_json=True)
+        payload = await call(
+            messages,
+            system_prompt=SYSTEM_PROMPT,
+            model=model,
+            max_tokens=_INTERPRET_MAX_TOKENS,
+            inject_web_search=False,
+        )
+        retry_text = _extract_text(payload)
+        if retry_text and not retry_text.startswith("Error:"):
+            return _parse(retry_text)
+        raise exc
 
 
 async def interpret_document_stream(
@@ -363,7 +410,8 @@ RECIPE_SYSTEM_PROMPT = """你是文档模板设计助手。你会收到一段 OC
    字段名 name，用被标注的表单原始标签/列头作为 source（取数来源）。标注定义的字段即为
    必采字段，不要跳过；其余字段按普通规则推断，不要臆造。
 8. 只输出一个 JSON 对象 {"fields": [...], "notes": [...]}，不要 Markdown 代码块，不要额外解释，不要输出思考过程。
-"""
+
+示例：{"fields":[{"name":"发票号码","type":"text","source":"发票号码","group":"header"}],"notes":[]}"""
 
 RECIPE_TYPES = ("text", "number", "date", "amount", "percent")
 RECIPE_GROUPS = ("header", "detail")
@@ -385,12 +433,15 @@ def build_recipe_messages(
     rows: list[list[Any]] | None = None,
     *,
     anti_thinking: bool = False,
+    strict_json: bool = False,
 ) -> list[dict[str, str]]:
-    user = "OCR 文本：\n" + str(ocr_text or "")
+    user = "OCR 文本：\n" + _bounded_ocr_text(ocr_text)
     if rows:
         user += "\n\n识别出的表格行（可能含噪声）：\n" + json.dumps(rows, ensure_ascii=False)
     if anti_thinking:
         user += _ANTI_THINKING_HINT
+    if strict_json:
+        user += _STRICT_JSON_HINT
     return [{"role": "user", "content": user}]
 
 
@@ -494,7 +545,23 @@ async def propose_recipe_ai(
         )
     if text.startswith("Error:"):
         raise ValueError(text)
-    parsed = parse_recipe_json(text)
+    try:
+        parsed = parse_recipe_json(text)
+    except ValueError as exc:
+        # One clean retry with a strict-JSON hint (no deltas leaked here).
+        messages = build_recipe_messages(ocr_text, rows, strict_json=True)
+        payload = await call(
+            messages,
+            system_prompt=RECIPE_SYSTEM_PROMPT,
+            model=model,
+            max_tokens=_INTERPRET_MAX_TOKENS,
+            inject_web_search=False,
+        )
+        retry_text = _extract_text(payload)
+        if retry_text and not retry_text.startswith("Error:"):
+            parsed = parse_recipe_json(retry_text)
+        else:
+            raise exc
     name = (base_name or "").strip() or "新模板"
     return {
         "name": name,
