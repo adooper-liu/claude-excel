@@ -536,6 +536,33 @@ def _rows_from_items(
     ]
 
 
+def _rows_from_items_x(
+    items: list[tuple[float, float, float, float, str]],
+) -> list[list[tuple[float, str]]]:
+    """Like ``_rows_from_items`` but keeps each cell's x-center for column
+    alignment (missing cells must stay empty instead of shifting columns)."""
+    if not items:
+        return []
+    heights = sorted(y2 - y1 for _x1, y1, _x2, y2, _t in items)
+    median_height = heights[len(heights) // 2]
+    tolerance = max(8.0, median_height * 0.6)
+    ordered = sorted(items, key=lambda it: (it[1], it[0]))
+
+    rows: list[list[tuple[float, float, str]]] = []
+    current: list[tuple[float, float, str]] = []
+    for x1, y1, x2, _y2, text in ordered:
+        if current and y1 - current[0][0] > tolerance:
+            rows.append(current)
+            current = []
+        current.append((y1, (x1 + x2) / 2.0, text))
+    if current:
+        rows.append(current)
+    return [
+        [(xc, text) for _y1, xc, text in sorted(cells, key=lambda c: c[1])]
+        for cells in rows
+    ]
+
+
 def _rows_from_rapid_ocr(
     ocr_boxes: list[Any], ocr_txts: list[Any]
 ) -> list[list[str]]:
@@ -543,8 +570,39 @@ def _rows_from_rapid_ocr(
     return _rows_from_items(_rapid_items(ocr_boxes, ocr_txts))
 
 
-def _tables_from_positional_rows(rows: list[list[str]]) -> list[TableBlock]:
-    """Build TableBlocks from rows that have enough cells (>= MIN_TABLE_CELLS)."""
+def _align_row_to_columns(
+    cells: list[tuple[float, str]], columns: list[float]
+) -> list[str]:
+    """Map a positional row's cells onto the reference columns by x-distance.
+
+    Each cell is greedily matched to its closest still-free column (smallest
+    distance first), so collisions resolve in favor of the closer cell and the
+    loser falls back to its next-nearest column; missing cells stay empty.
+    Data rows therefore never shift columns against the header row.
+    """
+    out = [""] * len(columns)
+    used_cells: set[int] = set()
+    used_columns: set[int] = set()
+    candidates = sorted(
+        (abs(column_x - x_center), ci, col_i)
+        for ci, (x_center, _text) in enumerate(cells)
+        for col_i, column_x in enumerate(columns)
+    )
+    for _distance, ci, col_i in candidates:
+        if ci in used_cells or col_i in used_columns:
+            continue
+        used_cells.add(ci)
+        used_columns.add(col_i)
+        out[col_i] = cells[ci][1]
+    return out
+
+
+def _tables_from_positional_rows_x(
+    rows: list[list[tuple[float, str]]],
+) -> list[TableBlock]:
+    """Build TableBlocks from positional rows; each row is ``(x_center, text)``
+    cells and every row is aligned to the run's reference columns (the first
+    row's x-centers) so ragged OCR rows do not shift columns."""
     from pdf_extract import _looks_like_header
 
     table_indices = [
@@ -556,10 +614,14 @@ def _tables_from_positional_rows(rows: list[list[str]]) -> list[TableBlock]:
     def flush() -> None:
         nonlocal run
         if len(run) >= 2:
-            cells = [rows[index] for index in run]
-            headers = list(cells[0]) if _looks_like_header(cells[0]) else []
-            data_rows = cells[1:] if headers else cells
-            tables.append(TableBlock(name="\u8868", headers=headers, rows=data_rows))
+            cells_x = [rows[index] for index in run]
+            columns = sorted(x_center for x_center, _text in cells_x[0])
+            aligned = [_align_row_to_columns(row, columns) for row in cells_x]
+            headers = list(aligned[0]) if _looks_like_header(aligned[0]) else []
+            data_rows = aligned[1:] if headers else aligned
+            tables.append(
+                TableBlock(name="\u8868", headers=headers, rows=data_rows)
+            )
         run = []
 
     for index in table_indices:
@@ -572,6 +634,14 @@ def _tables_from_positional_rows(rows: list[list[str]]) -> list[TableBlock]:
         run.append(index)
     flush()
     return tables
+
+
+def _tables_from_positional_rows(rows: list[list[str]]) -> list[TableBlock]:
+    """Build TableBlocks from plain positional rows (no x info -> index order)."""
+    rows_x = [
+        [(float(i), text) for i, text in enumerate(row)] for row in rows
+    ]
+    return _tables_from_positional_rows_x(rows_x)
 
 
 class _TableHtmlParser(HTMLParser):
@@ -732,8 +802,8 @@ def _tables_from_rapid_blocks(
     for block in _noise_blocks(items):
         noise_items.update(block)
     clean = [item for item in items if item not in noise_items]
-    rows = _rows_from_items(clean)
-    return _tables_from_positional_rows(rows)
+    rows = _rows_from_items_x(clean)
+    return _tables_from_positional_rows_x(rows)
 
 
 def _region_area_ratio(

@@ -373,7 +373,8 @@ def test_positional_rows_split_on_cell_count_divergence():
     assert len(tables) == 1
     assert tables[0].headers == ["h1", "h2", "h3", "h4", "h5", "h6", "h7", "h8"]
     assert len(tables[0].rows) == 1
-    assert tables[0].rows[0] == ["d1", "d2", "d3", "d4", "d5", "d6", "d7"]
+    # the ragged data row is padded to the header width (aligned, no shift)
+    assert tables[0].rows[0] == ["d1", "d2", "d3", "d4", "d5", "d6", "d7", ""]
 
 
 def test_is_noise_text():
@@ -426,3 +427,22 @@ def test_noise_block_excluded_from_tables():
     assert len(tables) == 1
     assert tables[0].headers == ["品名", "金额", "税率"]
     assert tables[0].rows == [["A产品", "1,234.56", "13%"]]
+
+
+def test_align_row_to_columns_fills_missing_cells():
+    """A ragged OCR data row must align to the header columns by x-distance;
+    collisions fall back to the next-nearest column (金额 108.10 is not lost)."""
+    columns = [408.0, 828.0, 981.0, 1193.0, 1480.0, 1822.0, 2053.0, 2293.0]
+    cells = [
+        (390.0, "算法导论"),
+        (761.0, "无"),
+        (1322.0, "1"),
+        (1580.0, "108.10"),
+        (1954.0, "108.10"),
+        (2045.0, "免税"),
+        (2437.0, "*x*"),
+    ]
+    aligned = layout_extract._align_row_to_columns(cells, columns)
+    assert aligned == [
+        "算法导论", "无", "", "1", "108.10", "108.10", "免税", "*x*",
+    ]
