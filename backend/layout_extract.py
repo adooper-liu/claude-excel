@@ -619,8 +619,21 @@ def _tables_from_positional_rows_x(
             aligned = [_align_row_to_columns(row, columns) for row in cells_x]
             headers = list(aligned[0]) if _looks_like_header(aligned[0]) else []
             data_rows = aligned[1:] if headers else aligned
+            # normalized column x-centers relative to the table's x-extent
+            column_positions = None
+            if len(columns) >= 2:
+                x_min, x_max = columns[0], columns[-1]
+                span = max(1e-6, x_max - x_min)
+                column_positions = [
+                    (xc - x_min) / span for xc in columns
+                ]
             tables.append(
-                TableBlock(name="\u8868", headers=headers, rows=data_rows)
+                TableBlock(
+                    name="\u8868",
+                    headers=headers,
+                    rows=data_rows,
+                    column_positions=column_positions,
+                )
             )
         run = []
 
@@ -806,6 +819,45 @@ def _tables_from_rapid_blocks(
     return _tables_from_positional_rows_x(rows)
 
 
+def _attach_kv_positions(
+    kvs: list[KVItem],
+    ocr_boxes: list[Any],
+    ocr_txts: list[Any],
+    image_size: tuple[int, int] | None,
+) -> None:
+    """Attach normalized (0..1) bboxes to KVItems from the matching OCR box.
+
+    KVs come from the position-sorted OCR lines, so a sequential pointer pairs
+    each KV with the next box whose text starts with the label — repeated
+    labels (购买方/销售方 both 名称) keep their own box.
+    """
+    if not kvs or not image_size:
+        return
+    width, height = image_size
+    if not width or not height:
+        return
+    boxes: list[tuple[tuple[float, float, float, float], str]] = []
+    for box, txt in zip(ocr_boxes, ocr_txts):
+        text = str(txt or "").strip()
+        if text:
+            boxes.append((_quad_bbox(box), text))
+
+    def matches(box_text: str, kv: KVItem) -> bool:
+        return box_text.startswith(kv.label) or normalize_key(box_text).startswith(
+            normalize_key(kv.label)
+        )
+
+    box_index = 0
+    for kv in kvs:
+        while box_index < len(boxes) and not matches(boxes[box_index][1], kv):
+            box_index += 1
+        if box_index >= len(boxes):
+            continue
+        x1, y1, x2, y2 = boxes[box_index][0]
+        kv.position = (x1 / width, y1 / height, x2 / width, y2 / height)
+        box_index += 1
+
+
 def _region_area_ratio(
     region: tuple[float, float, float, float], image: Any
 ) -> float:
@@ -849,6 +901,11 @@ def _layout_from_rapid(
     # dense forms, so do not restrict KV extraction to "text regions").
     raw_text = "\n".join(_rapid_ocr_lines(ocr_boxes, ocr_txts))
     kvs = _kvs_from_text(raw_text)
+    try:
+        image_size = (int(image.size[0]), int(image.size[1]))
+    except Exception:
+        image_size = None
+    _attach_kv_positions(kvs, ocr_boxes, ocr_txts, image_size)
 
     # Tables: RapidTable for scoped table regions, positional fallback else.
     tables: list[TableBlock] = []

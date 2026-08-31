@@ -110,14 +110,17 @@ def _detail_fields(layout: LayoutDocument) -> list[dict[str, Any]]:
             if not _is_usable_field_name(header):
                 continue
             values = [row[index] for row in table.rows if index < len(row)]
-            fields.append(
-                {
-                    "name": header,
-                    "type": infer_type(values),
-                    "source": header,
-                    "group": "detail",
-                }
-            )
+            field: dict[str, Any] = {
+                "name": header,
+                "type": infer_type(values),
+                "source": header,
+                "group": "detail",
+            }
+            if table.column_positions and index < len(table.column_positions):
+                xc = float(table.column_positions[index])
+                # normalized vertical line at the column's x-center
+                field["position"] = [xc, 0.0, xc, 1.0]
+            fields.append(field)
         return fields
     width = max((len(row) for row in table.rows), default=0)
     for index in range(width):
@@ -139,14 +142,15 @@ def propose_recipe(layout: LayoutDocument, *, base_name: str = "") -> dict[str, 
     for kv in layout.kvs:
         if not _is_usable_field_name(kv.label):
             continue
-        fields.append(
-            {
-                "name": kv.label,
-                "type": infer_type([kv.value]),
-                "source": kv.label,
-                "group": "header",
-            }
-        )
+        field: dict[str, Any] = {
+            "name": kv.label,
+            "type": infer_type([kv.value]),
+            "source": kv.label,
+            "group": "header",
+        }
+        if kv.position:
+            field["position"] = list(kv.position)
+        fields.append(field)
     # Deduplicate by normalized name (detail first): the same label often
     # appears both as a table header and as a key-value pair.
     seen: set[str] = set()
