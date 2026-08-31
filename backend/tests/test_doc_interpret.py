@@ -345,3 +345,32 @@ def test_repair_digit_values_leaves_amounts_untouched():
     }
     fixed = doc_interpret._repair_digit_values(result, ocr)
     assert fixed["kvs"][0]["value"] == 108.1
+
+
+def test_recipe_prompt_prefers_annotation_labels():
+    """The recipe prompt must tell the model to use annotation labels as field
+    names in any language (form and annotations may differ in language)."""
+    assert "标注标签" in doc_interpret.RECIPE_SYSTEM_PROMPT
+    assert "语言不同" in doc_interpret.RECIPE_SYSTEM_PROMPT
+    assert "source" in doc_interpret.RECIPE_SYSTEM_PROMPT
+
+
+def test_parse_recipe_json_keeps_any_language_names_and_sources():
+    """Field names/sources in any language (Chinese annotation on an English
+    form; German annotation on a French form) must pass through untouched."""
+    raw = (
+        '{"fields":['
+        '{"name":"\u53d1\u7968\u53f7","type":"text","source":"Invoice #","group":"header"},'
+        '{"name":"\u53d1\u7968\u65e5\u671f","type":"date","source":"Invoice Date","group":"header"},'
+        '{"name":"Rechnungsnr","type":"text","source":"Num\u00e9ro de facture","group":"header"},'
+        '{"name":"Menge","type":"number","source":"Quantit\u00e9","group":"detail"}'
+        '],"notes":[]}'
+    )
+    parsed = doc_interpret.parse_recipe_json(raw)
+    names = [(f["name"], f["source"], f["group"]) for f in parsed["fields"]]
+    assert names == [
+        ("\u53d1\u7968\u53f7", "Invoice #", "header"),
+        ("\u53d1\u7968\u65e5\u671f", "Invoice Date", "header"),
+        ("Rechnungsnr", "Num\u00e9ro de facture", "header"),
+        ("Menge", "Quantit\u00e9", "detail"),
+    ]
