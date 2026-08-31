@@ -35,6 +35,8 @@ export const HANDLED_TOOLS: ReadonlySet<string> = new Set([
   "web_fetch",
   "search_knowledge",
   "run_flow",
+  "interpret_document",
+  "propose_recipe",
   "complete",
   "save_structure_note",
   "load_structure_notes",

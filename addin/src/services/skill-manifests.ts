@@ -18,6 +18,7 @@ import knowledge from "../../skills/core/knowledge/manifest.json";
 import flows from "../../skills/core/flows/manifest.json";
 import structure from "../../skills/core/structure/manifest.json";
 import packAudit from "../../skills/core/pack-audit/manifest.json";
+import doc from "../../skills/core/doc/manifest.json";
 
 export type ManifestTool = { name: string; description?: string };
 export type CoreSkillManifest = {
@@ -45,4 +46,5 @@ export const CORE_SKILL_MANIFESTS: CoreSkillManifest[] = [
   flows,
   structure,
   packAudit,
+  doc,
 ] as CoreSkillManifest[];

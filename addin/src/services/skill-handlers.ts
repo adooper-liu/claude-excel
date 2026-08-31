@@ -455,6 +455,37 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const body = await r.text();
         return body || JSON.stringify({ error: 'empty knowledge search response' });
       }
+      case 'interpret_document': {
+        const ocrText = String(input.ocrText || '').trim();
+        if (!ocrText) {
+          return JSON.stringify({ error: 'interpret_document 需要 ocrText（OCR 文档全文）' });
+        }
+        const payload: Record<string, unknown> = { ocrText };
+        if (Array.isArray(input.rows)) payload.rows = input.rows;
+        const r = await fetch(API_BASE + '/api/doc/interpret', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await r.text();
+        return body || JSON.stringify({ error: 'interpret_document 空响应' });
+      }
+      case 'propose_recipe': {
+        const ocrText = String(input.ocrText || '').trim();
+        if (!ocrText) {
+          return JSON.stringify({ error: 'propose_recipe 需要 ocrText（OCR 文档全文）' });
+        }
+        const payload: Record<string, unknown> = { ocrText };
+        if (Array.isArray(input.rows)) payload.rows = input.rows;
+        if (input.baseName) payload.baseName = String(input.baseName);
+        const r = await fetch(API_BASE + '/api/doc/propose-recipe', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await r.text();
+        return body || JSON.stringify({ error: 'propose_recipe 空响应' });
+      }
       case 'run_flow': {
         const flow = String(input.flow || '').trim();
         const text = String(input.text || '').trim();

@@ -39,9 +39,9 @@ status: pending
 
 ## Tasks
 
-- [ ] **Task 1: 工具注册（三方锁步）** — skill-registry / skill-handlers / skill-manifests 加
-      `interpret_document`（输入 ocrText+rows → 结构化结果）与 `propose_recipe`（→ doc-recipe 候选）。
-      单测：注册一致 + executeHandler 分支返回结构化 JSON。
+- [x] **Task 1: 工具注册（三方锁步）** — 新增 `addin/skills/core/doc/manifest.json`（interpret_document +
+      propose_recipe），skill-manifests / skill-registry / skill-handlers 同步，后端 skill_registry.ADDIN_HANDLERS
+      同步；锁步测试 6 passed、前端 typecheck ✓ / unit 309 passing、后端全量 353 passed + 2 skip。
 - [ ] **Task 2: 文档上下文注入对话** — ChatInput 支持 `onAttachDocument(text, rows?)`：
       追加一条 user 消息承载 OCR 文本（截断保护，如 >8000 字折叠/摘要），不自动触发任何动作。
       PdfAttachSection「AI 解读」按钮改为「去对话解读」→ 注入文档文本并聚焦对话。
@@ -63,3 +63,7 @@ status: pending
 
 `cd backend && python -m pytest tests -q` → exit 0；`cd addin && npm run typecheck && npm run test:unit` → 全绿；
 提交 `git commit -m "feat(ai): AI 解读对话化（对话为主 + interpret_document 工具）"`。
+
+## 进度 log
+
+- 2026-08-31 Task 1 完成（分支 feat/ai-interpret-chat-tools）：工具已注册，待 Task 2（文档上下文注入对话）。

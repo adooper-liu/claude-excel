@@ -1,0 +1,32 @@
+{
+  "name": "doc",
+  "version": "1.0.0",
+  "description": "Interpret OCR'd documents (invoices/forms) into structured fields, or propose an extraction template. The document text usually comes from the chat's attached OCR context.",
+  "tools": [
+    {
+      "name": "interpret_document",
+      "description": "Parse OCR'd document text into structured JSON: kvs (header key-values), items (detail tables), totals (sums), notes (remarks/explanations). Call when the user asks to 解读/整理/提取 a parsed document, or wants its fields written to a sheet. Language- and layout-agnostic.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "ocrText": { "type": "string", "description": "OCR 识别出的文档全文（来自对话中的文档上下文）" },
+          "rows": { "type": "array", "description": "可选的扁平表格行", "items": { "type": "array" } }
+        },
+        "required": ["ocrText"]
+      }
+    },
+    {
+      "name": "propose_recipe",
+      "description": "Generate an extraction-template candidate from OCR'd document text (fields: name/type/source/group + notes). Annotation labels (any language) are preferred as field names. Call when the user asks to 生成模板/建模板 for a document.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "ocrText": { "type": "string", "description": "OCR 识别出的文档全文" },
+          "rows": { "type": "array", "description": "可选的扁平表格行", "items": { "type": "array" } },
+          "baseName": { "type": "string", "description": "模板名（可空）" }
+        },
+        "required": ["ocrText"]
+      }
+    }
+  ]
+}
