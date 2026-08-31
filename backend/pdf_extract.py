@@ -347,6 +347,42 @@ def _layout_table_rows(layout: Any) -> list[list[str]] | None:
     return rows if len(rows) >= 2 else None
 
 
+def _pdfplumber_rows_weak(rows: Any) -> bool:
+    """True when pdfplumber's table rows are too sparse to trust (form templates
+    like bilingual invoices often extract to a couple of near-empty rows)."""
+    if not isinstance(rows, list):
+        return True
+    usable = [r for r in rows if isinstance(r, list) and any(str(c).strip() for c in r)]
+    return len(usable) < 3
+
+
+def _pdf_pages_rapid_layout(data: bytes) -> Any:
+    """Render PDF pages and run the RapidOCR light path per page (kvs + tables).
+
+    Used when pdfplumber's text-layer table extraction is too weak (form /
+    template PDFs): the same RapidOCR pipeline that handles images reads the
+    rendered pages and produces real kvs + tables.
+    """
+    from layout_doc import LayoutDocument
+    from layout_extract import _render_pdf_pages, extract_layout_from_image_light
+
+    layout = LayoutDocument()
+    engines: list[str] = []
+    for image in _render_pdf_pages(data):
+        page = extract_layout_from_image_light(image)
+        layout.kvs.extend(page.kvs)
+        layout.tables.extend(page.tables)
+        if page.raw_text:
+            layout.raw_text = (layout.raw_text + "\n" + page.raw_text).strip()
+        if page.engine:
+            engines.append(page.engine)
+    if "rapid" in engines:
+        layout.engine = "rapid"
+    elif "tesseract" in engines:
+        layout.engine = "tesseract"
+    return layout
+
+
 def _enrich(
     result: dict[str, Any], layout: Any, template: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -468,15 +504,31 @@ def extract_pdf(
                 result, _safe_layout(extract_layout_from_pdf, data), template
             )
         if kind == "table":
+            layout = None
+            rows_have_header = _looks_like_header(rows[0]) if rows else False
+            display_text = text
+            if backend == "local" and _rapid_available() and _pdfplumber_rows_weak(rows):
+                # Form/template PDFs (e.g. bilingual invoices) often extract to
+                # a couple of near-empty pdfplumber rows: read the rendered
+                # pages with the RapidOCR pipeline instead.
+                layout = _safe_layout(_pdf_pages_rapid_layout, data)
+                if layout is not None:
+                    rapid_rows = _layout_table_rows(layout)
+                    if rapid_rows:
+                        rows = rapid_rows
+                        rows_have_header = True
+                        display_text = layout.raw_text or display_text
+            else:
+                layout = _safe_layout(extract_layout_from_pdf, data)
             if rows and template:
-                rows = apply_template(rows, template, has_header=_looks_like_header(rows[0]))
+                rows = apply_template(
+                    rows, template, has_header=rows_have_header
+                )
             result = _result(
                 kind="table", backend=None, filename=filename,
-                text=text, rows=rows, tables=table_count, pages=page_count,
+                text=display_text, rows=rows, tables=table_count, pages=page_count,
             )
-            return _enrich(
-                result, _safe_layout(extract_layout_from_pdf, data), template
-            )
+            return _enrich(result, layout, template)
 
         if backend == "local":
             layout = _safe_layout(extract_layout_from_pdf, data)

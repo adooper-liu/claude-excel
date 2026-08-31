@@ -358,3 +358,79 @@ def test_image_extract_template_falls_back_when_light_has_no_table(monkeypatch):
     )
     assert calls == [1]
     assert result["sheets"] is not None
+
+
+def test_pdfplumber_rows_weak():
+    assert pdf_extract._pdfplumber_rows_weak([["", "", "ers", "LLC"], ["Description", "Unit Price", "", "Total"]])
+    assert pdf_extract._pdfplumber_rows_weak([])
+    assert not pdf_extract._pdfplumber_rows_weak(
+        [["H1", "H2"], ["a", "1"], ["b", "2"], ["c", "3"]]
+    )
+
+
+def test_pdf_weak_table_uses_rapid_rendered_layout(monkeypatch):
+    """A text PDF whose pdfplumber rows are sparse must be read via the rendered
+    RapidOCR pipeline (fixes bilingual invoice templates extracting to garbage)."""
+    from layout_doc import KVItem, LayoutDocument, TableBlock
+
+    weak_rows = [["", "", "ers", "LLC"], ["Description", "Unit Price", "", "Total"]]
+    rapid_layout = LayoutDocument(
+        kvs=[KVItem("Invoice #", "10001721")],
+        tables=[
+            TableBlock(
+                name="表",
+                headers=["Qty", "Description", "Unit Price", "Total"],
+                rows=[["1.0000", "Aosom Outbounds 904145", "$110.0000", "$110.00"]],
+            )
+        ],
+        raw_text="INVOICE\nInvoice #: 10001721\nQty Description Unit Price Total",
+        engine="rapid",
+    )
+    monkeypatch.setattr(pdf_extract, "_rapid_available", lambda: True)
+    monkeypatch.setattr(
+        pdf_extract, "extract_pdf_tables", lambda data: (weak_rows, 2)
+    )
+    monkeypatch.setattr(pdf_extract, "detect_kind", lambda a, b: "table")
+    monkeypatch.setattr(
+        pdf_extract, "_pdf_pages_rapid_layout", lambda data: rapid_layout
+    )
+
+    def boom(*args, **kwargs):
+        raise AssertionError("pdfplumber path must not run when rapid render succeeds")
+
+    monkeypatch.setattr(pdf_extract, "extract_layout_from_pdf", boom)
+    result = pdf_extract.extract_pdf(
+        _text_pdf("Invoice #: 10001721"), ocr_backend="local", filename="inv.pdf"
+    )
+    assert result["layoutEngine"] == "rapid"
+    assert result["text"] == rapid_layout.raw_text
+    assert result["rows"] == [
+        ["Qty", "Description", "Unit Price", "Total"],
+        ["1.0000", "Aosom Outbounds 904145", "$110.0000", "$110.00"],
+    ]
+
+
+def test_pdf_good_table_keeps_pdfplumber(monkeypatch):
+    """A PDF with a real pdfplumber table must not take the slow rendered path."""
+    good_rows = [
+        ["Item", "Amount"],
+        ["Widget", "1,234.56"],
+        ["Gadget", "2.00"],
+        ["Sprocket", "3.50"],
+    ]
+    monkeypatch.setattr(pdf_extract, "_rapid_available", lambda: True)
+    monkeypatch.setattr(
+        pdf_extract, "extract_pdf_tables", lambda data: (good_rows, 2)
+    )
+    monkeypatch.setattr(pdf_extract, "detect_kind", lambda a, b: "table")
+    monkeypatch.setattr(pdf_extract, "_pdfplumber_rows_weak", lambda rows: False)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("rendered rapid path must not run for a good table")
+
+    monkeypatch.setattr(pdf_extract, "_pdf_pages_rapid_layout", boom)
+    result = pdf_extract.extract_pdf(
+        _text_pdf("Item Amount"), ocr_backend="local", filename="inv.pdf"
+    )
+    assert result["kind"] == "table"
+    assert "Widget" in " ".join(str(c) for row in (result["rows"] or []) for c in row)
