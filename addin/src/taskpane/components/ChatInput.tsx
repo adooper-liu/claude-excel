@@ -13,6 +13,13 @@ import { deleteUserSkill, installUserSkill, type InstalledSkill } from '../../se
 import { operatorCatalogByGroup } from '../../services/operator-catalog';
 import FinancePackQuickActions from './FinancePackQuickActions';
 
+function truncateOcr(text: string, maxChars: number): string {
+  const t = String(text || "");
+  if (t.length <= maxChars) return t;
+  const half = Math.floor(maxChars / 2);
+  return t.slice(0, half) + "\n……[中间省略]……\n" + t.slice(-half);
+}
+
 interface Props {
   onSend: (text: string) => void;
   onStop: () => void;
@@ -155,6 +162,25 @@ export default function ChatInput({
     }
   }, [text, isStreaming, onSend, installed]);
 
+  const attachDocumentToChat = useCallback(
+    (ocrText: string) => {
+      // Inject the parsed document into the chat input (head+tail truncated),
+      // let the user review/ask — no auto-trigger.
+      setText("请解读这份 OCR 文档：\n" + truncateOcr(ocrText, 6000));
+      setShowPdf(false);
+      setShowDocRecipe(false);
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.style.height = "auto";
+          textareaRef.current.style.height =
+            Math.min(textareaRef.current.scrollHeight, 100) + "px";
+        }
+      });
+    },
+    []
+  );
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (showSlash) {
@@ -226,6 +252,7 @@ export default function ChatInput({
         <PdfAttachSection
           disabled={disabled || isStreaming}
           refreshKey={docRecipeVersion}
+          onInterpretToChat={attachDocumentToChat}
           onProposeRecipe={(recipe) => {
             setDocRecipeDraft(recipe);
             setShowDocRecipe(true);

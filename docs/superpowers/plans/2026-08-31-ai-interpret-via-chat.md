@@ -42,9 +42,10 @@ status: pending
 - [x] **Task 1: 工具注册（三方锁步）** — 新增 `addin/skills/core/doc/manifest.json`（interpret_document +
       propose_recipe），skill-manifests / skill-registry / skill-handlers 同步，后端 skill_registry.ADDIN_HANDLERS
       同步；锁步测试 6 passed、前端 typecheck ✓ / unit 309 passing、后端全量 353 passed + 2 skip。
-- [ ] **Task 2: 文档上下文注入对话** — ChatInput 支持 `onAttachDocument(text, rows?)`：
-      追加一条 user 消息承载 OCR 文本（截断保护，如 >8000 字折叠/摘要），不自动触发任何动作。
-      PdfAttachSection「AI 解读」按钮改为「去对话解读」→ 注入文档文本并聚焦对话。
+- [x] **Task 2: 文档上下文注入对话** — ChatInput 新增 `attachDocumentToChat`（截断头+尾 6000 字，
+      预填输入框 + 聚焦 + 自动增高，不自动发送）；PdfAttachSection 新增「去对话解读」按钮
+      + `onInterpretToChat` prop。旧 AI 解读/自动解读路径保留（Task 3 移除）。
+      typecheck ✓ / unit 309 passing。
 - [ ] **Task 3: 对话触发解读** — 去掉解析后自动 `runInterpret`；对话 agent 在用户要求解读时
       通过工具返回结构化结果并在对话呈现；「进工作簿(解读)」改为从工具结果落地
       （复用 `interpretLandSheet` 逻辑，输入换成对话工具返回的 JSON）。
@@ -67,3 +68,4 @@ status: pending
 ## 进度 log
 
 - 2026-08-31 Task 1 完成（分支 feat/ai-interpret-chat-tools）：工具已注册，待 Task 2（文档上下文注入对话）。
+- 2026-08-31 Task 2 完成（分支 feat/ai-interpret-chat-inject）：文档注入对话就绪，待 Task 3（移除自动解读 + 工具触发落地）。

@@ -58,6 +58,8 @@ interface Props {
   disabled: boolean;
   refreshKey?: number;
   onProposeRecipe?: (recipe: DocRecipeProposal) => void;
+  /** Send the parsed document text into the chat for conversational interpretation. */
+  onInterpretToChat?: (text: string) => void;
 }
 
 const DOC_EXT = /\.(pdf|png|jpe?g|tiff?|bmp|md|markdown|txt|csv)$/i;
@@ -138,7 +140,12 @@ function pickFileFromDrop(dt: DataTransfer | null): File | null {
   return item?.kind === "file" ? item.getAsFile() : null;
 }
 
-export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe }: Props): JSX.Element {
+export default function PdfAttachSection({
+  disabled,
+  refreshKey,
+  onProposeRecipe,
+  onInterpretToChat,
+}: Props): JSX.Element {
   const [backend, setBackend] = useState<OcrBackend>("local");
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -671,6 +678,16 @@ export default function PdfAttachSection({ disabled, refreshKey, onProposeRecipe
                 onClick={() => void proposeAi()}
               >
                 {proposeBusy ? "生成中…" : "AI 生成模板"}
+              </button>
+            )}
+            {pendingResult.text && onInterpretToChat && (
+              <button
+                type="button"
+                className="pdf-confirm-alt"
+                disabled={busy}
+                onClick={() => onInterpretToChat(pendingResult.text!)}
+              >
+                去对话解读
               </button>
             )}
           </div>
