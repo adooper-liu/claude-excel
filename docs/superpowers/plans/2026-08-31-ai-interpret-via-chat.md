@@ -70,3 +70,6 @@ status: pending
 - 2026-08-31 Task 1 完成（分支 feat/ai-interpret-chat-tools）：工具已注册，待 Task 2（文档上下文注入对话）。
 - 2026-08-31 Task 2 完成（分支 feat/ai-interpret-chat-inject）：文档注入对话就绪，待 Task 3（移除自动解读 + 工具触发落地）。
 - 2026-08-31 Task 3 完成（分支 feat/ai-interpret-chat-land）：对话化解读就绪；Task 4 门禁随各 Task 已跑，Task 5 真机验收留管理员。
+- 2026-08-31 Task 5 验收发现并修复：用户「整理成工作簿表格」时 agent 回复 (no response)——
+  因模型需重发 51 行写表（超 token/空回复）。新增 `land_interpret_to_sheet` 工具：
+  interpret + 写表一步完成（行不经模型），manifest 提示 interpret_document 写表走该工具。

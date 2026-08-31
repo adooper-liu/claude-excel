@@ -486,6 +486,67 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
         const body = await r.text();
         return body || JSON.stringify({ error: 'propose_recipe 空响应' });
       }
+      case 'land_interpret_to_sheet': {
+        const ocrText = String(input.ocrText || '').trim();
+        if (!ocrText) {
+          return JSON.stringify({ error: 'land_interpret_to_sheet 需要 ocrText（OCR 文档全文）' });
+        }
+        const payload: Record<string, unknown> = { ocrText };
+        if (Array.isArray(input.rows)) payload.rows = input.rows;
+        const r = await fetch(API_BASE + '/api/doc/interpret', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const body = await r.text();
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return body || JSON.stringify({ error: 'interpret 返回非 JSON' });
+        }
+        if (!r.ok) return body || JSON.stringify({ error: 'interpret 失败' });
+        const res = parsed as {
+          error?: string;
+          kvs?: { label?: unknown; value?: unknown }[];
+          items?: { columns?: unknown[]; rows?: unknown[][] }[];
+          totals?: { label?: unknown; value?: unknown }[];
+          notes?: unknown[];
+        };
+        if (res.error) return JSON.stringify({ error: res.error });
+        const out: (string | number)[][] = [];
+        if (res.kvs && res.kvs.length) {
+          out.push(['字段', '值']);
+          res.kvs.forEach((kv) => out.push([String(kv.label ?? ''), kv.value as string | number]));
+        }
+        (res.items || []).forEach((item) => {
+          if (item.columns && item.columns.length) out.push(item.columns as (string | number)[]);
+          (item.rows || []).forEach((row) => out.push(row as (string | number)[]));
+        });
+        if (res.totals && res.totals.length) {
+          if (out.length) out.push([]);
+          out.push(['合计字段', '合计值']);
+          res.totals.forEach((t) => out.push([String(t.label ?? ''), t.value as string | number]));
+        }
+        if (res.notes && res.notes.length) {
+          if (out.length) out.push([]);
+          out.push(['备注']);
+          res.notes.forEach((n) => out.push([String(n)]));
+        }
+        if (!out.length) return JSON.stringify({ error: '解读结果为空，无可写内容' });
+        const safeRows = out.map((row) =>
+          row.map((cell) =>
+            typeof cell === 'string' && cell.startsWith('=') ? '​' + cell : cell
+          )
+        );
+        const sheetName = String(input.sheetName || '文档-解读').trim();
+        const written = await E.writeToNewSheet(sheetName, safeRows);
+        return (
+          '已写入工作表「' + written + '」，共 ' + safeRows.length + ' 行（kvs ' +
+          (res.kvs?.length ?? 0) + ' · 明细 ' + (res.items?.length ?? 0) + ' 表 · 合计 ' +
+          (res.totals?.length ?? 0) + '）。'
+        );
+      }
       case 'run_flow': {
         const flow = String(input.flow || '').trim();
         const text = String(input.text || '').trim();

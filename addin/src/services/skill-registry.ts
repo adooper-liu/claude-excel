@@ -37,6 +37,7 @@ export const HANDLED_TOOLS: ReadonlySet<string> = new Set([
   "run_flow",
   "interpret_document",
   "propose_recipe",
+  "land_interpret_to_sheet",
   "complete",
   "save_structure_note",
   "load_structure_notes",

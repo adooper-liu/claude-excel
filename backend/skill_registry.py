@@ -97,6 +97,7 @@ ADDIN_HANDLERS: dict[str, str] = {
     "run_flow": "skill-handlers.ts",
     "interpret_document": "skill-handlers.ts",
     "propose_recipe": "skill-handlers.ts",
+    "land_interpret_to_sheet": "skill-handlers.ts",
     "complete": "skill-handlers.ts",
     "save_structure_note": "skill-handlers.ts",
     "load_structure_notes": "skill-handlers.ts",

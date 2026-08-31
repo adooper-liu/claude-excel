@@ -5,7 +5,7 @@
   "tools": [
     {
       "name": "interpret_document",
-      "description": "Parse OCR'd document text into structured JSON: kvs (header key-values), items (detail tables), totals (sums), notes (remarks/explanations). Call when the user asks to 解读/整理/提取 a parsed document, or wants its fields written to a sheet. Language- and layout-agnostic.",
+      "description": "Parse OCR'd document text into structured JSON: kvs (header key-values), items (detail tables), totals (sums), notes (remarks/explanations). Call when the user asks to 解读/整理/提取 a parsed document. Language- and layout-agnostic. If the user wants the result written to a sheet, call land_interpret_to_sheet instead (do not re-emit the rows yourself).",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -24,6 +24,19 @@
           "ocrText": { "type": "string", "description": "OCR 识别出的文档全文" },
           "rows": { "type": "array", "description": "可选的扁平表格行", "items": { "type": "array" } },
           "baseName": { "type": "string", "description": "模板名（可空）" }
+        },
+        "required": ["ocrText"]
+      }
+    },
+    {
+      "name": "land_interpret_to_sheet",
+      "description": "Interpret an OCR'd document AND write the structured result (kvs/items/totals/notes) to a new Excel sheet in one step — the rows never pass through the model. Call when the user asks to 整理成工作簿表格/写入工作簿/进工作簿 for a parsed document. Pass ocrText from the document context; do NOT reconstruct the rows yourself.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "ocrText": { "type": "string", "description": "OCR 识别出的文档全文（来自对话中的文档上下文）" },
+          "rows": { "type": "array", "description": "可选的扁平表格行", "items": { "type": "array" } },
+          "sheetName": { "type": "string", "description": "新工作表名（可空，默认 文档-解读）" }
         },
         "required": ["ocrText"]
       }
