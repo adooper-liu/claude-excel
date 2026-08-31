@@ -30,13 +30,44 @@
     },
     {
       "name": "land_interpret_to_sheet",
-      "description": "Interpret an OCR'd document AND write the structured result (kvs/items/totals/notes) to a new Excel sheet in one step — the rows never pass through the model. Call when the user asks to 整理成工作簿表格/写入工作簿/进工作簿 for a parsed document. Pass ocrText from the document context; do NOT reconstruct the rows yourself.",
+      "description": "Interpret an OCR'd document AND write the structured result (kvs/items/totals/notes) to a new Excel sheet in one step — the rows never pass through the model. Call when the user asks to 整理成工作簿表格/写入工作簿/进工作簿 for a parsed document. Pass ocrText from the document context; do NOT reconstruct the rows yourself. If the user wants a custom column layout (e.g. 按 日期/类型/箱号/承运商 拆分), pass transform: {columns:[{name, mode: column|regex|constant|date, source?, pattern?, group?, value?}], dates?: [{from,to,date}]} — the tool applies it. Omit transform for the raw structured result.",
       "input_schema": {
         "type": "object",
         "properties": {
           "ocrText": { "type": "string", "description": "OCR 识别出的文档全文（来自对话中的文档上下文）" },
           "rows": { "type": "array", "description": "可选的扁平表格行", "items": { "type": "array" } },
-          "sheetName": { "type": "string", "description": "新工作表名（可空，默认 文档-解读）" }
+          "sheetName": { "type": "string", "description": "新工作表名（可空，默认 文档-解读）" },
+          "transform": {
+            "type": "object",
+            "description": "可选列变换：columns 定义输出列（mode=column 取源列 / regex 提取 / constant 常量 / date 用 dates 行区间），dates 按 items 行序给行区间标日期",
+            "properties": {
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "mode": { "type": "string", "enum": ["column", "regex", "constant", "date"] },
+                    "source": { "type": "string", "description": "源列名（items 表头）" },
+                    "pattern": { "type": "string", "description": "mode=regex 的正则" },
+                    "group": { "type": "number", "description": "mode=regex 的捕获组（默认 0）" },
+                    "value": { "type": "string", "description": "mode=constant 的常量" }
+                  }
+                }
+              },
+              "dates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "from": { "type": "number", "description": "起始行号（0-based，items 全局行序，含）" },
+                    "to": { "type": "number", "description": "结束行号（含）" },
+                    "date": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
         },
         "required": ["ocrText"]
       }

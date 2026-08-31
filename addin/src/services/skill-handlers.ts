@@ -514,15 +514,62 @@ export async function executeHandler(tool: ToolCall, ctx: HandlerContext): Promi
           notes?: unknown[];
         };
         if (res.error) return JSON.stringify({ error: res.error });
+        const transform = input.transform as
+          | {
+              columns?: {
+                name?: unknown; mode?: unknown; source?: unknown;
+                pattern?: unknown; group?: unknown; value?: unknown;
+              }[];
+              dates?: { from?: unknown; to?: unknown; date?: unknown }[];
+            }
+          | undefined;
+        const tcols = (transform?.columns || []).filter((c) => c && c.name != null);
         const out: (string | number)[][] = [];
         if (res.kvs && res.kvs.length) {
           out.push(['字段', '值']);
           res.kvs.forEach((kv) => out.push([String(kv.label ?? ''), kv.value as string | number]));
         }
-        (res.items || []).forEach((item) => {
-          if (item.columns && item.columns.length) out.push(item.columns as (string | number)[]);
-          (item.rows || []).forEach((row) => out.push(row as (string | number)[]));
-        });
+        if (tcols.length) {
+          const dateFor = (idx: number): string => {
+            const r = (transform?.dates || []).find(
+              (d) => idx >= Number(d.from ?? 0) && idx <= Number(d.to ?? idx)
+            );
+            return r && r.date != null ? String(r.date) : '';
+          };
+          out.push(tcols.map((c) => String(c.name)));
+          let globalIdx = 0;
+          (res.items || []).forEach((item) => {
+            const srcCols = (item.columns || []).map((c) => String(c ?? ''));
+            (item.rows || []).forEach((row) => {
+              const cells = row as (string | number)[];
+              const outRow: (string | number)[] = tcols.map((c) => {
+                const mode = String(c.mode ?? 'column');
+                if (mode === 'constant') return String(c.value ?? '');
+                if (mode === 'date') return dateFor(globalIdx);
+                const srcIdx = srcCols.indexOf(String(c.source ?? ''));
+                const raw =
+                  srcIdx >= 0 && srcIdx < cells.length ? String(cells[srcIdx] ?? '') : '';
+                if (mode === 'regex' && c.pattern) {
+                  try {
+                    const m = raw.match(new RegExp(String(c.pattern)));
+                    if (m) return m[Number(c.group ?? 0)] ?? '';
+                  } catch {
+                    /* model-supplied regex invalid -> empty for that cell */
+                  }
+                  return '';
+                }
+                return raw;
+              });
+              out.push(outRow);
+              globalIdx++;
+            });
+          });
+        } else {
+          (res.items || []).forEach((item) => {
+            if (item.columns && item.columns.length) out.push(item.columns as (string | number)[]);
+            (item.rows || []).forEach((row) => out.push(row as (string | number)[]));
+          });
+        }
         if (res.totals && res.totals.length) {
           if (out.length) out.push([]);
           out.push(['合计字段', '合计值']);

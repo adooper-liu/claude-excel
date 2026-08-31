@@ -73,3 +73,6 @@ status: pending
 - 2026-08-31 Task 5 验收发现并修复：用户「整理成工作簿表格」时 agent 回复 (no response)——
   因模型需重发 51 行写表（超 token/空回复）。新增 `land_interpret_to_sheet` 工具：
   interpret + 写表一步完成（行不经模型），manifest 提示 interpret_document 写表走该工具。
+- 2026-08-31 增强 land_interpret_to_sheet：支持可选 `transform`（模型出列映射，工具执行变换写表）——
+  columns 每列 mode=column|regex|constant|date + source/pattern/group/value，dates 按 items 行序标日期；
+  不传 transform 则写原始结构化结果（向后兼容）。真机可验证「按 日期/类型/箱号/承运商 拆分」。
