@@ -46,9 +46,9 @@ status: pending
       预填输入框 + 聚焦 + 自动增高，不自动发送）；PdfAttachSection 新增「去对话解读」按钮
       + `onInterpretToChat` prop。旧 AI 解读/自动解读路径保留（Task 3 移除）。
       typecheck ✓ / unit 309 passing。
-- [ ] **Task 3: 对话触发解读** — 去掉解析后自动 `runInterpret`；对话 agent 在用户要求解读时
-      通过工具返回结构化结果并在对话呈现；「进工作簿(解读)」改为从工具结果落地
-      （复用 `interpretLandSheet` 逻辑，输入换成对话工具返回的 JSON）。
+- [x] **Task 3: 对话触发解读** — 移除解析后自动 runInterpret 与旧 AI 解读面板/解读进工作簿/重试
+      （PdfAttachSection -189 行）；解读入口收敛为「去对话解读」→ 对话 agent 经 interpret_document
+      工具返回结构化结果并可按用户要求写表（write_to_sheet 已存在）。typecheck ✓ / unit 309 passing。
 - [ ] **Task 4: 单测 + 前端门禁** — 前端 typecheck + test:unit；后端现有 interpret 测试保持绿。
 - [ ] **Task 5: 真机验收（管理员）** — 上传发票 → 去对话解读 → 追问「合计多少」→
       「整理成表写入工作簿」→ 结果正确。
@@ -69,3 +69,4 @@ status: pending
 
 - 2026-08-31 Task 1 完成（分支 feat/ai-interpret-chat-tools）：工具已注册，待 Task 2（文档上下文注入对话）。
 - 2026-08-31 Task 2 完成（分支 feat/ai-interpret-chat-inject）：文档注入对话就绪，待 Task 3（移除自动解读 + 工具触发落地）。
+- 2026-08-31 Task 3 完成（分支 feat/ai-interpret-chat-land）：对话化解读就绪；Task 4 门禁随各 Task 已跑，Task 5 真机验收留管理员。

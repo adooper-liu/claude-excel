@@ -21,13 +21,6 @@ type DocRecipeProposal = {
   fields: DocRecipeField[];
 };
 
-type InterpretResult = {
-  kvs: { label: string; value: string | number }[];
-  items: { columns: string[]; rows: (string | number)[][] }[];
-  totals: { label: string; value: string | number }[];
-  notes: string[];
-};
-
 type PdfResult = {
   kind: "text" | "table" | "scanned";
   text?: string | null;
@@ -156,10 +149,6 @@ export default function PdfAttachSection({
   const fileRef = useRef<HTMLInputElement>(null);
   const [templates, setTemplates] = useState<DocRecipeSummary[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [interpretResult, setInterpretResult] = useState<InterpretResult | null>(null);
-  const [interpretBusy, setInterpretBusy] = useState(false);
-  const [interpretErr, setInterpretErr] = useState("");
-  const [interpretLive, setInterpretLive] = useState("");
   const [proposeBusy, setProposeBusy] = useState(false);
 
   const refreshTemplates = useCallback(async () => {
@@ -198,67 +187,6 @@ export default function PdfAttachSection({
     return data as PdfResult;
   }, [selectedTemplate]);
 
-  const runInterpret = useCallback(async (p: PendingLand) => {
-    if (!p || !p.text || interpretBusy) return;
-    setInterpretBusy(true);
-    setInterpretErr("");
-    setInterpretLive("");
-    try {
-      const response = await fetch(API_BASE + "/api/doc/interpret", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ocrText: p.text, rows: p.rows || [], stream: true }),
-      });
-      if (!response.ok) {
-        const data = await readJson(response);
-        throw new Error(String((data as { detail?: string }).detail || response.statusText || "解读失败"));
-      }
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("无法读取解读流");
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        buffer += decoder.decode(chunk.value, { stream: true });
-        let sep = buffer.indexOf("\n\n");
-        while (sep >= 0) {
-          const raw = buffer.slice(0, sep);
-          buffer = buffer.slice(sep + 2);
-          sep = buffer.indexOf("\n\n");
-          if (!raw.startsWith("data: ")) continue;
-          try {
-            const evt = JSON.parse(raw.slice(6)) as {
-              type?: string;
-              text?: string;
-              data?: InterpretResult;
-              message?: string;
-            };
-            if (evt.type === "delta" && evt.text) {
-              setInterpretLive((prev) => prev + evt.text);
-            } else if (evt.type === "result" && evt.data) {
-              setInterpretResult(evt.data);
-            } else if (evt.type === "error" && evt.message) {
-              setInterpretErr(evt.message);
-            }
-          } catch {
-            // ignore malformed SSE event
-          }
-        }
-      }
-    } catch (e) {
-      setInterpretErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setInterpretBusy(false);
-    }
-  }, [interpretBusy]);
-
-  const interpret = useCallback(async () => {
-    const p = pendingResult;
-    if (!p) return;
-    await runInterpret(p);
-  }, [pendingResult, runInterpret]);
-
   const process = useCallback(
     async (file: File, useBackend: OcrBackend) => {
       if (disabled || busy) return;
@@ -292,9 +220,6 @@ export default function PdfAttachSection({
         }
         setPendingResult(pending);
         setPendingFile(null);
-        if (pending.text) {
-          void runInterpret(pending);
-        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
         setStatus("");
@@ -302,7 +227,7 @@ export default function PdfAttachSection({
         setBusy(false);
       }
     },
-    [busy, disabled, extract, runInterpret]
+    [busy, disabled, extract]
   );
 
   const landKnowledge = useCallback(async () => {
@@ -423,64 +348,10 @@ export default function PdfAttachSection({
 
 
 
-  const interpretLandSheet = useCallback(async () => {
-    const p = pendingResult;
-    const r = interpretResult;
-    if (!p || !r || busy || interpretBusy) return;
-    setInterpretBusy(true);
-    setInterpretErr("");
-    try {
-      const rows: (string | number)[][] = [];
-      if (r.kvs.length) {
-        rows.push(["字段", "值"]);
-        r.kvs.forEach(function (kv) {
-          rows.push([kv.label, kv.value]);
-        });
-      }
-      r.items.forEach(function (item) {
-        if (item.columns.length) rows.push(item.columns);
-        item.rows.forEach(function (row) {
-          rows.push(row);
-        });
-      });
-      if (r.totals.length) {
-        if (rows.length) rows.push([]);
-        rows.push(["合计字段", "合计值"]);
-        r.totals.forEach(function (t) {
-          rows.push([t.label, t.value]);
-        });
-      }
-      if (r.notes.length) {
-        if (rows.length) rows.push([]);
-        rows.push(["备注"]);
-        r.notes.forEach(function (n) {
-          rows.push([n]);
-        });
-      }
-      if (!rows.length) {
-        setInterpretErr("解读结果为空，无可写内容");
-        return;
-      }
-      const safeRows = rows.map(function (row) {
-        return row.map(function (cell) {
-          return typeof cell === "string" && cell.startsWith("=") ? "\u200b" + cell : cell;
-        });
-      });
-      const written = await writeToNewSheet((p.sheetName || "文档") + "-解读", safeRows);
-      setInterpretResult(null);
-      setStatus("解读已进簿：「" + written + "」");
-    } catch (e) {
-      setInterpretErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setInterpretBusy(false);
-    }
-  }, [pendingResult, interpretResult, busy, interpretBusy]);
-
   const proposeAi = useCallback(async () => {
     const p = pendingResult;
-    if (!p || !p.text || busy || interpretBusy || proposeBusy) return;
+    if (!p || !p.text || busy || proposeBusy) return;
     setProposeBusy(true);
-    setInterpretErr("");
     try {
       const response = await fetch(API_BASE + "/api/doc/propose-recipe", {
         method: "POST",
@@ -498,11 +369,11 @@ export default function PdfAttachSection({
       onProposeRecipe?.(data as DocRecipeProposal);
       setPendingResult(null);
     } catch (e) {
-      setInterpretErr(e instanceof Error ? e.message : String(e));
+      setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setProposeBusy(false);
     }
-  }, [pendingResult, busy, interpretBusy, proposeBusy, onProposeRecipe]);
+  }, [pendingResult, busy, proposeBusy, onProposeRecipe]);
 
   return (
     <div className="fetch-bar pdf-bar">
@@ -674,7 +545,7 @@ export default function PdfAttachSection({
               <button
                 type="button"
                 className="pdf-confirm-alt"
-                disabled={busy || interpretBusy || proposeBusy}
+                disabled={busy || proposeBusy}
                 onClick={() => void proposeAi()}
               >
                 {proposeBusy ? "生成中…" : "AI 生成模板"}
@@ -691,61 +562,6 @@ export default function PdfAttachSection({
               </button>
             )}
           </div>
-          {pendingResult.text && (
-            <div className="pdf-interpret">
-              {interpretBusy && <p className="skill-install-note">AI 解读中…</p>}
-              {interpretBusy && interpretLive && (
-                <pre className="pdf-interpret-live">{interpretLive}</pre>
-              )}
-              {interpretResult && (
-                <div className="pdf-interpret-body">
-                  <p className="skill-install-note">
-                    kvs {interpretResult.kvs.length} 项 · 明细 {interpretResult.items.length} 表 ·
-                    合计 {interpretResult.totals.length} 项
-                    {interpretResult.notes.length ? " · 备注 " + interpretResult.notes.length + " 条" : ""}
-                  </p>
-                  {interpretResult.notes.length > 0 && (
-                    <ul className="pdf-interpret-notes">
-                      {interpretResult.notes.slice(0, 5).map(function (n, i) {
-                        return <li key={i}>{n}</li>;
-                      })}
-                    </ul>
-                  )}
-                  <button
-                    type="button"
-                    className="pdf-confirm-ok"
-                    disabled={busy || interpretBusy || proposeBusy}
-                    onClick={() => void interpretLandSheet()}
-                  >
-                    解读进工作簿
-                  </button>
-                </div>
-              )}
-              {interpretErr && (
-                <>
-                  <p className="fetch-err">{interpretErr}</p>
-                  <button
-                    type="button"
-                    className="pdf-confirm-alt"
-                    disabled={busy || interpretBusy || proposeBusy}
-                    onClick={() => void interpret()}
-                  >
-                    重试 AI 解读
-                  </button>
-                </>
-              )}
-              {!interpretBusy && !interpretResult && !interpretErr && (
-                <button
-                  type="button"
-                  className="pdf-confirm-alt"
-                  disabled={busy || interpretBusy || proposeBusy}
-                  onClick={() => void interpret()}
-                >
-                  AI 解读
-                </button>
-              )}
-            </div>
-          )}
         </div>
       )}
 
