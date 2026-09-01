@@ -1,5 +1,5 @@
 ---
-status: design          # design | coding | review | fix | blocked | done
+status: coding          # design | coding | review | fix | blocked | done
 branch: feat/tools-for-request-finance-allowlist
 ---
 
@@ -167,3 +167,4 @@ describe("selectToolsForRequest - finance-reconciliation", () => {
 |---|---|---|---|---|
 | 2026-09-01 | design | Claude Code | (待 commit) | 初稿 brief；P0 白名单结构修复 |
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：验收 v1 误判 write_to_sheet/write_formula/write_inputs/fill_range 应禁 → 改为 SKILL.md 步骤 4/5 必需，保留；目标/叙事改诚实口径；测试补 case 4 与"保留写格工具"断言；风险缓解 12→21 个工具名 |
+| 2026-09-01 | coding | Codex CLI | (本次提交) | 认领 P0；开始实现 finance-reconciliation 工具白名单与回归测试 |
