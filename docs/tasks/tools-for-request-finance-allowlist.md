@@ -1,5 +1,5 @@
 ---
-status: coding          # design | coding | review | fix | blocked | done
+status: review          # design | coding | review | fix | blocked | done
 branch: feat/tools-for-request-finance-allowlist
 ---
 
@@ -36,16 +36,16 @@ git checkout master && git pull && git checkout -b feat/tools-for-request-financ
 
 ## 验收
 
-- [ ] 后端 `pytest backend/tests` 全绿
-- [ ] 前端 `npm run test:unit` + `npm run typecheck` 全绿
-- [ ] **任务特有**：
-  - [ ] `addin/test/unit/tools-for-request.test.js` 新增 ≥ 3 个 case：
+- [x] 后端 `pytest backend/tests` 全绿
+- [x] 前端 `npm run test:unit` + `npm run typecheck` 全绿
+- [x] **任务特有**：
+  - [x] `addin/test/unit/tools-for-request.test.js` 新增 ≥ 3 个 case：
     1. `skillId="finance-reconciliation"` + 任意 userText → 返回的白名单**不含** `find_replace` / `web_fetch`（8 步未用且危险，应被禁；修正 v1：`write_to_sheet` / `write_formula` / `write_inputs` / `fill_range` 是 SKILL.md 明确需要的，**应含**）
     2. `skillId="finance-reconciliation"` → 返回的白名单**含** `reconcile_tables` / `calculate_table` / `create_pivot` / `append_pack_audit` / `ensure_table` / `format_range` / `sort_filter`（8 步必需 7 个算子）
     3. `skillId="finance-reconciliation"` → 返回的白名单**含** `get_sheet_names` / `inspect_table` / `inspect_workbook` / `complete`（探路+收尾）
     4. `skillId="finance-reconciliation"` → 返回的白名单**含** `write_to_sheet` / `write_inputs` / `write_formula` / `fill_range`（SKILL.md 步骤 4/5 必需；修正 v1 的误判）
-  - [ ] 现有 4 个 nativeSkill（reconcile/reshape/calculate/pivot）的 case 全部仍绿（无回归）
-  - [ ] 现有 `NATIVE_HINT` 命中时的 case 仍绿
+  - [x] 现有 4 个 nativeSkill（reconcile/reshape/calculate/pivot）的 case 全部仍绿（无回归）
+  - [x] 现有 `NATIVE_HINT` 命中时的 case 仍绿
 
 ## 方案（Claude Code 填，design 阶段）
 
@@ -167,4 +167,5 @@ describe("selectToolsForRequest - finance-reconciliation", () => {
 |---|---|---|---|---|
 | 2026-09-01 | design | Claude Code | (待 commit) | 初稿 brief；P0 白名单结构修复 |
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：验收 v1 误判 write_to_sheet/write_formula/write_inputs/fill_range 应禁 → 改为 SKILL.md 步骤 4/5 必需，保留；目标/叙事改诚实口径；测试补 case 4 与"保留写格工具"断言；风险缓解 12→21 个工具名 |
-| 2026-09-01 | coding | Codex CLI | (本次提交) | 认领 P0；开始实现 finance-reconciliation 工具白名单与回归测试 |
+| 2026-09-01 | coding | Codex CLI | `8d9f832` | 认领 P0；开始实现 finance-reconciliation 工具白名单与回归测试 |
+| 2026-09-01 | review | Codex CLI | (本次提交) | 实现核心工具白名单并保留独立 user.* 注册表；前端 314 tests + typecheck 全绿，后端 353 passed / 2 skipped |

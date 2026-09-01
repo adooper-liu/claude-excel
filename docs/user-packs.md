@@ -108,6 +108,8 @@ samples/
 
 实现：`backend/user_packs_store.py`（`install_pack` 循环 `install_skill`；失败 rollback）。
 
+`/跨境业财` 的核心工具走 `addin/src/services/tools-for-request.ts` 中的 `finance-reconciliation` 白名单；新增 Pack skill 时，应在该文件注册对应的核心工具 allowlist。`user.*` 仍走独立注册表与信任门，不并入核心白名单。
+
 ---
 
 ## 6. 与核心的混线禁令（Pack 也遵守）

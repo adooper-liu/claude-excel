@@ -156,4 +156,80 @@ describe("selectToolsForRequest", function () {
     assert.ok(names.indexOf("inspect_workbook") >= 0);
     assert.ok(names.indexOf("write_to_sheet") < 0);
   });
+
+  it("blocks core tools outside the finance-reconciliation recipe for any user text", function () {
+    const financeTools = [
+      { name: "get_sheet_names" },
+      { name: "find_replace" },
+      { name: "web_fetch" },
+    ];
+    const names = selectToolsForRequest("请按技能说明处理当前工作簿。", financeTools, "finance-reconciliation").map(
+      (t) => t.name
+    );
+    assert.deepStrictEqual(names, ["get_sheet_names"]);
+  });
+
+  it("keeps finance-reconciliation write and validation tools required by the recipe", function () {
+    const required = [
+      "write_to_sheet",
+      "write_to_range",
+      "write_inputs",
+      "write_formula",
+      "fill_range",
+      "data_validation",
+    ];
+    const names = selectToolsForRequest(
+      "跑对账",
+      required.map((name) => ({ name })),
+      "finance-reconciliation"
+    ).map((t) => t.name);
+    assert.deepStrictEqual(names, required);
+  });
+
+  it("keeps finance-reconciliation core operators required by the eight-step workflow", function () {
+    const required = [
+      "reconcile_tables",
+      "calculate_table",
+      "create_pivot",
+      "append_pack_audit",
+      "ensure_table",
+      "format_range",
+      "sort_filter",
+    ];
+    const names = selectToolsForRequest(
+      "跑对账",
+      required.map((name) => ({ name })),
+      "finance-reconciliation"
+    ).map((t) => t.name);
+    assert.deepStrictEqual(names, required);
+  });
+
+  it("keeps finance-reconciliation inspection and finalization tools", function () {
+    const required = [
+      "inspect_workbook",
+      "inspect_table",
+      "inspect_formulas",
+      "scan_formula_errors",
+      "read_range",
+      "read_selection",
+      "complete",
+    ];
+    const names = selectToolsForRequest(
+      "跑对账",
+      required.map((name) => ({ name })),
+      "finance-reconciliation"
+    ).map((t) => t.name);
+    assert.deepStrictEqual(names, required);
+  });
+
+  it("preserves independently registered user tools for finance-reconciliation", function () {
+    const financeTools = [
+      { name: "user.connector_load_feed" },
+      { name: "user.other_authorized_tool" },
+      { name: "get_sheet_names" },
+      { name: "web_fetch" },
+    ];
+    const names = selectToolsForRequest("跑对账", financeTools, "finance-reconciliation").map((t) => t.name);
+    assert.deepStrictEqual(names, ["user.connector_load_feed", "user.other_authorized_tool", "get_sheet_names"]);
+  });
 });

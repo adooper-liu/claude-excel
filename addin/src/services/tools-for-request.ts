@@ -82,6 +82,33 @@ export function selectToolsForRequest(
     ]);
     return tools.filter((t) => allow.has(t.name));
   }
+  // Keep the finance recipe's core surface closed; user.* has its own registry and trust gate.
+  if (skillId === "finance-reconciliation") {
+    const allow = new Set([
+      "get_sheet_names",
+      "write_to_sheet",
+      "write_to_range",
+      "write_inputs",
+      "write_formula",
+      "fill_range",
+      "data_validation",
+      "reconcile_tables",
+      "calculate_table",
+      "create_pivot",
+      "append_pack_audit",
+      "ensure_table",
+      "format_range",
+      "sort_filter",
+      "inspect_workbook",
+      "inspect_table",
+      "inspect_formulas",
+      "scan_formula_errors",
+      "read_range",
+      "read_selection",
+      "complete",
+    ]);
+    return tools.filter((t) => t.name.startsWith("user.") || allow.has(t.name));
+  }
   const nativeSkill =
     skillId === "reconcile" || skillId === "reshape" || skillId === "calculate" || skillId === "pivot";
   if (!nativeSkill && !NATIVE_HINT.test(userText)) return tools;
