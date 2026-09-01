@@ -34,6 +34,23 @@ DEFAULT_PROVIDERS = {
         "apiKey": "",
         "baseUrl": "https://api.minimax.chat/anthropic",
     },
+    # SiliconFlow 官方兼容 OpenAI 接口（中文站）
+    "siliconflow_cn": {
+        "apiKey": "",
+        "baseUrl": "https://api.siliconflow.cn/v1",
+        # 标记为 OpenAI‑compatible，这样 ai_proxy 会走 _payload_openai 路径
+        "apiStyle": "openai",
+        "model": "",
+        "smallFastModel": "",
+    },
+    # SiliconFlow 国际站（.com）
+    "siliconflow_com": {
+        "apiKey": "",
+        "baseUrl": "https://api.siliconflow.com/v1",
+        "apiStyle": "openai",
+        "model": "",
+        "smallFastModel": "",
+    },
 }
 
 DEFAULT_CONFIG = {
@@ -134,7 +151,20 @@ def get_active_provider() -> str:
 
 
 def get_api_key() -> str:
-    env_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN") or ""
+    """Return the API key for the active provider.
+
+    The original implementation looked at ``DEEPSEEK_API_KEY`` and
+    ``ANTHROPIC_AUTH_TOKEN`` because those were the historic providers.
+    SiliconFlow uses its own environment variable name – ``SILICONFLOW_API_KEY`` –
+    which we also respect here.  If any of the variables is set we return it;
+    otherwise we fall back to the stored key of the active provider.
+    """
+    env_key = (
+        os.getenv("DEEPSEEK_API_KEY")
+        or os.getenv("ANTHROPIC_AUTH_TOKEN")
+        or os.getenv("SILICONFLOW_API_KEY")
+        or ""
+    )
     if env_key:
         return env_key
     return _active_provider().get("apiKey", "")
