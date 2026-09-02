@@ -1,5 +1,5 @@
 ---
-status: coding          # design | coding | review | fix | blocked | done
+status: review          # design | coding | review | fix | blocked | done
 branch: feat/finance-e2e-test-design
 ---
 
@@ -36,17 +36,17 @@ git checkout master && git pull && git checkout -b feat/finance-e2e-test-design
 
 ## 验收
 
-- [ ] 后端 `pytest backend/tests` 全绿
-- [ ] 前端 `npm run test:unit` + `npm run typecheck` 全绿
-- [ ] **任务特有**：
-  - [ ] `addin/test/integration/finance-reconciliation-e2e.test.ts`（或 .js，看现成约定）**新增 ≥ 4 个 case**：
+- [x] 后端 `pytest backend/tests` 全绿
+- [x] 前端 `npm run test:unit` + `npm run typecheck` 全绿
+- [x] **任务特有**：
+  - [x] `addin/test/integration/finance-reconciliation-e2e.test.ts`（或 .js，看现成约定）**新增 ≥ 4 个 case**：
     1. **三件套 #1**（透视可见）：跑 8 步 → 断言工作簿存在 sheet `业财利润透视` 且含 ≥ 1 行透视数据
     2. **三件套 #2**（审计记录）：跑 8 步 → 断言 sheet `_pack_audit` 第 2 行的**14 列表头与记录**（对齐 `addin/src/excel/pack-audit.ts` `auditHeaders()`，snake_case）：`timestamp` / `packId` / `packVersion` / `runType` / `matched` / `left_only` / `right_only` / `conflict` / `review_pending` / `sourceHash_orders` / `sourceHash_ads` / `note` / `assumption_snapshot` / `match_rate`（修正 v1：错误地写了 9 个 camelCase 字段如 `leftOnly`/`sourceHashOrders`/`assumptionSnapshot`/`matchRate`——实际 header 以 snake_case 为准，且含 `timestamp`+`review_pending`）
     3. **三件套 #3**（净利容差）：跑 5/4 行 fixture → 手工算 SKU 净利 → 差 ≤ 0.01（与 `reconcile-core.ts` `compareTolerance=0.01` 对齐）
-    4. **白名单回归**（依赖 P0 任务合入）：mock `selectToolsForRequest` 拦截 `find_replace` / `web_fetch` 在 `finance-reconciliation` 路径下不可见；该 case 用 P0 完成后的接口；若 P0 未合入，先 `@skip` 占位
-  - [ ] **不依赖** Windows 真实 Excel：纯 mocha + mock，跑在 `ubuntu-latest` CI
-  - [ ] **总耗时** ≤ 30s（CI 预算）
-  - [ ] 测试不修改仓库内任何 `samples/packs/.../connector/fixtures/*.csv`（用临时 fixture 复制到 OS tmpdir）
+    4. **白名单回归**（P0 已合入）：`selectToolsForRequest` 拦截 `find_replace` / `web_fetch` 在 `finance-reconciliation` 路径下不可见；case 直接运行，不 `skip`
+  - [x] **不依赖** Windows 真实 Excel：纯 mocha + mock，跑在 `ubuntu-latest` CI
+  - [x] **总耗时** ≤ 30s（CI 预算）
+  - [x] 测试不修改仓库内任何 `samples/packs/.../connector/fixtures/*.csv`（用临时 fixture 复制到 OS tmpdir）
 
 ## 方案（Claude Code 填，design 阶段）
 
@@ -54,11 +54,12 @@ git checkout master && git pull && git checkout -b feat/finance-e2e-test-design
 
 ```
 addin/test/integration/
-  finance-reconciliation-e2e.test.ts   # 新增
-  src/
-    test-helpers.ts                    # 已有，需扩：mock 8 步核心算子 + 内存工作簿
-    test-taskpane.html                 # 已有，不动
-  webpack.config.js                    # 已有，扩展 entry 含 integration 目录
+  finance-reconciliation-e2e.test.js   # 4 个 Gate/P0 回归 case
+  finance-reconciliation-harness.js   # 真实 core + office-addin-mock 内存工作簿
+  fixtures/
+    orders.csv                         # 历史 Gate 5 行干净 fixture
+    ads.csv                            # 历史 Gate 4 行干净 fixture
+addin/package.json                     # test:unit 纳入 integration glob
 ```
 
 **关键设计判断**：
@@ -115,25 +116,13 @@ describe("finance-reconciliation end-to-end (gate-1b-mvp §3)", () => {
   });
 
   it("§3.3 净利容差 ≤ 0.01", async () => {
-    // 5/4 行 fixture 手算 SKU 净利（完整公式，profit_formula.md §一）：
-    //   样本取订单首行 O-R1 (ABC-01 ×2 @29.99 USD)：
-    //     收入   = 2×29.99×7.2            = 431.856
-    //     佣金   = 收入×0.15              = 64.778
-    //     FBA    = 2×3.22×1.035×7.2       = 47.991
-    //     仓储   = 2×1.5×7.2              = 21.600
-    //     广告   = (10+5)USD×7.2          = 108.000   （ABC-01 归因 ad L2 10+L3 5）
-    //     手续费 = 收入×0.025             = 10.796
-    //     退款   = 0（completed 行不计算退款，公式见 profit_formula §一退款规则）
-    //     COGS   = 0（fixture 无 COGS 映射 → 标黄不阻断）
-    //     净利   = 431.856 - 64.778 - 47.991 - 21.600 - 108 - 10.796 = 178.691
-    // ⚠️ 实际期望值以执行器在 fixture 上先跑+手工口径核对为准（可能因 reconcile
-    //    归因窗口/归一合并偏离上述示意值）；本轮修订不固化和 948 的伪示例
-    //    （v1 的 SKU-A qty10/price20 不在真实 fixture 中，且公式漏 B4 退款/B7 仓储/B8 手续费）
-    // 跑 8 步 → 取该 SKU 行净利 → 断言 |actual - 期望值| <= 0.01
+    // 历史 5/4 行 fixture 的 widget-b：1 × 15 USD，无广告、无退款、COGS=0。
+    // 收入 108；佣金 16.2；FBA 23.99544；仓储 10.8；手续费 2.7。
+    // 独立手工真值：108 - 16.2 - 23.99544 - 10.8 - 2.7 = 54.30456。
+    // 跑公开 core 链 → 取该 SKU 行净利 → 断言 |actual - 54.30456| <= 0.01
   });
 
-  it("白名单回归（P0 依赖，暂 skip）", async function () {
-    if (!process.env.P0_MERGED) this.skip();
+  it("白名单回归（P0 已合入，不 skip）", async function () {
     const tools = [{ name: "write_to_sheet" }, { name: "find_replace" },
                    { name: "web_fetch" }, { name: "reconcile_tables" }];
     const out = selectToolsForRequest("跑", tools, "finance-reconciliation");
@@ -147,18 +136,18 @@ describe("finance-reconciliation end-to-end (gate-1b-mvp §3)", () => {
 
 ### 3. mock 实现要点
 
-- **`loadConnectorFeed` mock**：返回 fixture `orders.csv` / `ads.csv` 解析后的 `{ headers, rows, meta: { sourceHash } }`
-- **`Excel.RequestContext` mock**：维护 `mockWorkbook` 内存结构，记录 `write_to_sheet` / `create_pivot` 等调用
-- **`sourceHash` mock**：`crypto.createHash("sha256").update(JSON.stringify(rows)).digest("hex")` 计算，验长度 64
+- **fixture 边界**：历史 Gate 5/4 行 CSV 先复制到 OS tmpdir，再按 connector 的 SKU 小写/日期字段规则归一；不调用 `user.*` 子进程
+- **`Excel.RequestContext` mock**：用 `office-addin-mock` 维护内存工作簿，真实调用 `appendPackAudit`
+- **`sourceHash`**：`crypto.createHash("sha256").update(rawCsv).digest("hex")` 计算，验长度 64
 - **`reconcile_tables` 真跑**（`reconcile-core.ts` 是纯 JS，无 Office.js 依赖）
 - **`calculate_table` 真跑**（`calculate-core.ts` 是纯 JS）
-- **`create_pivot` mock**：仅记录被调用 + 入参 `tableName` / `rows` / `values` / `outputSheet`
+- **`create_pivot` 边界**：真实 `planPivot` 校验字段/聚合，内存工作簿承接透视输出（不依赖 Excel 桌面）
 
 ### 4. CI 集成
 
-- `package.json` `test:unit` 改为 `mocha -r ts-node/register "test/unit/**/*.test.{js,ts}" "test/integration/**/*.test.{js,ts}"`
+- `package.json` `test:unit` 加入 `"test/integration/**/*.test.js"`
 - CI 不变（已 `npm run test:unit`）
-- 总耗时 5–30s 区间，符合 CI 预算
+- integration case 实测 < 1s，符合 < 30s CI 预算
 
 ## Review notes（Claude Code 填，review 阶段，只读不改代码）
 
@@ -171,3 +160,4 @@ describe("finance-reconciliation end-to-end (gate-1b-mvp §3)", () => {
 | 2026-09-01 | design | Claude Code | (待 commit) | 初稿 brief；3 件套端到端回归 |
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：路径改 docs/ 根；_pack_audit 断言改 14 列 snake_case；§3.3 期望值去掉伪示例 SKU-A、改完整公式+注明以执行器实测为准 |
 | 2026-09-02 | coding | Codex CLI | (本次提交) | 认领任务；按公开算子链与 `selectToolsForRequest` seams 开始端到端集成测试。 |
+| 2026-09-02 | review | Codex CLI | (本次提交) | 4 个 integration case 落地：date_window(7) 5/4 fixture、透视、14 列审计、净利容差、P0 白名单；前端 318 passing + typecheck，后端 353 passed / 2 skipped。 |

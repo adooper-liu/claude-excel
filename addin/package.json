@@ -29,7 +29,7 @@
     "stop": "office-addin-debugging stop manifest.xml",
     "test": "npm run test:unit && npm run test:e2e",
     "test:e2e": "mocha -r ts-node/register test/end-to-end/*.ts",
-    "test:unit": "mocha -r ts-node/register test/unit/*.test.ts test/unit/*.test.js",
+    "test:unit": "mocha -r ts-node/register test/unit/*.test.ts test/unit/*.test.js \"test/integration/**/*.test.js\"",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "validate": "office-addin-manifest validate manifest.xml",
     "watch": "webpack --mode development --watch"
