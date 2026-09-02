@@ -1,5 +1,5 @@
 ---
-status: design          # design | coding | review | fix | blocked | done
+status: coding          # design | coding | review | fix | blocked | done
 branch: feat/finance-e2e-test-design
 ---
 
@@ -170,3 +170,4 @@ describe("finance-reconciliation end-to-end (gate-1b-mvp §3)", () => {
 |---|---|---|---|---|
 | 2026-09-01 | design | Claude Code | (待 commit) | 初稿 brief；3 件套端到端回归 |
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：路径改 docs/ 根；_pack_audit 断言改 14 列 snake_case；§3.3 期望值去掉伪示例 SKU-A、改完整公式+注明以执行器实测为准 |
+| 2026-09-02 | coding | Codex CLI | (本次提交) | 认领任务；按公开算子链与 `selectToolsForRequest` seams 开始端到端集成测试。 |

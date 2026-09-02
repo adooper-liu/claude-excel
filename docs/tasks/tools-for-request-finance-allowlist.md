@@ -1,5 +1,5 @@
 ---
-status: review          # design | coding | review | fix | blocked | done
+status: done            # design | coding | review | fix | blocked | done
 branch: feat/tools-for-request-finance-allowlist
 ---
 
@@ -174,3 +174,4 @@ describe("selectToolsForRequest - finance-reconciliation", () => {
 | 2026-09-01 | coding | Codex CLI | `8d9f832` | 认领 P0；开始实现 finance-reconciliation 工具白名单与回归测试 |
 | 2026-09-01 | review | Codex CLI | (本次提交) | 实现核心工具白名单并保留独立 user.* 注册表；前端 314 tests + typecheck 全绿，后端 353 passed / 2 skipped |
 | 2026-09-02 | review | Claude Code | (本次提交) | 只读评审无阻塞；对照 brief 逐项核对实现/测试/文档 3 项一致（skillId=finance-reconciliation、21 工具、user.* 保留）；确认 getAllTools 缓存含 user.* 故前缀放行必需；2 条非阻塞 note（未授权 user.* 不过滤、与默认路径一致）+ 3 个已确认设计点 |
+| 2026-09-02 | done | Codex CLI | (本次提交) | 补齐机器收尾状态；实现与 review 提交已在 `master`，远端 `master` 已核验为 `0e3030b`。 |
