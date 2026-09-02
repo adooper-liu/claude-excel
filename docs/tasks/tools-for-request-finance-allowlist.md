@@ -159,7 +159,11 @@ describe("selectToolsForRequest - finance-reconciliation", () => {
 
 ## Review notes（Claude Code 填，review 阶段，只读不改代码）
 
-（待 review 时填）
+**结论：实现与 brief 骨架逐项一致，无阻塞缺陷，可合入。** 以下按严重度排序，均为非阻塞项。
+
+1. **[低] `startsWith("user.")` 会放行未授权 user.* 工具进工具面** — `user-skills.ts` `fetchUserTools()`（L180-204）对 `authorized !== false` 只改 description 后缀（「未授权，需重新安装授权」），**不过滤**，未授权工具仍在 `getAllTools()` 列表里。因此 finance-reconciliation 路径下未授权 user.* 仍对 LLM 可见（调用时才被信任门拒）。这与默认对话路径行为**一致**（`return tools` 全量），非本任务引入；若要求「金融路径只暴露已授权 user.*」，应在 `fetchUserTools` 层过滤（单独立项），不在本文件。
+2. **[低] 白名单与 brief 骨架 21 个工具名完全一致** — 抽查逐一比对：探路 7 + 写表 7 + 核心 6 + 收尾 1 = 21 个，与方案§2 `allow` 集合相同（顺序不同，无影响）。
+3. **[已确认正确] 关键设计点**：（a）`NATIVE_HINT` 正则/`NATIVE_BLOCKED`/`nativeSkill`（reconcile/reshape/calculate/pivot）未动，回归风险低；（b）测试 4+native 存量 case 全在，`deepStrictEqual` 断言精确（不仅含/不含，且**全等**——比 brief 要求的「含/不含」更严，可防 allow 多漏一个工具名静默通过）；（c）`docs/user-packs.md` §5 已加白名单说明行（brief 改动清单第三项）；（d）branch 前置：本任务在 `getAllTools` 缓存里带 `user.*`，实现保留前缀放行是**必需**的（SKILL.md 步骤 1 `user.connector_load_feed` 走独立注册表）。
 
 ## 进度 log（谁改谁 append，一行一条）
 
@@ -169,3 +173,4 @@ describe("selectToolsForRequest - finance-reconciliation", () => {
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：验收 v1 误判 write_to_sheet/write_formula/write_inputs/fill_range 应禁 → 改为 SKILL.md 步骤 4/5 必需，保留；目标/叙事改诚实口径；测试补 case 4 与"保留写格工具"断言；风险缓解 12→21 个工具名 |
 | 2026-09-01 | coding | Codex CLI | `8d9f832` | 认领 P0；开始实现 finance-reconciliation 工具白名单与回归测试 |
 | 2026-09-01 | review | Codex CLI | (本次提交) | 实现核心工具白名单并保留独立 user.* 注册表；前端 314 tests + typecheck 全绿，后端 353 passed / 2 skipped |
+| 2026-09-02 | review | Claude Code | (本次提交) | 只读评审无阻塞；对照 brief 逐项核对实现/测试/文档 3 项一致（skillId=finance-reconciliation、21 工具、user.* 保留）；确认 getAllTools 缓存含 user.* 故前缀放行必需；2 条非阻塞 note（未授权 user.* 不过滤、与默认路径一致）+ 3 个已确认设计点 |
