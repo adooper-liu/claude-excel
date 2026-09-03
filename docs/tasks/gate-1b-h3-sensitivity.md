@@ -1,5 +1,5 @@
 ---
-status: design          # design | coding | review | fix | blocked | done
+status: coding          # design | coding | review | fix | blocked | done
 branch: feat/gate-1b-h3-sensitivity
 ---
 
@@ -218,3 +218,4 @@ slash: 业财敏感性
 |---|---|---|---|---|
 | 2026-09-01 | design | Claude Code | (待 commit) | §7 立项 + SKILL 重写设计；商业主战场切 H3 |
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：路径改 `docs/` 根（`gate-1b-mvp-closed-loop.md` 不在 docs/tasks）；工具清单补 `write_inputs`（还原原值必需）；slash 沿用 `业财敏感性`（不新增触发词）；SKILL 骨架 §5 审计改 `scenarios[]`，不再伪造 matched/matchRate |
+| 2026-09-03 | coding | Codex CLI | (本次提交) | 认领 H3；核对真实 registry/schema：`inspect_range` 未注册，`append_pack_audit` 不接收 `scenarios[]`，实现将用 `read_range`，场景摘要写入现有 `note`。 |

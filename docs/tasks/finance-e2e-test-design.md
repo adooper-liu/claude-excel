@@ -1,5 +1,5 @@
 ---
-status: review          # design | coding | review | fix | blocked | done
+status: done            # design | coding | review | fix | blocked | done
 branch: feat/finance-e2e-test-design
 ---
 
@@ -174,3 +174,4 @@ describe("finance-reconciliation end-to-end (gate-1b-mvp §3)", () => {
 | 2026-09-02 | review | Codex CLI | (本次提交) | 4 个 integration case 落地：date_window(7) 5/4 fixture、透视、14 列审计、净利容差、P0 白名单；前端 318 passing + typecheck，后端 353 passed / 2 skipped。 |
 | 2026-09-03 | review | Claude Code | (本次提交) | 只读评审：318 passing 实测绿（含 4 case）；reconcile/audit 真跑；14 列断言与 auditHeaders 全等；白名单回归不 skip。**1 条中优先级 note**：§3.3 "独立手算"名不副实——expected 与 actual 同源（都来自 harness 自己的 `calculateProfit`），公式本身与 SKILL.md 附录 B 一致、54.30456 独立重算正确，但测的是 harness 自洽而非产品管道对照；建议 fix 阶段降级诚实命名或接真 calculate。无其它阻塞 |
 | 2026-09-03 | fix | Claude Code | (本次提交) | §3.3 独立性修复：测试文件新增 `expectedWidgetBNet()`（独立展开 SKILL.md 口径，不复用 harness `calculateProfit`），断言期望值改用该函数——expected/actual 变双实现互验；harness/其它 case/公式均未动；318 passing 复测绿（66ms） |
+| 2026-09-03 | done | Codex CLI | `cbbc1e8` | review 修正已合入并推送 `master`，任务分支已清理；补齐机器收尾状态。 |
