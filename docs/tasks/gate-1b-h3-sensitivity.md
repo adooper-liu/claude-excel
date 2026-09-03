@@ -1,5 +1,5 @@
 ---
-status: coding          # design | coding | review | fix | blocked | done
+status: review          # design | coding | review | fix | blocked | done
 branch: feat/gate-1b-h3-sensitivity
 ---
 
@@ -34,18 +34,19 @@ git checkout master && git pull && git checkout -b feat/gate-1b-h3-sensitivity
 - **不做** 多币种多主体联动（Phase 2）
 - **不改** 核心算子实现（沿用现有）
 - **不动** `reconcile_tables` / `calculate_table` / `create_pivot` —— 用 H1 已落地的 `业财利润公式` sheet 作为输入
-- **新增仅 8 个工具名**（不引入新算子）：`get_sheet_names` / `inspect_table` / `inspect_range` / `read_range` / `write_inputs` / `write_formula` / `format_range` / `append_pack_audit` / `complete`
+- **只编排 9 个已注册工具**（不引入新算子）：`get_sheet_names` / `inspect_table` / `read_range` / `write_inputs` / `write_to_sheet` / `format_range` / `sort_filter` / `append_pack_audit` / `complete`
   > **修正（2026-09-01 审查）**：v1 工具清单漏了 `write_inputs`——SKILL 步骤 3「临时改 `假设参数!B{x}` 后**强制还原原值**」必须用 `write_inputs` 回写；漏列则 SKILL 无法还原（风险 1 缓解自身提到 write_inputs）。`write_inputs` 已在 P0 白名单（`tools-for-request-finance-allowlist`）内。
+  > **实现核对（2026-09-03）**：registry 没有 `inspect_range`，小范围读取统一用 `read_range`；H3 独立矩阵必须由 `write_to_sheet` 创建，临界行排序使用 `sort_filter`。`append_pack_audit` 也没有顶层 `scenarios[]`，场景摘要写入现有 `note`，原 B2–B10 快照写入 `assumptionSnapshot`。
 
 ## 验收
 
-- [ ] 后端 `pytest backend/tests` 全绿
-- [ ] 前端 `npm run test:unit` + `npm run typecheck` 全绿
-- [ ] **任务特有**：
-  - [ ] `docs/gate-1b-mvp-closed-loop.md` 增 §7 H3（含 7.1–7.8 子节），§0 状态从"进行中"改为"MVP 4 段 done，H3 立项中"，§9 进度 log 加 2026-09-01 design 行
-  - [ ] `samples/packs/cross-border-ecommerce-finance/skills/finance-sensitivity/SKILL.md` 重写为可执行 6 步强模板（探路→读现状→算多档→标临界→审计→结论）
-  - [ ] `samples/packs/cross-border-ecommerce-finance/knowledge/profit_formula.md` 增"H3 档位默认值"小节（-10%/-5%/0/+5%/+10%）
-  - [ ] `samples/packs/cross-border-ecommerce-finance/pack.json` `skills` 数组确认含 `finance-sensitivity`（已有，仅校验）
+- [x] 后端 `pytest backend/tests` 全绿（2026-09-03：353 passed, 2 skipped）
+- [x] 前端 `npm run test:unit` + `npm run typecheck` 全绿（2026-09-03：322 passing；typecheck 通过）
+- [ ] **任务特有（自动化契约完成，真机重装待办）**：
+  - [x] `docs/gate-1b-mvp-closed-loop.md` 增 §7 H3（含 7.1–7.8 子节），§0 状态从"进行中"改为"MVP 4 段 done，H3 立项中"，§9 进度 log 加 2026-09-01 design 行
+  - [x] `samples/packs/cross-border-ecommerce-finance/skills/finance-sensitivity/SKILL.md` 重写为可执行 6 步强模板（探路→读现状→算多档→标临界→审计→结论）
+  - [x] `samples/packs/cross-border-ecommerce-finance/knowledge/profit_formula.md` 增"H3 档位默认值"小节（-10%/-5%/0/+5%/+10%）
+  - [x] `samples/packs/cross-border-ecommerce-finance/pack.json` 升至 `0.1.3`，`skills` 数组确认含 `finance-sensitivity`
   - [ ] 重装 pack 后任务窗格 `/` 菜单能搜到 `/业财敏感性`（沿用现有 `slash:` 字段，不新增触发词）
 
 ## 方案（Claude Code 填，design 阶段）
@@ -219,3 +220,4 @@ slash: 业财敏感性
 | 2026-09-01 | design | Claude Code | (待 commit) | §7 立项 + SKILL 重写设计；商业主战场切 H3 |
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：路径改 `docs/` 根（`gate-1b-mvp-closed-loop.md` 不在 docs/tasks）；工具清单补 `write_inputs`（还原原值必需）；slash 沿用 `业财敏感性`（不新增触发词）；SKILL 骨架 §5 审计改 `scenarios[]`，不再伪造 matched/matchRate |
 | 2026-09-03 | coding | Codex CLI | (本次提交) | 认领 H3；核对真实 registry/schema：`inspect_range` 未注册，`append_pack_audit` 不接收 `scenarios[]`，实现将用 `read_range`，场景摘要写入现有 `note`。 |
+| 2026-09-03 | verify | Codex CLI | (本次提交) | H3/P&L 定向 17 passing；前端 unit 322 passing；typecheck 通过；后端 353 passed, 2 skipped。Pack 升至 0.1.3；真机重装与 §7.4 三件套留给 review/验收。 |

@@ -15,7 +15,7 @@ slash: 业财损益
 | 键 | 值 |
 |---|---|
 | packId | `cross-border-ecommerce-finance` |
-| packVersion | 读 installed pack；不知则用 `0.1.2` |
+| packVersion | 读 installed pack；不知则用 `0.1.3` |
 | 假设参数 | `假设参数`（B2–B10） |
 | 利润口径表 | `业财利润公式` |
 | 损益汇总 | `业财损益汇总` / Table `T_finance_pl` |

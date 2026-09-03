@@ -44,8 +44,8 @@ describe("finance-pl SKILL", function () {
     assert.ok(parsed.title.includes("P&L"));
   });
 
-  it("pack 0.1.2 registers the user-side P&L skill", function () {
-    assert.strictEqual(pack.version, "0.1.2");
+  it("pack 0.1.3 registers the user-side P&L skill", function () {
+    assert.strictEqual(pack.version, "0.1.3");
     assert.ok(pack.skills.includes("finance-pl"));
   });
 

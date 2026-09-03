@@ -2,7 +2,7 @@
   "id": "cross-border-ecommerce-finance",
   "category": "cross-border-ecommerce",
   "title": "跨境电商业财包",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "gate": "1b",
   "description": "Gate 1b：对账→假设→敏感性→损益汇总→结算×银行桥表。含 connector 与本机扩展。",
   "skills": ["finance-reconciliation", "finance-sensitivity", "finance-pl", "settlement-bank-recon"],
