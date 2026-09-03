@@ -151,7 +151,18 @@ describe("finance-reconciliation end-to-end (gate-1b-mvp §3)", () => {
 
 ## Review notes（Claude Code 填，review 阶段，只读不改代码）
 
-（待 review 时填）
+**结论：4 个 case 全绿、reconcile/audit 管道真跑、断言数字自洽，可合入；但 §3.3 "独立净利" 存在测试独立性缺陷，需按 review 意见修正（非阻塞，建议 fix 阶段改）。**
+
+1. **🔴 [中] §3.3 "independent manual result" 名不副实——expected 与 actual 同源** — harness `finance-reconciliation-harness.js` L185：`profitRows = profitSkeleton.rows.map(r => calculateProfit(r[0], orders, ads))`，`calculateProfit`（L32-49）是该 harness **自己实现**的公式；断言期望值 `54.30456`（test L59）也由同一公式手算（我独立重算 `54.3045599…` 与之一致）。因此：
+   - **actual**（`业财利润公式` 净利列）由 harness `calculateProfit` 生成；**expected**（54.30456）按同一公式手算——**两者同源自洽**，任何一方公式写错，测试仍绿。
+   - 这不是"产品管道算出的数 vs 手工对照"，而是"harness 复刻公式 vs 它自身"。绿只证明 harness 公式自洽，**不证明产品 `calculate_table` 输出该数**（且 harness L169-176 的 `calculate` 只取 groupBy 骨架，净利列未经 real 算子）。
+   - **对照 brief §1 设计原则**（"业务真值靠录屏自证，自动化只验管道没漏"）——本意图是"不假装业务真值可自动化"，实现却用同名公式"假独立"地自验了净利，**把"人工复核口"伪装成"独立对照"**。命名 `independent manual result` 误导。
+   - **已确认公式本身正确**：`calculateProfit` 与 SKILL.md 附录 B 口径逐项一致（收入/佣金/FBA/仓储/广告/退款/手续费/COGS=0，我逐项比对过），54.30456 独立手算正确。缺陷只在**独立性**，不在公式。
+   - **建议（fix 阶段）**：§3.3 要么改为**显式注明"净利由 harness 复刻公式产生，仅验管道连通"**（诚实降级），要么把 expected 定为**真实 `calculate_table` 输出**（需 harness 接活公式，超出当前 mock 边界），二选一后在代码注释与 brief 同步更正命名，**不要继续称独立对照**。
+
+2. **[低] 三件套 #1 透视 sheet 由 harness 手工塞行**（L190），非 real pivot 算子出数——与 brief "只测调度层"边界一致，注明即可。
+
+3. **[已确认正确] 其它**：（a）`_pack_audit` 14 列 snake_case 断言与 `pack-audit.ts` `auditHeaders()` 全等，slice `[3,2,1,0,1]`=matched/left_only/right_only/conflict/review_pending，`match_rate` 0.5 由 counts 计算，两 hash 长 64——reconcile 真跑（harness 直调 `reconcile-core.ts` 纯函数）；（b）白名单回归 case 直接跑不 skip（P0 已合入），断言 `find_replace`/`web_fetch` 不在 finance-reconciliation 面；（c）fixture 复制到 OS tmpdir、不改仓库源文件；（d）`package.json` `test:unit` 纳入 `"test/integration/**/*.test.js"`，CI 不变，实测 integration 全绿 318 passing（142ms）
 
 ## 进度 log（谁改谁 append，一行一条）
 
@@ -161,3 +172,5 @@ describe("finance-reconciliation end-to-end (gate-1b-mvp §3)", () => {
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：路径改 docs/ 根；_pack_audit 断言改 14 列 snake_case；§3.3 期望值去掉伪示例 SKU-A、改完整公式+注明以执行器实测为准 |
 | 2026-09-02 | coding | Codex CLI | (本次提交) | 认领任务；按公开算子链与 `selectToolsForRequest` seams 开始端到端集成测试。 |
 | 2026-09-02 | review | Codex CLI | (本次提交) | 4 个 integration case 落地：date_window(7) 5/4 fixture、透视、14 列审计、净利容差、P0 白名单；前端 318 passing + typecheck，后端 353 passed / 2 skipped。 |
+| 2026-09-03 | review | Claude Code | (本次提交) | 只读评审：318 passing 实测绿（含 4 case）；reconcile/audit 真跑；14 列断言与 auditHeaders 全等；白名单回归不 skip。**1 条中优先级 note**：§3.3 "独立手算"名不副实——expected 与 actual 同源（都来自 harness 自己的 `calculateProfit`），公式本身与 SKILL.md 附录 B 一致、54.30456 独立重算正确，但测的是 harness 自洽而非产品管道对照；建议 fix 阶段降级诚实命名或接真 calculate。无其它阻塞 |
+| 2026-09-03 | fix | Claude Code | (本次提交) | §3.3 独立性修复：测试文件新增 `expectedWidgetBNet()`（独立展开 SKILL.md 口径，不复用 harness `calculateProfit`），断言期望值改用该函数——expected/actual 变双实现互验；harness/其它 case/公式均未动；318 passing 复测绿（66ms） |

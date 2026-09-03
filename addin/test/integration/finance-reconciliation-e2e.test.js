@@ -6,6 +6,27 @@ const { runFinanceRecipe, withTempFixtures } = require("./finance-reconciliation
 
 const FIXTURE_DIR = path.join(__dirname, "fixtures");
 
+/**
+ * 独立期望值：widget-b 净利（不复用 harness 的 calculateProfit，避免同源自检）。
+ * fixture O004: Widget-B ×1 @15.00，无广告、无退款。
+ * 口径与 SKILL.md 附录 B 一致（收入=数量×单价×汇率B2；佣金=收入×B3；
+ * FBA=件数×B5×(1+B6燃油)×汇率；仓储=件数×B7×汇率；手续费=收入×B8）。
+ * 若 fixture 的 widget-b 行变更，此处需同步。
+ */
+function expectedWidgetBNet() {
+  const qty = 1;
+  const price = 15;
+  const rate = 7.2; // B2
+  const revenue = qty * price * rate; // 108
+  const commission = revenue * 0.15; // B3
+  const fba = qty * 3.22 * (1 + 0.035) * rate; // B5=3.22, B6=0.035
+  const storage = qty * 1.5 * rate; // B7
+  const advertising = 0; // 无广告
+  const refund = 0; // 无退款
+  const paymentFee = revenue * 0.025; // B8
+  return revenue - commission - fba - storage - advertising - refund - paymentFee; // 54.30456
+}
+
 describe("finance-reconciliation integration (gate-1b-mvp section 3)", function () {
   it("creates a visible profit pivot with data", async function () {
     await withTempFixtures(FIXTURE_DIR, async function (fixtures) {
@@ -56,7 +77,8 @@ describe("finance-reconciliation integration (gate-1b-mvp section 3)", function 
       const widgetB = profitRows.find((row) => row[0] === "widget-b");
 
       assert.ok(widgetB, "missing Widget-B profit row");
-      assert.ok(Math.abs(widgetB[2] - 54.30456) <= 0.01, `unexpected net profit: ${widgetB[2]}`);
+      // expected 由本测试独立展开（expectedWidgetBNet），与 harness 的 calculateProfit 互为独立实现
+      assert.ok(Math.abs(widgetB[2] - expectedWidgetBNet()) <= 0.01, `unexpected net profit: ${widgetB[2]}`);
     });
   });
 
