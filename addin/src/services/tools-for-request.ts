@@ -109,6 +109,21 @@ export function selectToolsForRequest(
     ]);
     return tools.filter((t) => t.name.startsWith("user.") || allow.has(t.name));
   }
+  // Finance sensitivity (H3): closed set = 9 tools from finance-sensitivity/SKILL.md 工具边界.
+  if (skillId === "finance-sensitivity") {
+    const allow = new Set([
+      "get_sheet_names",
+      "inspect_table",
+      "read_range",
+      "write_inputs", // 临时改 B{x} + 立即还原
+      "write_to_sheet", // 写 H3_敏感性_<参数> 矩阵
+      "sort_filter",
+      "format_range",
+      "append_pack_audit",
+      "complete",
+    ]);
+    return tools.filter((t) => t.name.startsWith("user.") || allow.has(t.name));
+  }
   const nativeSkill =
     skillId === "reconcile" || skillId === "reshape" || skillId === "calculate" || skillId === "pivot";
   if (!nativeSkill && !NATIVE_HINT.test(userText)) return tools;

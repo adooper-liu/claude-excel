@@ -232,4 +232,39 @@ describe("selectToolsForRequest", function () {
     const names = selectToolsForRequest("跑对账", financeTools, "finance-reconciliation").map((t) => t.name);
     assert.deepStrictEqual(names, ["user.connector_load_feed", "user.other_authorized_tool", "get_sheet_names"]);
   });
+
+  it("blocks tools outside the finance-sensitivity recipe for any user text", function () {
+    const sensitivityTools = [
+      { name: "get_sheet_names" },
+      { name: "find_replace" },
+      { name: "web_fetch" },
+      { name: "reconcile_tables" },
+      { name: "calculate_table" },
+      { name: "create_pivot" },
+    ];
+    const names = selectToolsForRequest("退款率涨到 12%", sensitivityTools, "finance-sensitivity").map(
+      (t) => t.name
+    );
+    assert.deepStrictEqual(names, ["get_sheet_names"]);
+  });
+
+  it("keeps the nine finance-sensitivity recipe tools", function () {
+    const required = [
+      "get_sheet_names",
+      "inspect_table",
+      "read_range",
+      "write_inputs",
+      "write_to_sheet",
+      "sort_filter",
+      "format_range",
+      "append_pack_audit",
+      "complete",
+    ];
+    const names = selectToolsForRequest(
+      "退款率涨到 12%",
+      required.map((name) => ({ name })),
+      "finance-sensitivity"
+    ).map((t) => t.name);
+    assert.deepStrictEqual(names, required);
+  });
 });

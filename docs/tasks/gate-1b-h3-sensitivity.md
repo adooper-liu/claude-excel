@@ -211,7 +211,15 @@ slash: 业财敏感性
 
 ## Review notes（Claude Code 填，review 阶段，只读不改代码）
 
-（待 review 时填）
+**结论：实现与 brief 逐项一致，无阻塞缺陷，可合入。** 本任务为纯编排/文档定义（SKILL.md + profit_formula + pack.json + mvp §7），未改核心算子；自动化门禁全绿，1 项真机待办未勾（重装 pack 后斜杠可见）。以下 2 条非阻塞。
+
+1. **[中·建议→已解决 2026-09-03] `finance-sensitivity` skillId 未同步白名单** — `addin/src/services/tools-for-request.ts` 只有 `finance-reconciliation` 分支（P0 已合入），`/业财敏感性`（skillId=finance-sensitivity）会落到默认 `return tools` 全量——`find_replace`/`web_fetch` 等无关工具对 H3 仍可见。与 P0 修的"工具面不受控"同类。**已解决**：单独立项 `docs/tasks/finance-sensitivity-allowlist.md`，已加 `finance-sensitivity` 分支（H3 SKILL.md 9 工具边界 + user.* 放行），2 个新 test case，324 passing 实测绿。
+
+2. **[低] 真机待办未勾** — 验收最后一项"重装 pack 后 `/业财敏感性` 可见"为 [ ]，属用户真机侧（installed pack 需重装到 `~/.claude-excel-web/`）。SKILL.md `slash: 业财敏感性` 与 brief §7.6 一致，重装后应可触发；此项不阻塞文档/编排合入，待用户真机验证后勾选。
+
+3. **[已确认正确]** （a）`finance-sensitivity/SKILL.md` 六步强模板：探路 → 读现状锁定单参数 → 逐档 `write_inputs→read_range→write_inputs` 强制还原 → 写矩阵+`format_range`+`sort_filter` 标临界 → `append_pack_audit`（`note` 写场景 JSON、`assumptionSnapshot` 写 before 快照，**不伪造** matched/leftOnly/rightOnly/matchRate）→ 三段式 `complete`。（b）`profit_formula.md` §六 H3 档位默认值（-10/-5/0/+5/+10，含还原约束）为单一真相。（c）`pack.json` 0.1.2→0.1.3，skills 含 finance-sensitivity。（d）`docs/gate-1b-mvp-closed-loop.md` §0 改"MVP 4 段 done，H3 立项中"，§7.1–7.8 落地，§9 进度行已补。（e）测试：H3 断言五档/还原/审计防伪造/版本 0.1.3，实测 322 passing 全绿。
+
+4. **[已确认正确] 口径一致** — 关键数值（汇率B2=7.2/佣金B3=0.15/FBA燃油B6=0.035 等）与 `profit_formula.md` §四、`finance-reconciliation/SKILL.md` 附录 A 单一真相对齐；H3 档位一律"以读取到的原值为基准计算"，不凭空编差值（符合「不编基准数字」纪律）。
 
 ## 进度 log（谁改谁 append，一行一条）
 
@@ -221,3 +229,4 @@ slash: 业财敏感性
 | 2026-09-01 | review | Claude Code | (待 commit) | 审查修订：路径改 `docs/` 根（`gate-1b-mvp-closed-loop.md` 不在 docs/tasks）；工具清单补 `write_inputs`（还原原值必需）；slash 沿用 `业财敏感性`（不新增触发词）；SKILL 骨架 §5 审计改 `scenarios[]`，不再伪造 matched/matchRate |
 | 2026-09-03 | coding | Codex CLI | (本次提交) | 认领 H3；核对真实 registry/schema：`inspect_range` 未注册，`append_pack_audit` 不接收 `scenarios[]`，实现将用 `read_range`，场景摘要写入现有 `note`。 |
 | 2026-09-03 | verify | Codex CLI | (本次提交) | H3/P&L 定向 17 passing；前端 unit 322 passing；typecheck 通过；后端 353 passed, 2 skipped。Pack 升至 0.1.3；真机重装与 §7.4 三件套留给 review/验收。 |
+| 2026-09-03 | review | Claude Code | (本次提交) | 只读评审：六步强模板/五档/逐档写-读-写还原/审计防伪造（不传 matched 等）逐项核对，与 SKILL.md、profit_formula §六、pack.json 0.1.3、mvp §7.1–7.8 一致；322 passing 实测绿。**执行器主动纠正了两处 design 遗漏**（`inspect_range` 未注册→用 `read_range`；`append_pack_audit` 无 `scenarios[]`→场景写 `note`），方向正确。2 条非阻塞 note：① finance-sensitivity 未同步 P0 白名单（/业财敏感性 走全量工具面，建议单独立项补，同 Pack 一致）；② 真机重装/§7.4 待用户验证（[ ] 未勾，不阻塞文档合入）。可进入验收。 |
